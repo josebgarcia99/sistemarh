@@ -24,6 +24,15 @@ class DiscoveredModel:
     capabilities: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class Generation:
+    text: str
+    input_tokens: int
+    output_tokens: int
+    # Falso si el proveedor cortó la respuesta por el límite de salida.
+    complete: bool
+
+
 class ProviderHttpError(Exception):
     def __init__(self, kind: str, message: str) -> None:
         super().__init__(message)
@@ -36,6 +45,18 @@ def _get(client: httpx.Client, url: str, headers: dict[str, str], params: dict[s
         response = client.get(url, headers=headers, params=params)
     except httpx.HTTPError as error:
         raise ProviderHttpError("red", "No se pudo conectar con el proveedor.") from error
+    return _checked(response)
+
+
+def _post(client: httpx.Client, url: str, headers: dict[str, str], body: dict[str, Any]) -> Any:
+    try:
+        response = client.post(url, headers=headers, json=body)
+    except httpx.HTTPError as error:
+        raise ProviderHttpError("red", "No se pudo conectar con el proveedor.") from error
+    return _checked(response)
+
+
+def _checked(response: httpx.Response) -> Any:
     if response.status_code in (401, 403):
         raise ProviderHttpError(
             "clave", "El proveedor rechazó la clave: no es válida o no tiene permisos."
@@ -97,6 +118,35 @@ class AnthropicClient(_BaseClient):
                 params = {"limit": "100", "after_id": str(payload["last_id"])}
         return models
 
+    def generate(
+        self, api_key: str, model: str, *, system: str, user: str, max_output_tokens: int
+    ) -> Generation:
+        """API de mensajes. No se ha ejecutado contra el servicio real."""
+        headers = {"Authorization": f"Bearer {api_key}", "anthropic-version": self._api_version}
+        body = {
+            "model": model,
+            "max_tokens": max_output_tokens,
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+        }
+        with self._client_factory() as client:
+            payload = _post(client, f"{self._base_url}/v1/messages", headers, body)
+        try:
+            text = "".join(
+                block.get("text", "") for block in payload["content"] if block.get("type") == "text"
+            )
+            usage = payload["usage"]
+            return Generation(
+                text=text,
+                input_tokens=int(usage["input_tokens"]),
+                output_tokens=int(usage["output_tokens"]),
+                complete=payload.get("stop_reason") != "max_tokens",
+            )
+        except (KeyError, TypeError, ValueError, AttributeError) as error:
+            raise ProviderHttpError(
+                "proveedor", "El proveedor devolvió una respuesta con un formato inesperado."
+            ) from error
+
 
 class OpenAIClient(_BaseClient):
     def __init__(
@@ -114,3 +164,40 @@ class OpenAIClient(_BaseClient):
             DiscoveredModel(model_id=str(item["id"]), display_name=str(item["id"]))
             for item in payload.get("data", [])
         ]
+
+    def generate(
+        self, api_key: str, model: str, *, system: str, user: str, max_output_tokens: int
+    ) -> Generation:
+        """API de respuestas. No se ha ejecutado contra el servicio real."""
+        headers = {"Authorization": f"Bearer {api_key}"}
+        body = {
+            "model": model,
+            "instructions": system,
+            "input": user,
+            "max_output_tokens": max_output_tokens,
+            # Los documentos no se conservan en el proveedor.
+            "store": False,
+        }
+        with self._client_factory() as client:
+            payload = _post(client, f"{self._base_url}/v1/responses", headers, body)
+        try:
+            if payload.get("error"):
+                raise ProviderHttpError("proveedor", "El proveedor no pudo generar la respuesta.")
+            text = "".join(
+                part.get("text", "")
+                for item in payload["output"]
+                if item.get("type") == "message"
+                for part in item.get("content", [])
+                if part.get("type") == "output_text"
+            )
+            usage = payload["usage"]
+            return Generation(
+                text=text,
+                input_tokens=int(usage["input_tokens"]),
+                output_tokens=int(usage["output_tokens"]),
+                complete=payload.get("status") != "incomplete",
+            )
+        except (KeyError, TypeError, ValueError, AttributeError) as error:
+            raise ProviderHttpError(
+                "proveedor", "El proveedor devolvió una respuesta con un formato inesperado."
+            ) from error

@@ -10,6 +10,7 @@ from app.infrastructure.ai_providers.http_clients import (
 )
 from app.modules.ai_settings.domain.models import (
     DiscoveredModel,
+    Generation,
     ProviderClient,
     ProviderCode,
     ProviderError,
@@ -26,6 +27,17 @@ class _Adapter:
         except ProviderHttpError as error:
             raise ProviderError(error.kind, error.message) from error
         return [DiscoveredModel(m.model_id, m.display_name, m.capabilities) for m in found]
+
+    def generate(
+        self, api_key: str, model: str, *, system: str, user: str, max_output_tokens: int
+    ) -> Generation:
+        try:
+            result = self._inner.generate(
+                api_key, model, system=system, user=user, max_output_tokens=max_output_tokens
+            )
+        except ProviderHttpError as error:
+            raise ProviderError(error.kind, error.message) from error
+        return Generation(result.text, result.input_tokens, result.output_tokens, result.complete)
 
 
 def build_provider_clients(settings: Settings) -> dict[ProviderCode, ProviderClient]:

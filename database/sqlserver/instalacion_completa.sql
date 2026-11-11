@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Instalación completa
-   Versión del esquema: (vacía) -> 0006
-   Generado: 2026-11-11 15:40 (UTC) con scripts/generate_sql.py
+   Versión del esquema: (vacía) -> 0007
+   Generado: 2026-11-11 15:56 (UTC) con scripts/generate_sql.py
 
    Crea todos los esquemas y tablas en una base de datos VACÍA.
 
@@ -551,6 +551,51 @@ CREATE TABLE ai.rubric_criteria (
 GO
 
 UPDATE alembic_version SET version_num='0006' WHERE alembic_version.version_num = '0005';
+
+GO
+
+-- Running upgrade 0006 -> 0007
+
+ALTER TABLE ai.models ADD input_price NUMERIC(12, 4) NULL;
+
+GO
+
+ALTER TABLE ai.models ADD output_price NUMERIC(12, 4) NULL;
+
+GO
+
+CREATE TABLE ai.executions (
+    id UNIQUEIDENTIFIER NOT NULL, 
+    occurred_at DATETIME2(3) NOT NULL, 
+    operation VARCHAR(40) NOT NULL, 
+    provider_code VARCHAR(20) NOT NULL, 
+    model_id NVARCHAR(200) NOT NULL, 
+    status VARCHAR(20) NOT NULL, 
+    attempts INTEGER NOT NULL, 
+    duration_ms INTEGER NOT NULL, 
+    input_tokens INTEGER NULL, 
+    output_tokens INTEGER NULL, 
+    estimated_cost_usd NUMERIC(12, 6) NULL, 
+    confirmed_cost_usd NUMERIC(12, 6) NULL, 
+    error_kind VARCHAR(20) NULL, 
+    actor_user_id UNIQUEIDENTIFIER NULL, 
+    vacancy_id UNIQUEIDENTIFIER NULL, 
+    CONSTRAINT pk_executions PRIMARY KEY (id), 
+    CONSTRAINT ck_executions_status CHECK (status IN ('CORRECTA', 'FALLIDA')), 
+    CONSTRAINT ck_executions_attempts CHECK (attempts >= 1)
+);
+
+GO
+
+CREATE INDEX ix_executions_provider_date ON ai.executions (provider_code, occurred_at);
+
+GO
+
+CREATE INDEX ix_executions_date ON ai.executions (occurred_at);
+
+GO
+
+UPDATE alembic_version SET version_num='0007' WHERE alembic_version.version_num = '0006';
 
 GO
 

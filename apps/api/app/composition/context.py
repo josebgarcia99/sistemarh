@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from fastapi import Request
@@ -10,7 +12,7 @@ from app.composition.ai import env_api_keys
 from app.composition.backend import Backend, Repositories
 from app.composition.file_access import VacancyFileAccessPolicy
 from app.core.clock import Clock
-from app.core.config.settings import Settings
+from app.core.config.settings import Environment, Settings
 from app.core.exceptions.errors import ServiceUnavailableError
 from app.core.security.master_key import MasterKey
 from app.core.security.passwords import PasswordHasher
@@ -41,6 +43,8 @@ class AppContext:
     scanner: MalwareScanner = field(default_factory=DisabledScanner)
     master_key: MasterKey | None = None
     ai_clients: dict[ProviderCode, ProviderClient] = field(default_factory=dict)
+    # Espera entre reintentos de una llamada a un proveedor (las pruebas no esperan).
+    ai_sleep: Callable[[float], None] = time.sleep
 
     def require_backend(self) -> Backend:
         if self.backend is None:
@@ -93,6 +97,11 @@ class AppContext:
             cipher=self.master_key,
             clients=self.ai_clients,
             env_keys=env_api_keys(self.settings),
+            # Restricción 8: fuera de producción no se envían documentos a un
+            # proveedor de IA salvo autorización expresa.
+            documents_allowed=self.settings.ai_allow_real_documents
+            or self.settings.environment is Environment.PRODUCTION,
+            sleep=self.ai_sleep,
         )
 
     def audit(self, repos: Repositories) -> AuditLog:

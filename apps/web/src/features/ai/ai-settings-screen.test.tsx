@@ -41,15 +41,27 @@ const model: AiModel = {
   display_name: "Modelo Grande 1",
   is_available: true,
   reports_capabilities: true,
+  input_price: null,
+  output_price: null,
 };
 const assignments = (assigned: AiModel | null = null) => [
   { operation: "EXTRACCION_CV", model: assigned, updated_at: null },
   { operation: "EVALUACION_DOCUMENTAL", model: null, updated_at: null },
 ];
+const emptyUsage = {
+  year: 2026,
+  month: 11,
+  rows: [],
+  providers: [
+    { code: "ANTHROPIC", name: "Anthropic", spent_usd: "0", limit_usd: null },
+    { code: "OPENAI", name: "OpenAI", spent_usd: "0", limit_usd: null },
+  ],
+};
 const base = (providers: AiProvider[], encryption = true) => ({
   "GET /api/v1/ai/providers": { body: { encryption_available: encryption, providers } },
   "GET /api/v1/ai/models": { body: [] },
   "GET /api/v1/ai/assignments": { body: assignments() },
+  "GET /api/v1/ai/usage": { body: emptyUsage },
 });
 
 afterEach(() => {
@@ -184,6 +196,71 @@ describe("AiSettingsScreen", () => {
     expect((await screen.findByText(/Modelo actualizado para «Extracción de datos de CV»/)).tagName).toBe("P");
     const put = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/assignments/EXTRACCION_CV"));
     expect(JSON.parse(String(put?.[1]?.body))).toEqual({ model_id: model.id });
+  });
+
+  it("guarda el precio de un modelo, lo prueba y muestra el consumo del mes", async () => {
+    const priced = { ...model, input_price: "3.0000", output_price: "15.0000" };
+    let current = model;
+    const fetchMock = mockApi({
+      ...base([{ ...withKey, enabled: true, models_available: 1 }, openai]),
+      "GET /api/v1/ai/models": () => ({ body: [current] }),
+      [`PUT /api/v1/ai/models/${model.id}/prices`]: () => {
+        current = priced;
+        return { body: priced };
+      },
+      [`POST /api/v1/ai/models/${model.id}/test`]: {
+        body: {
+          ok: true,
+          error: null,
+          reply: "OK",
+          input_tokens: 1000,
+          output_tokens: 500,
+          estimated_cost_usd: "0.010500",
+          attempts: 1,
+        },
+      },
+      "GET /api/v1/ai/usage": {
+        body: {
+          ...emptyUsage,
+          rows: [
+            {
+              provider_code: "ANTHROPIC",
+              provider_name: "Anthropic",
+              model_id: "modelo-grande-1",
+              operation: "PRUEBA",
+              calls: 2,
+              failures: 1,
+              input_tokens: 1000,
+              output_tokens: 500,
+              estimated_cost_usd: "0.010500",
+            },
+          ],
+          providers: [
+            { code: "ANTHROPIC", name: "Anthropic", spent_usd: "0.010500", limit_usd: "200.00" },
+            emptyUsage.providers[1],
+          ],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderApp(<AiSettingsScreen />, { session: makeUser() });
+    await user.type(await screen.findByLabelText("Precio de entrada de Modelo Grande 1"), "3");
+    await user.type(screen.getByLabelText("Precio de salida de Modelo Grande 1"), "15");
+    await user.click(screen.getByRole("button", { name: "Guardar precio de Modelo Grande 1" }));
+    const prices = screen.getByRole("region", { name: "Modelos y precios" });
+    expect((await within(prices).findByRole("status")).textContent).toContain("guardado");
+    const put = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/prices"));
+    expect(JSON.parse(String(put?.[1]?.body))).toEqual({ input_price: "3", output_price: "15" });
+
+    await user.click(screen.getByRole("button", { name: "Probar Modelo Grande 1" }));
+    expect((await within(prices).findByText(/respondió/)).textContent).toContain(
+      "Costo estimado: 0.010500 USD",
+    );
+
+    const usage = screen.getByRole("region", { name: "Consumo y costos de este mes" });
+    expect(within(usage).getByText("Límite mensual: 200.00 USD")).toBeTruthy();
+    expect(within(usage).getByRole("cell", { name: "Prueba de modelo" })).toBeTruthy();
+    expect(within(usage).getByRole("cell", { name: "0.010500 USD" })).toBeTruthy();
   });
 
   it("muestra el error si la configuración no carga", async () => {

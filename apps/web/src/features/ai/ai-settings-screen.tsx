@@ -16,11 +16,14 @@ import {
   type AiProvider,
   assignModel,
   getAiOverview,
+  getUsage,
   listAiModels,
   listAssignments,
   OPERATION_LABELS,
   revokeProviderKey,
+  setModelPrices,
   setProviderKey,
+  testModel,
   testProvider,
   updateProvider,
 } from "@/lib/api/ai";
@@ -96,13 +99,8 @@ export function AiSettingsScreen() {
             ))}
           </div>
           <Assignments />
-          <section className={cardClass}>
-            <h2 className="text-xl font-medium">Consumo y costos</h2>
-            <p className="mt-1 text-ink-muted">
-              Todavía no hay consumo registrado. Aparecerá aquí, por modelo y operación, cuando se
-              procesen documentos.
-            </p>
-          </section>
+          <ModelPrices />
+          <Usage />
         </>
       )}
     </>
@@ -504,6 +502,243 @@ function Assignments() {
           );
         })}
       </ul>
+    </section>
+  );
+}
+
+function ModelPrices() {
+  const queryClient = useQueryClient();
+  const models = useQuery({
+    queryKey: ["ai", "models"],
+    queryFn: ({ signal }) => listAiModels(signal),
+  });
+  const [feedback, setFeedback] = useState<Feedback>(null);
+  const available = (models.data ?? []).filter((model) => model.is_available);
+  if (available.length === 0) return null;
+
+  return (
+    <section aria-labelledby="prices-title" className={`${cardClass} flex flex-col gap-4`}>
+      <div>
+        <h2 id="prices-title" className="text-xl font-medium">
+          Modelos y precios
+        </h2>
+        <p className="mt-1 max-w-3xl text-ink-muted">
+          Captura el precio de cada modelo, en dólares por millón de tokens, tal como lo publica
+          el proveedor. Con él se estima el costo y se aplica el límite mensual. «Probar» pide al
+          modelo una respuesta mínima; no envía documentos.
+        </p>
+      </div>
+      {feedback && (
+        <p
+          role={feedback.kind === "ok" ? "status" : "alert"}
+          className={`rounded-2xl px-4 py-3 ${
+            feedback.kind === "ok"
+              ? "bg-accent-blue-soft text-accent-blue-ink"
+              : "bg-accent-red-soft text-accent-red-ink"
+          }`}
+        >
+          {feedback.text}
+        </p>
+      )}
+      <ul aria-label="Modelos" className="flex flex-col gap-2">
+        {available.map((model) => (
+          <ModelPriceRow
+            key={`${model.id}-${model.input_price}-${model.output_price}`}
+            model={model}
+            onFeedback={setFeedback}
+            onChanged={() => queryClient.invalidateQueries({ queryKey: ["ai"] })}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ModelPriceRow({
+  model,
+  onFeedback,
+  onChanged,
+}: {
+  model: AiModel;
+  onFeedback: (feedback: Feedback) => void;
+  onChanged: () => Promise<void>;
+}) {
+  const [input, setInput] = useState(model.input_price ?? "");
+  const [output, setOutput] = useState(model.output_price ?? "");
+  const [busy, setBusy] = useState(false);
+
+  async function run(action: () => Promise<NonNullable<Feedback>>) {
+    setBusy(true);
+    onFeedback(null);
+    try {
+      const outcome = await action();
+      await onChanged();
+      onFeedback(outcome);
+    } catch (caught) {
+      onFeedback({ kind: "error", text: describeError(caught) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="flex flex-wrap items-end gap-3 rounded-2xl bg-surface px-4 py-3">
+      <div className="min-w-0 flex-[2_1_220px]">
+        <p className="font-medium break-words">{model.display_name}</p>
+        <p className="text-sm text-ink-muted">{model.provider_name}</p>
+      </div>
+      <div className="flex flex-[1_1_120px] flex-col gap-1">
+        <label htmlFor={`in-${model.id}`} className="text-sm text-ink-muted">
+          Entrada (USD)
+        </label>
+        <input
+          id={`in-${model.id}`}
+          aria-label={`Precio de entrada de ${model.display_name}`}
+          inputMode="decimal"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          className={fieldClass}
+        />
+      </div>
+      <div className="flex flex-[1_1_120px] flex-col gap-1">
+        <label htmlFor={`out-${model.id}`} className="text-sm text-ink-muted">
+          Salida (USD)
+        </label>
+        <input
+          id={`out-${model.id}`}
+          aria-label={`Precio de salida de ${model.display_name}`}
+          inputMode="decimal"
+          value={output}
+          onChange={(event) => setOutput(event.target.value)}
+          className={fieldClass}
+        />
+      </div>
+      <button
+        type="button"
+        className={secondaryButtonClass}
+        disabled={busy}
+        aria-label={`Guardar precio de ${model.display_name}`}
+        onClick={() =>
+          run(async () => {
+            await setModelPrices(model.id, {
+              input_price: input.trim() || null,
+              output_price: output.trim() || null,
+            });
+            return { kind: "ok", text: `Precio de ${model.display_name} guardado.` };
+          })
+        }
+      >
+        Guardar precio
+      </button>
+      <button
+        type="button"
+        className={secondaryButtonClass}
+        disabled={busy}
+        aria-label={`Probar ${model.display_name}`}
+        onClick={() =>
+          run(async () => {
+            const result = await testModel(model.id);
+            if (!result.ok) {
+              return { kind: "error", text: result.error ?? "El modelo no respondió." };
+            }
+            const cost = result.estimated_cost_usd
+              ? ` Costo estimado: ${result.estimated_cost_usd} USD.`
+              : " Sin precio capturado no se estima el costo.";
+            return {
+              kind: "ok",
+              text: `${model.display_name} respondió. Tokens: ${result.input_tokens} de entrada y ${result.output_tokens} de salida.${cost}`,
+            };
+          })
+        }
+      >
+        Probar
+      </button>
+    </li>
+  );
+}
+
+function Usage() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const { data, error } = useQuery({
+    queryKey: ["ai", "usage", year, month],
+    queryFn: ({ signal }) => getUsage(year, month, signal),
+  });
+
+  return (
+    <section aria-labelledby="usage-title" className={`${cardClass} flex flex-col gap-4`}>
+      <div>
+        <h2 id="usage-title" className="text-xl font-medium">
+          Consumo y costos de este mes
+        </h2>
+        <p className="mt-1 max-w-3xl text-ink-muted">
+          El costo es una estimación a partir de los tokens y del precio capturado; lo que
+          cobra el proveedor puede diferir. No se guarda el contenido enviado ni las respuestas.
+        </p>
+      </div>
+      {error ? (
+        <p role="alert" className="rounded-2xl bg-accent-red-soft px-4 py-3 text-accent-red-ink">
+          {describeError(error)}
+        </p>
+      ) : !data ? (
+        <p className="text-ink-muted">Cargando consumo…</p>
+      ) : (
+        <>
+          <ul aria-label="Gasto por proveedor" className="grid gap-3 sm:grid-cols-2">
+            {data.providers.map((provider) => (
+              <li key={provider.code} className="rounded-tile bg-surface px-5 py-4">
+                <p className="text-sm text-ink-muted">{provider.name}</p>
+                <p className="text-2xl font-medium">{provider.spent_usd} USD</p>
+                <p className="text-sm text-ink-muted">
+                  {provider.limit_usd ? `Límite mensual: ${provider.limit_usd} USD` : "Sin límite mensual"}
+                </p>
+              </li>
+            ))}
+          </ul>
+          {data.rows.length === 0 ? (
+            <p className="text-ink-muted">Todavía no hay llamadas registradas este mes.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] border-separate border-spacing-y-1.5 text-left text-sm">
+                <thead>
+                  <tr className="text-ink-muted">
+                    {["Modelo", "Operación", "Llamadas", "Fallidas", "Tokens de entrada", "Tokens de salida", "Costo estimado"].map(
+                      (title) => (
+                        <th key={title} scope="col" className="px-4 pb-1 font-normal">
+                          {title}
+                        </th>
+                      ),
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rows.map((row) => (
+                    <tr key={`${row.provider_code}-${row.model_id}-${row.operation}`}>
+                      <td className="rounded-l-3xl bg-surface px-4 py-3 font-medium">
+                        {row.model_id}
+                        <span className="block text-ink-muted">{row.provider_name}</span>
+                      </td>
+                      <td className="bg-surface px-4 py-3">
+                        {row.operation === "PRUEBA"
+                          ? "Prueba de modelo"
+                          : (OPERATION_LABELS[row.operation] ?? row.operation)}
+                      </td>
+                      <td className="bg-surface px-4 py-3">{row.calls}</td>
+                      <td className="bg-surface px-4 py-3">{row.failures}</td>
+                      <td className="bg-surface px-4 py-3">{row.input_tokens}</td>
+                      <td className="bg-surface px-4 py-3">{row.output_tokens}</td>
+                      <td className="rounded-r-3xl bg-surface px-4 py-3">
+                        {row.estimated_cost_usd ? `${row.estimated_cost_usd} USD` : "Sin precio"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </section>
   );
 }

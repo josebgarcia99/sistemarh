@@ -131,4 +131,17 @@ Estado al 11 de noviembre de 2026.
 
 **Sin verificar:** la aplicación nunca se ha conectado a Anthropic ni a OpenAI. Las pruebas usan proveedores simulados y claves ficticias. La dirección, la cabecera de autorización y la versión de la API de Anthropic (`2026-10-21`, configurable) se tomaron de la documentación pública de cada proveedor consultada el 11 de noviembre de 2026.
 
-**Pendiente:** registro de consumo y costos, aplicación del límite mensual y validación de capacidades antes de usar un modelo. Llegan con el procesamiento de CV.
+**Llamadas a los proveedores (Fase 4, tercera parte).**
+
+| Aspecto | Cómo quedó |
+| --- | --- |
+| Qué se registra | Cada llamada deja en `ai.executions` la operación, el modelo, los tokens, el costo estimado, la duración, los intentos y el resultado. No se guarda lo enviado ni lo recibido |
+| Costo | Se estima con el precio por millón de tokens que el administrador captura para cada modelo. No hay precios en el código. Es una estimación: la factura del proveedor puede diferir |
+| Límite mensual | Antes de cada llamada se compara el gasto estimado del mes con el límite del proveedor; si se alcanzó, la llamada no se hace. Si hay límite y el modelo no tiene precio, la llamada se rechaza para no gastar a ciegas |
+| Reintentos | Fallos de red, de límite de solicitudes o del proveedor se reintentan dos veces, con espera. Una clave rechazada no se reintenta. Un fallo definitivo se registra y se informa; no tumba el proceso que lo llamó |
+| Documentos | Fuera de producción, una llamada que lleve un documento se rechaza salvo que `RECLU_AI_ALLOW_REAL_DOCUMENTS` sea `true` (restricción 8) |
+| OpenAI | Se envía `store: false` para que el proveedor no conserve lo enviado |
+
+**Sin verificar:** las llamadas de generación tampoco se han ejecutado contra los servicios reales. La forma de la llamada a OpenAI se tomó de su documentación pública consultada el 11 de noviembre de 2026; la de Anthropic se escribió a partir de la forma conocida de su API de mensajes, sin poder consultar esa página de la documentación ese día.
+
+**Pendiente:** validar las capacidades de un modelo antes de usarlo y conciliar el costo estimado con la factura real.

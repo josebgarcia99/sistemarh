@@ -45,6 +45,7 @@ class AuditAction(StrEnum):
     IA_CONEXION_PROBADA = "ia.conexion_probada"
     IA_PROVEEDOR_ACTUALIZADO = "ia.proveedor_actualizado"
     IA_MODELO_ASIGNADO = "ia.modelo_asignado"
+    IA_PRECIO_ACTUALIZADO = "ia.precio_actualizado"
     PERFIL_VERSION_CREADA = "perfil.version_creada"
     PROMPT_GENERADO = "prompt.generado"
     PROMPT_EDITADO = "prompt.editado"

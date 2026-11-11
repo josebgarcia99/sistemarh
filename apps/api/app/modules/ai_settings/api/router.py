@@ -75,6 +75,9 @@ class ModelOut(BaseModel):
     display_name: str
     is_available: bool
     reports_capabilities: bool
+    # Dólares por millón de tokens; los captura el administrador.
+    input_price: Decimal | None
+    output_price: Decimal | None
 
     @classmethod
     def of(cls, model: Model) -> ModelOut:
@@ -86,6 +89,8 @@ class ModelOut(BaseModel):
             display_name=model.display_name,
             is_available=model.is_available,
             reports_capabilities=model.capabilities is not None,
+            input_price=model.input_price,
+            output_price=model.output_price,
         )
 
 
@@ -101,6 +106,48 @@ class AssignmentOut(BaseModel):
             model=ModelOut.of(model) if model else None,
             updated_at=assignment.updated_at,
         )
+
+
+class PricesIn(BaseModel):
+    input_price: Decimal | None = Field(default=None, max_digits=12, decimal_places=4)
+    output_price: Decimal | None = Field(default=None, max_digits=12, decimal_places=4)
+
+
+class ModelTestOut(BaseModel):
+    ok: bool
+    error: str | None
+    # Primeros caracteres de la respuesta del modelo a la prueba.
+    reply: str
+    input_tokens: int | None
+    output_tokens: int | None
+    estimated_cost_usd: Decimal | None
+    attempts: int
+
+
+class UsageRowOut(BaseModel):
+    provider_code: ProviderCode
+    provider_name: str
+    model_id: str
+    operation: str
+    calls: int
+    failures: int
+    input_tokens: int
+    output_tokens: int
+    estimated_cost_usd: Decimal | None
+
+
+class ProviderSpendOut(BaseModel):
+    code: ProviderCode
+    name: str
+    spent_usd: Decimal
+    limit_usd: Decimal | None
+
+
+class UsageOut(BaseModel):
+    year: int
+    month: int
+    rows: list[UsageRowOut]
+    providers: list[ProviderSpendOut]
 
 
 class AssignmentIn(BaseModel):
@@ -247,3 +294,85 @@ def assign_model(
             principal.user, operation, body.model_id, ip=client_ip(request)
         )
     return AssignmentOut.of(assignment, model)
+
+
+@router.put(
+    "/models/{model_id}/prices", response_model=ModelOut, summary="Precio por millón de tokens"
+)
+def set_model_prices(
+    model_id: uuid.UUID,
+    body: PricesIn,
+    request: Request,
+    principal: Principal = Depends(require_admin),  # noqa: B008
+    context: AppContext = Depends(get_context),  # noqa: B008
+) -> ModelOut:
+    with context.require_backend().transaction() as repos:
+        model = context.ai_settings(repos).set_prices(
+            principal.user,
+            model_id,
+            input_price=body.input_price,
+            output_price=body.output_price,
+            ip=client_ip(request),
+        )
+    return ModelOut.of(model)
+
+
+@router.post(
+    "/models/{model_id}/test",
+    response_model=ModelTestOut,
+    summary="Pide al modelo una respuesta mínima (no envía documentos)",
+)
+def test_model(
+    model_id: uuid.UUID,
+    principal: Principal = Depends(require_admin),  # noqa: B008
+    context: AppContext = Depends(get_context),  # noqa: B008
+) -> ModelTestOut:
+    with context.require_backend().transaction() as repos:
+        result = context.ai_settings(repos).test_model(principal.user, model_id)
+    return ModelTestOut(
+        ok=result.ok,
+        error=result.error,
+        reply=result.text[:200],
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        estimated_cost_usd=result.estimated_cost_usd,
+        attempts=result.attempts,
+    )
+
+
+@router.get("/usage", response_model=UsageOut, summary="Consumo y costo estimado de un mes")
+def get_usage(
+    year: int = Query(ge=2024, le=2100),
+    month: int = Query(ge=1, le=12),
+    principal: Principal = Depends(require_admin),  # noqa: B008
+    context: AppContext = Depends(get_context),  # noqa: B008
+) -> UsageOut:
+    with context.require_backend().transaction() as repos:
+        rows, spend = context.ai_settings(repos).usage(principal.user, year, month)
+    return UsageOut(
+        year=year,
+        month=month,
+        rows=[
+            UsageRowOut(
+                provider_code=row.provider_code,
+                provider_name=PROVIDER_NAMES[row.provider_code],
+                model_id=row.model_id,
+                operation=row.operation,
+                calls=row.calls,
+                failures=row.failures,
+                input_tokens=row.input_tokens,
+                output_tokens=row.output_tokens,
+                estimated_cost_usd=row.estimated_cost_usd,
+            )
+            for row in rows
+        ],
+        providers=[
+            ProviderSpendOut(
+                code=item.code,
+                name=PROVIDER_NAMES[item.code],
+                spent_usd=item.spent_usd,
+                limit_usd=item.limit_usd,
+            )
+            for item in spend
+        ],
+    )

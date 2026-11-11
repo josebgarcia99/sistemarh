@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -17,9 +18,12 @@ from app.core.exceptions.errors import (
 )
 from app.core.ids import new_sequential_uuid
 from app.modules.ai_settings.domain.models import (
+    PROVIDER_NAMES,
     AiRepository,
     Assignment,
     Credential,
+    Execution,
+    ExecutionStatus,
     KeySource,
     Model,
     Operation,
@@ -28,11 +32,17 @@ from app.modules.ai_settings.domain.models import (
     ProviderCode,
     ProviderError,
     TextCipher,
+    UsageRow,
 )
 from app.modules.audit.application.service import AuditLog
 from app.modules.audit.domain.models import AuditAction, AuditResult
 
 RESOURCE = "proveedor_ia"
+TEST_OPERATION = "PRUEBA"
+# Fallos que pueden ser pasajeros: red, límite de solicitudes o error del proveedor.
+_RETRYABLE = frozenset({"red", "limite", "proveedor"})
+_BACKOFF_SECONDS = (2.0, 6.0)
+_MILLION = Decimal(1_000_000)
 _MIN_KEY_LENGTH = 20
 _MAX_KEY_LENGTH = 500
 
@@ -70,6 +80,37 @@ class ResolvedModel:
     api_key: str
 
 
+@dataclass(frozen=True)
+class GenerationResult:
+    """Resultado de una llamada a un proveedor. Un fallo del proveedor no es una
+    excepción: queda registrado y quien llama decide qué hacer."""
+
+    ok: bool
+    text: str
+    complete: bool
+    error: str | None
+    input_tokens: int | None
+    output_tokens: int | None
+    estimated_cost_usd: Decimal | None
+    attempts: int
+    execution_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class ProviderSpend:
+    code: ProviderCode
+    spent_usd: Decimal
+    limit_usd: Decimal | None
+
+
+def month_bounds(year: int, month: int) -> tuple[datetime, datetime]:
+    from datetime import UTC
+
+    start = datetime(year, month, 1, tzinfo=UTC)
+    end = datetime(year + month // 12, month % 12 + 1, 1, tzinfo=UTC)
+    return start, end
+
+
 def _mask(last4: str) -> str:
     return f"••••{last4}"
 
@@ -89,6 +130,8 @@ class AiSettingsService:
         cipher: TextCipher | None,
         clients: Mapping[ProviderCode, ProviderClient],
         env_keys: Mapping[ProviderCode, str],
+        documents_allowed: bool = False,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._repo = repository
         self._audit = audit
@@ -96,6 +139,8 @@ class AiSettingsService:
         self._cipher = cipher
         self._clients = clients
         self._env_keys = env_keys
+        self._documents_allowed = documents_allowed
+        self._sleep = sleep
 
     @staticmethod
     def _require_admin(actor: Actor) -> None:
@@ -393,8 +438,7 @@ class AiSettingsService:
 
     # --- Uso por otras partes del sistema ------------------------------------------------
 
-    def resolve(self, operation: Operation) -> ResolvedModel:
-        """Modelo y clave para ejecutar una operación. Se valida en el momento de usarlo."""
+    def _assigned_model(self, operation: Operation) -> Model:
         assignment = self._repo.get_assignment(operation)
         model = self._repo.get_model(assignment.model_ref) if assignment.model_ref else None
         if model is None:
@@ -402,12 +446,196 @@ class AiSettingsService:
                 "Esta operación no tiene un modelo asignado. Pídele al administrador "
                 "que lo configure en Configuración de IA."
             )
+        return model
+
+    def _usable_key(self, model: Model) -> str:
         if not model.is_available or not self._repo.get_provider(model.provider_code).enabled:
             raise ValidationFailedError(
-                "El modelo asignado a esta operación ya no está disponible o su "
-                "proveedor está deshabilitado."
+                "El modelo asignado ya no está disponible o su proveedor está deshabilitado."
             )
         api_key = self._api_key(model.provider_code)
         if api_key is None:
-            raise ValidationFailedError("El proveedor asignado no tiene una API key registrada.")
-        return ResolvedModel(model.provider_code, model.model_id, api_key)
+            raise ValidationFailedError("El proveedor del modelo no tiene una API key registrada.")
+        return api_key
+
+    def resolve(self, operation: Operation) -> ResolvedModel:
+        """Modelo y clave para ejecutar una operación. Se valida en el momento de usarlo."""
+        model = self._assigned_model(operation)
+        return ResolvedModel(model.provider_code, model.model_id, self._usable_key(model))
+
+    # --- Precios y consumo ---------------------------------------------------------------
+
+    def set_prices(
+        self,
+        actor: Actor,
+        model_ref: uuid.UUID,
+        *,
+        input_price: Decimal | None,
+        output_price: Decimal | None,
+        ip: str | None = None,
+    ) -> Model:
+        """Precio por millón de tokens. Lo captura el administrador: no hay precios
+        escritos en el código."""
+        self._require_admin(actor)
+        model = self._repo.get_model(model_ref)
+        if model is None:
+            raise NotFoundError("El modelo no existe.")
+        if (input_price is None) != (output_price is None):
+            raise ValidationFailedError(
+                "Captura los dos precios, de entrada y de salida, o ninguno."
+            )
+        for price in (input_price, output_price):
+            if price is not None and not Decimal(0) <= price <= Decimal(100000):
+                raise ValidationFailedError("El precio debe estar entre 0 y 100,000 USD.")
+        if input_price is not None and output_price is not None:
+            input_price = input_price.quantize(Decimal("0.0001"))
+            output_price = output_price.quantize(Decimal("0.0001"))
+        model.input_price, model.output_price = input_price, output_price
+        self._repo.save_model(model)
+        self._audit.record(
+            AuditAction.IA_PRECIO_ACTUALIZADO,
+            actor_user_id=actor.id,
+            resource_type="modelo_ia",
+            resource_id=model.id,
+            ip=ip,
+            details={
+                "modelo": model.model_id,
+                "entrada_usd": str(input_price) if input_price is not None else None,
+                "salida_usd": str(output_price) if output_price is not None else None,
+            },
+        )
+        return model
+
+    def usage(
+        self, actor: Actor, year: int, month: int
+    ) -> tuple[list[UsageRow], list[ProviderSpend]]:
+        self._require_admin(actor)
+        start, end = month_bounds(year, month)
+        spend = [
+            ProviderSpend(
+                code,
+                self._repo.provider_cost(code, start, end),
+                self._repo.get_provider(code).monthly_limit_usd,
+            )
+            for code in ProviderCode
+        ]
+        return self._repo.usage(start, end), spend
+
+    # --- Ejecución -----------------------------------------------------------------------
+
+    def execute(
+        self,
+        operation: Operation | str,
+        *,
+        system: str,
+        user: str,
+        model: Model | None = None,
+        actor_user_id: uuid.UUID | None = None,
+        vacancy_id: uuid.UUID | None = None,
+        max_output_tokens: int = 4000,
+        carries_document: bool = False,
+    ) -> GenerationResult:
+        """Llama al proveedor del modelo asignado y registra el consumo.
+
+        Antes de llamar comprueba el modelo, la clave, la autorización para
+        enviar documentos y el límite de gasto mensual. Reintenta los fallos
+        pasajeros. No guarda lo enviado ni lo recibido: solo tokens, costo
+        estimado, duración y resultado.
+        """
+        if model is None:
+            if not isinstance(operation, Operation):
+                raise ValidationFailedError("La operación no existe.")
+            model = self._assigned_model(operation)
+        api_key = self._usable_key(model)
+        code = model.provider_code
+        if carries_document and not self._documents_allowed:
+            raise ValidationFailedError(
+                "En este entorno no está autorizado enviar documentos a proveedores de IA "
+                "(RECLU_AI_ALLOW_REAL_DOCUMENTS)."
+            )
+        priced = model.input_price is not None and model.output_price is not None
+        limit = self._repo.get_provider(code).monthly_limit_usd
+        now = self._clock()
+        if limit is not None:
+            if not priced:
+                raise ValidationFailedError(
+                    "El proveedor tiene un límite de gasto mensual, pero el modelo no tiene "
+                    "precio capturado. Captúralo en Configuración de IA para poder aplicarlo."
+                )
+            if self._repo.provider_cost(code, *month_bounds(now.year, now.month)) >= limit:
+                raise ConflictError(
+                    f"Se alcanzó el límite de gasto mensual de {PROVIDER_NAMES[code]}. "
+                    "Un administrador puede ampliarlo en Configuración de IA."
+                )
+
+        started = time.monotonic()
+        attempts = 0
+        generation = None
+        failure: ProviderError | None = None
+        while generation is None:
+            attempts += 1
+            try:
+                generation = self._clients[code].generate(
+                    api_key,
+                    model.model_id,
+                    system=system,
+                    user=user,
+                    max_output_tokens=max_output_tokens,
+                )
+            except ProviderError as error:
+                if error.kind in _RETRYABLE and attempts <= len(_BACKOFF_SECONDS):
+                    self._sleep(_BACKOFF_SECONDS[attempts - 1])
+                    continue
+                failure = error
+                break
+
+        cost = None
+        if generation is not None and priced:
+            cost = (
+                generation.input_tokens * model.input_price
+                + generation.output_tokens * model.output_price
+            ) / _MILLION
+            cost = cost.quantize(Decimal("0.000001"))
+        execution = Execution(
+            id=new_sequential_uuid(),
+            occurred_at=now,
+            operation=str(operation.value if isinstance(operation, Operation) else operation),
+            provider_code=code,
+            model_id=model.model_id,
+            status=ExecutionStatus.CORRECTA if generation else ExecutionStatus.FALLIDA,
+            attempts=attempts,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            input_tokens=generation.input_tokens if generation else None,
+            output_tokens=generation.output_tokens if generation else None,
+            estimated_cost_usd=cost,
+            error_kind=failure.kind if failure else None,
+            actor_user_id=actor_user_id,
+            vacancy_id=vacancy_id,
+        )
+        self._repo.add_execution(execution)
+        return GenerationResult(
+            ok=generation is not None,
+            text=generation.text if generation else "",
+            complete=generation.complete if generation else False,
+            error=failure.message if failure else None,
+            input_tokens=execution.input_tokens,
+            output_tokens=execution.output_tokens,
+            estimated_cost_usd=cost,
+            attempts=attempts,
+            execution_id=execution.id,
+        )
+
+    def test_model(self, actor: Actor, model_ref: uuid.UUID) -> GenerationResult:
+        """Pide al modelo una respuesta mínima. No envía ningún documento."""
+        self._require_admin(actor)
+        model = self._repo.get_model(model_ref)
+        if model is None:
+            raise NotFoundError("El modelo no existe.")
+        return self.execute(
+            TEST_OPERATION,
+            model=model,
+            system="Responde únicamente con la palabra OK.",
+            user="Prueba de funcionamiento.",
+            actor_user_id=actor.id,
+            max_output_tokens=200,
+        )

@@ -55,6 +55,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "ia.conexion_probada": "Prueba de conexión con proveedor de IA",
   "ia.proveedor_actualizado": "Proveedor de IA actualizado",
   "ia.modelo_asignado": "Modelo de IA asignado",
+  "ia.precio_actualizado": "Precio de modelo de IA actualizado",
   "perfil.version_creada": "Versión de perfil de puesto",
   "prompt.generado": "Prompt generado",
   "prompt.editado": "Prompt editado",

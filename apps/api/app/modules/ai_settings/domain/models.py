@@ -82,6 +82,9 @@ class Model:
     is_available: bool
     first_seen_at: datetime
     last_seen_at: datetime
+    # Precio en dólares por millón de tokens. Lo captura el administrador.
+    input_price: Decimal | None = None
+    output_price: Decimal | None = None
 
 
 @dataclass
@@ -109,8 +112,59 @@ class ProviderError(Exception):
         self.message = message
 
 
+@dataclass(frozen=True)
+class Generation:
+    text: str
+    input_tokens: int
+    output_tokens: int
+    complete: bool
+
+
 class ProviderClient(Protocol):
     def list_models(self, api_key: str) -> list[DiscoveredModel]: ...
+
+    def generate(
+        self, api_key: str, model: str, *, system: str, user: str, max_output_tokens: int
+    ) -> Generation: ...
+
+
+class ExecutionStatus(StrEnum):
+    CORRECTA = "CORRECTA"
+    FALLIDA = "FALLIDA"
+
+
+@dataclass(frozen=True)
+class Execution:
+    """Una llamada a un proveedor. Nunca guarda el contenido enviado ni la respuesta."""
+
+    id: uuid.UUID
+    occurred_at: datetime
+    operation: str
+    provider_code: ProviderCode
+    model_id: str
+    status: ExecutionStatus
+    attempts: int
+    duration_ms: int
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    estimated_cost_usd: Decimal | None = None
+    # Lo que el proveedor factura de verdad; se llena si algún día se concilia.
+    confirmed_cost_usd: Decimal | None = None
+    error_kind: str | None = None
+    actor_user_id: uuid.UUID | None = None
+    vacancy_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True)
+class UsageRow:
+    provider_code: ProviderCode
+    model_id: str
+    operation: str
+    calls: int
+    failures: int
+    input_tokens: int
+    output_tokens: int
+    estimated_cost_usd: Decimal | None
 
 
 class TextCipher(Protocol):
@@ -139,6 +193,14 @@ class AiRepository(Protocol):
     def add_model(self, model: Model) -> None: ...
 
     def save_model(self, model: Model) -> None: ...
+
+    def add_execution(self, execution: Execution) -> None: ...
+
+    def usage(self, start: datetime, end: datetime) -> list[UsageRow]: ...
+
+    def provider_cost(self, code: ProviderCode, start: datetime, end: datetime) -> Decimal:
+        """Costo estimado acumulado del proveedor en el periodo."""
+        ...
 
     def get_assignment(self, operation: Operation) -> Assignment: ...
 

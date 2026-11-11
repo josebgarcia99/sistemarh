@@ -35,6 +35,8 @@ const modelSchema = z.object({
   display_name: z.string(),
   is_available: z.boolean(),
   reports_capabilities: z.boolean(),
+  input_price: z.string().nullable(),
+  output_price: z.string().nullable(),
 });
 export type AiModel = z.infer<typeof modelSchema>;
 
@@ -106,4 +108,58 @@ export function assignModel(operation: string, modelId: string | null): Promise<
     body: { model_id: modelId },
     schema: assignmentSchema,
   });
+}
+
+const modelTestSchema = z.object({
+  ok: z.boolean(),
+  error: z.string().nullable(),
+  reply: z.string(),
+  input_tokens: z.number().nullable(),
+  output_tokens: z.number().nullable(),
+  estimated_cost_usd: z.string().nullable(),
+  attempts: z.number(),
+});
+export type AiModelTest = z.infer<typeof modelTestSchema>;
+
+const usageSchema = z.object({
+  year: z.number(),
+  month: z.number(),
+  rows: z.array(
+    z.object({
+      provider_code: providerCodeSchema,
+      provider_name: z.string(),
+      model_id: z.string(),
+      operation: z.string(),
+      calls: z.number(),
+      failures: z.number(),
+      input_tokens: z.number(),
+      output_tokens: z.number(),
+      estimated_cost_usd: z.string().nullable(),
+    }),
+  ),
+  providers: z.array(
+    z.object({
+      code: providerCodeSchema,
+      name: z.string(),
+      spent_usd: z.string(),
+      limit_usd: z.string().nullable(),
+    }),
+  ),
+});
+export type AiUsage = z.infer<typeof usageSchema>;
+
+/** Precio en dólares por millón de tokens. Vacío en ambos para quitarlo. */
+export function setModelPrices(
+  modelId: string,
+  input: { input_price: string | null; output_price: string | null },
+): Promise<AiModel> {
+  return apiFetch(`/ai/models/${modelId}/prices`, { method: "PUT", body: input, schema: modelSchema });
+}
+
+export function testModel(modelId: string): Promise<AiModelTest> {
+  return apiFetch(`/ai/models/${modelId}/test`, { method: "POST", schema: modelTestSchema });
+}
+
+export function getUsage(year: number, month: number, signal?: AbortSignal): Promise<AiUsage> {
+  return apiFetch("/ai/usage", { query: { year, month }, schema: usageSchema, signal });
 }

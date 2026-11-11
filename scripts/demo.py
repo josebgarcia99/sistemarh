@@ -44,6 +44,7 @@ from app.infrastructure.storage.local import LocalFileStorage
 from app.main import create_app
 from app.modules.ai_settings.domain.models import (
     DiscoveredModel,
+    Generation,
     ProviderCode,
     ProviderError,
 )
@@ -78,6 +79,10 @@ class SimulatedProvider:
             DiscoveredModel(f"demo-{self._name}-grande", f"Modelo simulado grande ({self._name})"),
             DiscoveredModel(f"demo-{self._name}-rapido", f"Modelo simulado rápido ({self._name})"),
         ]
+
+    def generate(self, api_key, model, *, system, user, max_output_tokens) -> Generation:
+        # Respuesta fija con un consumo inventado, para ver la pantalla de costos.
+        return Generation("OK", input_tokens=len(system + user) // 4 + 50, output_tokens=40, complete=True)
 
 
 def seed(app, password: str) -> None:

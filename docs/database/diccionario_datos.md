@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0006`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0007`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -242,6 +242,7 @@ Modelos que cada proveedor informa. Se llena al probar la conexión; no hay iden
 | `capabilities` | `NVARCHAR(MAX)` | No | Capacidades que declara el proveedor, en JSON. Vacío si no las informa. |
 | `is_available` | `BIT` | Sí | 0 si el proveedor dejó de listarlo en la última comprobación. |
 | `first_seen_at`, `last_seen_at` | `DATETIME2(3)` | Sí | Primera y última vez que el proveedor lo listó. |
+| `input_price`, `output_price` | `NUMERIC(12,4)` | No | Precio en dólares por millón de tokens de entrada y de salida. Lo captura el administrador; sin él no se estima el costo. |
 
 ### `ai.operation_assignments`
 
@@ -252,6 +253,28 @@ Modelo asignado a cada operación (extracción de CV, evaluación, generación d
 | `operation` | `VARCHAR(40)` | Sí | Clave primaria. Una de las ocho operaciones. |
 | `model_ref` | `UNIQUEIDENTIFIER` | No | Modelo asignado (`ai.models`). Vacío: sin asignar. |
 | `updated_at`, `updated_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | No | Último cambio y quién lo hizo. |
+
+### `ai.executions`
+
+Una fila por cada llamada a un proveedor de IA. Guarda el consumo, **nunca** el contenido enviado ni la respuesta. Solo recibe inserciones.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `occurred_at` | `DATETIME2(3)` | Sí | Fecha de la llamada. |
+| `operation` | `VARCHAR(40)` | Sí | Operación (por ejemplo `EVALUACION_DOCUMENTAL`) o `PRUEBA`. |
+| `provider_code` | `VARCHAR(20)` | Sí | Proveedor. |
+| `model_id` | `NVARCHAR(200)` | Sí | Modelo usado. |
+| `status` | `VARCHAR(20)` | Sí | `CORRECTA` o `FALLIDA`. |
+| `attempts` | `INT` | Sí | Intentos realizados (1 si no hubo reintentos). |
+| `duration_ms` | `INT` | Sí | Duración total, en milisegundos. |
+| `input_tokens`, `output_tokens` | `INT` | No | Tokens que informó el proveedor. Vacíos si la llamada falló. |
+| `estimated_cost_usd` | `NUMERIC(12,6)` | No | Costo estimado con el precio capturado. Vacío si el modelo no tiene precio. |
+| `confirmed_cost_usd` | `NUMERIC(12,6)` | No | Costo real, si algún día se concilia con la factura del proveedor. Aún no se usa. |
+| `error_kind` | `VARCHAR(20)` | No | Tipo de fallo: `red`, `clave`, `limite` o `proveedor`. |
+| `actor_user_id`, `vacancy_id` | `UNIQUEIDENTIFIER` | No | Quién la originó y para qué vacante. Sin clave foránea a propósito: el registro se conserva. |
+
+Índices: `ix_executions_provider_date (provider_code, occurred_at)` para el límite mensual e `ix_executions_date (occurred_at)`.
 
 ### `ai.prompt_versions`
 

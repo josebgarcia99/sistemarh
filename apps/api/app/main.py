@@ -5,7 +5,8 @@ Ejecutar en desarrollo:  uvicorn app.main:app --reload
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import time
+from collections.abc import Callable, Mapping
 
 from fastapi import APIRouter, FastAPI
 
@@ -93,6 +94,7 @@ def create_app(
     scanner: MalwareScanner | None = None,
     master_key: MasterKey | None = None,
     ai_clients: dict[ProviderCode, ProviderClient] | None = None,
+    ai_sleep: Callable[[float], None] = time.sleep,
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
@@ -120,6 +122,7 @@ def create_app(
         scanner=scanner or build_scanner(settings),
         master_key=master_key if master_key is not None else build_master_key(settings),
         ai_clients=ai_clients if ai_clients is not None else build_provider_clients(settings),
+        ai_sleep=ai_sleep,
     )
 
     app.add_middleware(RequestContextMiddleware)

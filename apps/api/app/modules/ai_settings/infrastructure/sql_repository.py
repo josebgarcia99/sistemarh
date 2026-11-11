@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import uuid
+from dataclasses import asdict
+from datetime import datetime
+from decimal import Decimal
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
@@ -11,12 +14,15 @@ from sqlalchemy.orm import Session
 from app.modules.ai_settings.domain.models import (
     Assignment,
     Credential,
+    Execution,
     Model,
     Operation,
     Provider,
     ProviderCode,
+    UsageRow,
 )
 from app.modules.ai_settings.infrastructure.orm import (
+    AiExecutionRow,
     AiModelRow,
     AiOperationAssignmentRow,
     AiProviderCredentialRow,
@@ -53,6 +59,8 @@ def _to_model(row: AiModelRow) -> Model:
         is_available=row.is_available,
         first_seen_at=row.first_seen_at,
         last_seen_at=row.last_seen_at,
+        input_price=row.input_price,
+        output_price=row.output_price,
     )
 
 
@@ -153,6 +161,8 @@ class SqlAiRepository:
         row.capabilities = json.dumps(model.capabilities) if model.capabilities else None
         row.is_available = model.is_available
         row.last_seen_at = model.last_seen_at
+        row.input_price = model.input_price
+        row.output_price = model.output_price
         self._session.flush()
 
     def get_assignment(self, operation: Operation) -> Assignment:
@@ -170,3 +180,54 @@ class SqlAiRepository:
         row.updated_at = assignment.updated_at
         row.updated_by = assignment.updated_by
         self._session.flush()
+
+    # --- Consumo -------------------------------------------------------------------------
+
+    def add_execution(self, execution: Execution) -> None:
+        values = asdict(execution)
+        values["provider_code"] = execution.provider_code.value
+        values["status"] = execution.status.value
+        self._session.add(AiExecutionRow(**values))
+        self._session.flush()
+
+    def usage(self, start: datetime, end: datetime) -> list[UsageRow]:
+        row = AiExecutionRow
+        failed = sa.case((row.status == "FALLIDA", 1), else_=0)
+        rows = self._session.execute(
+            sa.select(
+                row.provider_code,
+                row.model_id,
+                row.operation,
+                sa.func.count(),
+                sa.func.sum(failed),
+                sa.func.coalesce(sa.func.sum(row.input_tokens), 0),
+                sa.func.coalesce(sa.func.sum(row.output_tokens), 0),
+                sa.func.sum(row.estimated_cost_usd),
+            )
+            .where(row.occurred_at >= start, row.occurred_at < end)
+            .group_by(row.provider_code, row.model_id, row.operation)
+            .order_by(row.provider_code, row.model_id, row.operation)
+        ).all()
+        return [
+            UsageRow(
+                provider_code=ProviderCode(code),
+                model_id=model_id,
+                operation=operation,
+                calls=calls,
+                failures=int(failures or 0),
+                input_tokens=int(tokens_in),
+                output_tokens=int(tokens_out),
+                estimated_cost_usd=Decimal(str(cost)) if cost is not None else None,
+            )
+            for code, model_id, operation, calls, failures, tokens_in, tokens_out, cost in rows
+        ]
+
+    def provider_cost(self, code: ProviderCode, start: datetime, end: datetime) -> Decimal:
+        total = self._session.execute(
+            sa.select(sa.func.sum(AiExecutionRow.estimated_cost_usd)).where(
+                AiExecutionRow.provider_code == code.value,
+                AiExecutionRow.occurred_at >= start,
+                AiExecutionRow.occurred_at < end,
+            )
+        ).scalar()
+        return Decimal(str(total)) if total is not None else Decimal(0)

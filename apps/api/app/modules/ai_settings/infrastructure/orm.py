@@ -81,6 +81,8 @@ class AiModelRow(Base):
     is_available: Mapped[bool] = mapped_column(sa.Boolean)
     first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime)
     last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    input_price: Mapped[Decimal | None] = mapped_column(sa.Numeric(12, 4), nullable=True)
+    output_price: Mapped[Decimal | None] = mapped_column(sa.Numeric(12, 4), nullable=True)
 
 
 class AiOperationAssignmentRow(Base):
@@ -95,3 +97,28 @@ class AiOperationAssignmentRow(Base):
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
         GUID, sa.ForeignKey(_USER_FK), nullable=True
     )
+
+
+class AiExecutionRow(Base):
+    __tablename__ = "executions"
+    __table_args__ = (
+        sa.Index("ix_executions_provider_date", "provider_code", "occurred_at"),
+        sa.Index("ix_executions_date", "occurred_at"),
+        {"schema": SCHEMA_AI},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID, primary_key=True)
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    operation: Mapped[str] = mapped_column(sa.String(40))
+    provider_code: Mapped[str] = mapped_column(sa.String(20))
+    model_id: Mapped[str] = mapped_column(sa.Unicode(200))
+    status: Mapped[str] = mapped_column(sa.String(20))
+    attempts: Mapped[int] = mapped_column(sa.Integer)
+    duration_ms: Mapped[int] = mapped_column(sa.Integer)
+    input_tokens: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    estimated_cost_usd: Mapped[Decimal | None] = mapped_column(sa.Numeric(12, 6), nullable=True)
+    confirmed_cost_usd: Mapped[Decimal | None] = mapped_column(sa.Numeric(12, 6), nullable=True)
+    error_kind: Mapped[str | None] = mapped_column(sa.String(20), nullable=True)
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(GUID, nullable=True)
+    vacancy_id: Mapped[uuid.UUID | None] = mapped_column(GUID, nullable=True)

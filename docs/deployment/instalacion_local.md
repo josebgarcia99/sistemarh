@@ -146,6 +146,7 @@ Si Sistemas prefiere ejecutar T-SQL en lugar de Alembic, los scripts equivalente
 | `actualizacion_0003_a_0004.sql` | Base que ya tiene la versión `0003` |
 | `actualizacion_0004_a_0005.sql` | Base que ya tiene la versión `0004` |
 | `actualizacion_0005_a_0006.sql` | Base que ya tiene la versión `0005` |
+| `actualizacion_0006_a_0007.sql` | Base que ya tiene la versión `0006` |
 | `permisos_usuario_aplicacion.sql` | Plantilla de permisos mínimos para el usuario de la aplicación |
 | `reversion_completa.sql` | Elimina todo. Solo para bases de prueba |
 
