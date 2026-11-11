@@ -207,3 +207,14 @@ Estado al 11 de noviembre de 2026.
 **Límite conocido:** el servidor controla la forma de la respuesta de la IA, no cada frase. Un resumen podría contener una valoración indebida escrita dentro de un texto permitido. Por eso cada pantalla lo presenta como resumen y no como conclusión, y por eso debe revisarse con casos sintéticos antes de usarlo con datos reales.
 
 **Sin verificar:** con SQL Server y con un modelo real.
+
+## Resultados finales, indicadores y reportes (Fase 7)
+
+- **La contratación es una decisión humana.** El resultado final solo se registra desde una petición de una persona con sesión y con permiso de colaboración sobre la vacante. Ninguna tarea automática ni respuesta de la IA escribe en `recruitment.application_outcomes`; la columna de quién lo registró no admite valores vacíos. Contratar a alguien que la IA no clasificó como aceptado se anota en la auditoría.
+- **Nada se borra.** Reabrir una postulación exige motivo y deja el resultado anterior anulado, con quién lo anuló y cuándo. El usuario de base de datos de la aplicación no tiene permiso de borrado en ese esquema.
+- **Permisos de hoy, también en los históricos.** Los tableros y el histórico no guardan cifras: se calculan en cada consulta sobre las vacantes que la persona puede ver en ese momento (las suyas y las compartidas; todas si es administradora). Quien pierde el acceso a una vacante deja de verla en cualquier periodo, pasado o presente. Pedir por identificador una vacante ajena devuelve resultados vacíos, sin revelar que existe.
+- **Datos solo para administradores.** El uso y costo de IA, los errores técnicos y la carga de trabajo por persona no se envían a quien no es administrador; no es que la pantalla los oculte.
+- **Excel sin fórmulas ejecutables.** Todo texto capturado por alguien (nombres, motivos, filtros) se escribe de forma que Excel no lo interprete como fórmula.
+- **Los reportes se quedan en el servidor.** Cada Excel se guarda en el almacenamiento documental con su identificador, fecha, tamaño y SHA-256, y queda en la auditoría quién lo generó y quién lo descargó. Solo lo descarga quien lo generó (o un administrador), y solo mientras conserve acceso a todas las vacantes que contiene; si perdió alguna, debe generar uno nuevo. No se envía a ningún servicio externo.
+- **Lo que un reporte contiene.** El de postulaciones lleva nombres de candidatos, etapa, resultado y su motivo, y la clasificación inicial de la IA. No lleva datos de contacto, psicometría, estudios socioeconómicos ni contenido de llamadas.
+- **Pendiente.** Política de retención y borrado de los reportes generados; revisión de las consultas de reportes en SQL Server.

@@ -14,6 +14,8 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 
 **Fase 6 (Evaluaciones posteriores): construida completa y probada con datos sintéticos y proveedores simulados; pendiente de la misma validación.** Incluye psicometría, entrevistas con gerente, pruebas técnicas, estudios socioeconómicos con formularios configurables y digitalización, y la síntesis del expediente. Su criterio de cierre ("el expediente muestra todas las etapas con sus fuentes") pasa en las pruebas y en el recorrido en navegador.
 
+**Fase 7 (Cierre e indicadores): construida completa y probada con datos sintéticos; pendiente de la misma validación.** Incluye los resultados finales de las postulaciones (contrataciones incluidas), el tablero de inicio, la pantalla de indicadores con filtros e históricos, el histórico de candidatos y los reportes en Excel guardados en el servidor. Su criterio de cierre («los tableros coinciden con los datos del flujo sintético») pasa en las pruebas y en el recorrido en navegador.
+
 ## Funcionalidades terminadas
 
 | Elemento | Detalle |
@@ -75,11 +77,17 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 | Digitalización | La IA lee un formulario escaneado (con OCR si hace falta) y propone el valor de cada campo, avisando de lo ilegible y de lo que falta. No guarda nada: lo que la persona acepta entra marcado como «leído por la IA» y sin verificar |
 | Expediente por etapas | En el expediente, cada etapa del proceso muestra si está cubierta, es la actual, se omitió o está por venir, y las fuentes que tiene: CV y evaluación, llamadas, evaluaciones y documentos. Lo que exige un permiso que la persona no tiene aparece solo como existente |
 | Síntesis del expediente con IA | Ordena la información en hechos documentados, declaraciones, observaciones humanas, resultados técnicos, información pendiente y diferencias por aclarar. No produce puntuaciones, índices ni recomendaciones: el servidor descarta cualquier otro dato de la respuesta. La psicometría solo entra si está validada por un profesional y quien pide la síntesis tiene ese permiso; el contenido del estudio socioeconómico nunca entra |
-| Base de datos | Migraciones `0001` (identidad y auditoría), `0002` (vacantes y transferencias), `0003` (documentos), `0004` (cifrado de documentos), `0005` (configuración de IA), `0006` (perfiles y prompts), `0007` (consumo de IA), `0008` (lotes de CV), `0009` (reclutamiento operativo) y `0010` (evaluaciones posteriores): 34 tablas en los esquemas `auth`, `vacancy`, `files`, `ai`, `recruitment` y `ops` |
-| Scripts para Sistemas | `database/sqlserver/`: instalación completa, actualizaciones entre versiones consecutivas (de `0001` a `0010`), reversión y plantilla de permisos del usuario de la aplicación |
+| Resultados finales | Seis resultados (contratado, no contratado, desistió, no localizado, vacante cancelada, otro cierre); mientras no hay ninguno, la postulación está «en proceso». Los registra una persona con permiso de colaboración sobre la vacante: nunca el sistema ni la IA. Guardan fecha, responsable, motivo (obligatorio salvo en la contratación), observaciones y, en la contratación, fecha de incorporación. No se contrata a más personas que plazas tiene la vacante. Reabrir exige motivo y anula el resultado anterior sin borrarlo. Contratar a alguien que la IA no clasificó como aceptado queda anotado en la auditoría como decisión humana |
+| Tablero de inicio | Para cada persona, sobre sus vacantes y las compartidas: vacantes propias y compartidas, procesos pendientes, candidatos en llamada, pruebas y entrevistas pendientes; y de los últimos 30 días, CV analizados, aceptados y rechazados por la IA, procesos cerrados y contrataciones, más la actividad reciente |
+| Indicadores | Pantalla «Indicadores» con periodo y filtros por vacante, departamento, responsable, colaborador y estado: fotografía de hoy, totales del periodo, embudo por etapa con conversión, tiempo promedio por etapa, tiempo de cobertura, tabla por vacante e histórico por mes. Solo para administradores: carga de trabajo por responsable, uso y costo de IA y errores técnicos. Una contratación se cuenta una sola vez, a nombre del responsable de la vacante, aunque tenga colaboradores |
+| Histórico de candidatos | Lista de postulaciones con todos los filtros de la sección 24.3: fechas (de carga, evaluación, movimiento o cierre), vacante, responsable, colaborador, departamento, estado, etapa, candidato, clasificación y calificación de la IA, modelo, versión del prompt, banco de preguntas y resultado final. Paginada |
+| Reportes en Excel | De indicadores (varias hojas) y de postulaciones, con los filtros aplicados. Se guardan en el servidor con identificador, fecha, tamaño y SHA-256. Los textos capturados no pueden ejecutarse como fórmula. Un reporte solo se descarga mientras quien lo generó conserve acceso a todas las vacantes que contiene |
+| Permisos de los reportes | Las cifras se calculan en cada consulta con los permisos que la persona tiene hoy: un administrador ve todo; los demás, sus vacantes y las compartidas. Vale igual para un histórico de años anteriores |
+| Base de datos | Migraciones `0001` (identidad y auditoría), `0002` (vacantes y transferencias), `0003` (documentos), `0004` (cifrado de documentos), `0005` (configuración de IA), `0006` (perfiles y prompts), `0007` (consumo de IA), `0008` (lotes de CV), `0009` (reclutamiento operativo) `0010` (evaluaciones posteriores) y `0011` (resultados finales y reportes): 36 tablas en los esquemas `auth`, `vacancy`, `files`, `ai`, `recruitment` y `ops` |
+| Scripts para Sistemas | `database/sqlserver/`: instalación completa, actualizaciones entre versiones consecutivas (de `0001` a `0011`), reversión y plantilla de permisos del usuario de la aplicación |
 | Pantallas | Inicio de sesión, Inicio, Vacantes (lista, alta, detalle, compartir, documentos, perfil, prompt y evaluación de CV, candidatos con expediente y llamadas, historial, transferir), Bancos de preguntas, Etapas, Formularios, Usuarios, Bajas (baja con transferencia), Configuración de IA y Auditoría. El menú cambia según el rol |
 | Worker Celery | Configuración segura, tarea `system.ping` y tarea `cv.process_batch`, que procesa un lote de CV y, al arrancar, vuelve a encolar los lotes que quedaron a medias |
-| Reglas entre módulos | 12 contratos de `import-linter`: capas por módulo y dominios independientes |
+| Reglas entre módulos | 13 contratos de `import-linter`: capas por módulo y dominios independientes |
 
 ## Pruebas ejecutadas
 
@@ -87,15 +95,16 @@ Ejecutadas el 11 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 294 pruebas, todas pasan |
+| API: `pytest` | 309 pruebas, todas pasan |
 | Worker: `pytest` | 5 pruebas, todas pasan |
-| `ruff check` y `lint-imports` | Sin errores; 12 contratos cumplidos |
+| `ruff check` y `lint-imports` | Sin errores; 13 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |
-| Frontend: `vitest` | 86 pruebas, todas pasan |
+| Frontend: `vitest` | 93 pruebas, todas pasan |
 | Frontend: `next build` | Compila |
 | Recorrido en navegador real, identidad | 10 pasos: redirección sin sesión, credenciales erróneas, inicio de sesión, alta de usuario, restablecer contraseña, recarga, cierre de sesión, contraseña anterior rechazada, reclutador sin acceso a Usuarios y respuesta 403 de la API |
 | Recorrido en navegador real, vacantes | 11 pasos: alta de dos reclutadores, alta de dos vacantes, cambio de estado, compartir en lectura, la otra persona solo ve la compartida y no puede editarla, la API le niega cambiar el estado, transferencia individual, baja con transferencia, auditoría con el acceso denegado, la persona dada de baja ya no entra y el receptor queda como responsable |
 | Recorrido en navegador real, evaluación de CV | 9 pasos sobre el modo demostración, con CV ficticios y un proveedor simulado: la pestaña muestra el prompt aprobado y los CV sin evaluar; el lote evalúa 4 CV y deja uno como no evaluable; el detalle muestra niveles, evidencia y motivo; se descargan el Excel y los ZIP, que suman los 4 originales con su manifiesto; se repite la evaluación y el lote anterior se conserva; los archivos generados no se mezclan con los documentos; con acceso de lectura se consulta y se descarga sin poder operar; auditoría y consumo lo registran; en móvil no hay desbordamiento |
+| Recorrido en navegador real, Fase 7 | 9 pasos sobre el modo demostración: el inicio muestra el tablero propio; una contratación queda con fecha de incorporación, responsable e historial, y la persona ya no se mueve de etapa; un desistimiento se reabre y el resultado anterior queda anulado, no borrado; el inicio pasa a mostrar 4 CV analizados, 2 procesos cerrados y 1 contratación; los indicadores de la reclutadora no traen los datos reservados al administrador; el histórico se filtra por resultado y el Excel descargado se abre y contiene esa única fila; el administrador ve la carga por responsable, el uso de IA y descarga el Excel de seis hojas; la segunda persona solo ve lo propio y lo compartido; en móvil, inicio e indicadores no se desbordan |
 | Recorrido en navegador real, Fase 6 | 8 pasos sobre el modo demostración: la calificación de una prueba técnica la calcula el sistema con la rúbrica; la entrevista exige la conclusión humana y la IA solo organiza; validar una psicometría exige al profesional y la IA resume el documento cifrado; en el estudio la IA llena campos sin verificar y la persona marca lo verificado; el expediente muestra cada etapa con sus fuentes y la síntesis por tipo de fuente; sin el permiso adicional no se ven psicometría, estudio ni la síntesis que los incluye; el administrador guarda una versión nueva del formulario; en móvil no hay desbordamiento |
 | Recorrido en navegador real, Fase 5 | 9 pasos sobre el modo demostración: los 4 CV evaluados entran como candidatos en revisión de RH con su nombre; un rechazado por la IA avanza a llamada solo con motivo; el expediente muestra historial, clasificación inicial intacta y experiencia con permanencia; llamada con banco, análisis de IA y cierre; reprogramación y desistimiento en el historial; banco nuevo con una pregunta propuesta por la IA; con lectura se consulta sin operar y no se ve un banco privado ajeno; el administrador guarda una versión nueva de etapas y la auditoría registra los movimientos; la convocatoria abierta conserva sus 8 etapas y en móvil no hay desbordamiento |
 | OCR real | Tesseract 5.3 leyó un PDF escaneado y una imagen PNG sintéticos, y el lote los evaluó. Es la única integración externa de esta fase que se ejecutó de verdad |
@@ -142,6 +151,10 @@ No hay todavía una instancia de SQL Server de pruebas. Por eso:
 - **Los resúmenes, la digitalización y la síntesis con un modelo real.** Probados con respuestas programadas. No se sabe todavía si un modelo real respeta siempre las prohibiciones (no diagnosticar, no recomendar, no puntuar); el servidor descarta lo que no cabe en el formato, pero el texto de un resumen puede contener una frase indebida. Hay que revisarlo con casos sintéticos antes de usarlo.
 - **OCR con documentos reales.** Tesseract se probó con imágenes sintéticas de letra impresa y nítida. Con escaneos reales (torcidos, con sellos, en baja resolución o manuscritos) la lectura será peor; hay que medirla. Tampoco se ha construido la imagen Docker con Tesseract.
 - **Extracción del CV y análisis de llamadas con un modelo real.** Probados con respuestas programadas.
+- **Los reportes en SQL Server.** Las consultas de los tableros (subconsultas de vacantes visibles, uniones entre esquemas) y la carga inicial de resultados finales de la migración `0011` solo se han ejecutado sobre el motor en memoria o se generaron sin conexión. Falta ejecutarlas en SQL Server y medir su tiempo.
+- **Los tableros con volumen real.** Las cifras se calculan en cada consulta leyendo las postulaciones y movimientos de las vacantes visibles. Con los datos sintéticos responde al instante; no se ha medido con miles de postulaciones.
+- **El índice único de «un resultado vigente por postulación»** es un índice filtrado: se probó en el motor en memoria, no en SQL Server.
+- **Zona horaria en el servidor.** Los periodos se calculan con la zona `America/Mexico_City` de la librería de Python (`tzdata`). No se ha comprobado dentro de la imagen Docker.
 - **Concurrencia en SQL Server.** Dos personas moviendo a la misma candidata a la vez, y el índice único de correo de candidatos, solo se probaron sobre el motor en memoria.
 - **Las ayudas de IA con un modelo real.** La lectura del perfil y la propuesta de criterios se probaron con respuestas programadas. Falta ver qué tan fiel es un modelo real al documento y si respeta el formato.
 - **La evaluación de CV con un modelo real.** Todo se probó con un proveedor simulado que devuelve respuestas programadas. No se sabe todavía qué tan bien sigue un modelo real el formato pedido ni qué calidad tienen sus niveles y evidencias; eso se mide cuando haya claves, con CV sintéticos primero.
@@ -180,7 +193,12 @@ No hay todavía una instancia de SQL Server de pruebas. Por eso:
 | Ocultar los datos de contacto antes de enviar el CV (decisión 13) | Se ocultan correos y teléfonos. El nombre y la dirección no | No se pueden reconocer de forma fiable sin otro modelo; se reevalúa con la extracción estructurada |
 | Procesamiento en el worker | En producción y en contenedores lo hace el worker (Celery). Sin Redis configurado, lo hace un hilo de la propia API; en las pruebas y en el modo demostración se ejecuta en el momento | Permite trabajar en un equipo sin Redis. El estado vive siempre en SQL Server |
 | Tablas de etapas (`stage_definitions`, `stage_versions`, `application_stage_history`), de bancos (`questions`, `question_bank_versions`) y de llamadas (`call_sessions`, `call_answers`, `call_analyses`) | Nueve tablas en el esquema `recruitment`. Las preguntas de una versión de banco y las respuestas de una llamada van en columnas JSON; el análisis de una llamada va en la propia llamada y solo se conserva el más reciente | Se leen y se guardan siempre juntas. Una llamada apunta a la versión exacta del banco con la que se hizo |
-| Resultado final de la postulación en la Fase 5 | La postulación tiene estado (activa, desistió, descartada, cancelada) y etapa. El resultado de contratación se construye en la Fase 7 | Así lo marca el plan por fases |
+| Resultado final de la postulación | El resultado final es el estado de la postulación (siete valores) más un registro en `recruitment.application_outcomes`. Los atajos de la Fase 5 (desistió, descartar, cancelar) se convirtieron en resultados finales | Evita tener dos conceptos para lo mismo |
+| Tablas de indicadores o cifras precalculadas | No existen: cada tablero se calcula al consultarlo, a partir de las tablas operativas | Así no puede contradecir al expediente y respeta siempre los permisos de hoy. Si el volumen lo exige, se añaden resúmenes después |
+| Reportes «por evaluación, por vacante, por reclutador y administrativos» (sección 30) como archivos distintos | Dos Excel: indicadores (hojas Resumen, Etapas, Vacantes, Reclutadores, Mensual e IA) y postulaciones. El de un lote de CV ya existía. Se acotan con los filtros | Los mismos datos, sin multiplicar formatos |
+| Filtros de etapa, candidato, clasificación, calificación, modelo, prompt, banco y resultado en los tableros | Se aplican en el histórico de candidatos y en su Excel. Los tableros se filtran por periodo, vacante, departamento, responsable, colaborador y estado | En cifras agregadas esos filtros darían números difíciles de interpretar |
+| Exportaciones a PDF y a Word (sección 30) | No construidas | Quedan para la Fase 8 si se piden |
+| Los reportes en `files.file_assets` | Tienen su propio registro, `ops.report_exports`, porque no pertenecen a una sola vacante. La conciliación del almacenamiento los reconoce | La tabla de documentos exige una vacante |
 | Conversión de DOC antiguos | No construida: esos CV quedan como «no evaluable» | Requiere LibreOffice en el servidor; no se ha pedido |
 | Pantallas diseñadas antes de construirlas | Las de la Fase 5 se construyeron directamente con el sistema visual aprobado, sin maqueta previa | Se pidió la fase completa de una vez |
 | Tablas separadas para psicometría, entrevistas, pruebas técnicas y estudios | Una sola tabla `recruitment.assessments` con el tipo y lo capturado en JSON, validado en Python según el tipo; más plantillas de formulario y síntesis: cuatro tablas en total | Los cuatro tipos comparten postulación, estado, fecha, documento, resumen de IA y control de edición simultánea |
@@ -230,7 +248,14 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - De cada evaluación solo se conserva el resumen de IA más reciente. Las síntesis del expediente sí se conservan todas, aunque la pantalla muestra la más reciente.
 - Una casilla del estudio sin marcar no se guarda: no se distingue «no» de «sin dato».
 - En el formulario del estudio, las opciones se escriben separadas por coma, así que una opción no puede contener comas.
-- Con «Formularios», el menú del administrador tiene nueve entradas y ocupa dos líneas.
+- Con «Indicadores», el menú del administrador tiene diez entradas y ocupa dos líneas.
+- «Pruebas pendientes» y «entrevistas pendientes» cuentan las postulaciones activas que están en esas etapas, no las evaluaciones con estado pendiente.
+- Para contratar no se exige que la persona esté en la etapa «Resultado final»; el resultado se puede registrar desde cualquier etapa.
+- Cerrar una convocatoria o cancelar una vacante no cierra sus postulaciones: siguen «en proceso» hasta que alguien registre su resultado.
+- Los reportes generados no se borran ni caducan; todavía no hay política de retención para ellos.
+- El uso de IA de los indicadores es de todo el sistema; al filtrar por vacante solo se cuenta el que quedó asociado a esas vacantes.
+- El histórico de candidatos se abre dentro de «Indicadores»; desde una fila no se salta al expediente.
+- Las cifras de tiempo aparecen en días con un decimal; estancias de minutos se ven como «0 días».
 - La extracción de datos del CV duplica las llamadas a la IA por cada CV de un lote. Es opcional: sin un modelo asignado a «Extracción de CV» no se hace, y el nombre de la persona se toma del nombre del archivo.
 - Dos CV distintos de la misma persona (mismo correo) en una convocatoria generan una sola postulación, con el primero.
 - Los datos de una persona se comparten entre sus postulaciones: corregir su nombre o correo desde una vacante lo cambia en todas.
@@ -269,6 +294,8 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - 11 nov 2026: lectura de CV escaneados con OCR (Tesseract en el servidor).
 - 11 nov 2026: Fase 5 completa: candidatos, postulaciones, convocatorias, etapas por versiones, movimientos, bancos de preguntas, llamadas y análisis con IA, extracción del CV y permanencia laboral.
 - 11 nov 2026: Fase 6 completa: psicometría, entrevistas con gerente, pruebas técnicas, formularios y estudios socioeconómicos con digitalización, expediente por etapas y síntesis con IA.
+- 11 nov 2026: Fase 7 completa: resultados finales y contrataciones, tablero de inicio, indicadores con filtros e históricos, histórico de candidatos y reportes en Excel guardados en el servidor.
+- 11 nov 2026: los atajos «Desistió», «Descartar» y «Cancelar proceso» del expediente se sustituyen por «Registrar resultado final»; «Reactivar» pasa a llamarse «Reabrir proceso».
 - 11 nov 2026: al guardar una evaluación, el aviso de «guardada» desaparecía porque el editor se volvía a crear con la versión nueva. Lo detectó el recorrido en navegador.
 - 11 nov 2026: el servidor de desarrollo de Next.js cortaba las cargas de más de 10 MB al reenviarlas a la API; se amplió el límite a 25 MB. Lo detectó el recorrido en navegador.
 
@@ -293,6 +320,6 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 ## Próximos pasos
 
 1. Validar contra SQL Server en cuanto exista una instancia.
-2. Fase 7: resultados finales, contrataciones, dashboards, reportes y estadísticas históricas.
+2. Fase 8: lo que queda del documento maestro (endurecimiento, manuales, exportaciones a PDF y Word si se piden, pruebas de carga).
 3. Con las claves de IA: revisar con casos sintéticos que los resúmenes y la síntesis respetan las prohibiciones.
 4. Medir el OCR con escaneos reales de prueba.

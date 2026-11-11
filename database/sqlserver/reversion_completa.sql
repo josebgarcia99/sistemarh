@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Reversión completa (DESTRUCTIVO)
-   Versión del esquema: 0010 -> (vacía)
-   Generado: 2026-11-11 19:31 (UTC) con scripts/generate_sql.py
+   Versión del esquema: 0011 -> (vacía)
+   Generado: 2026-11-11 20:11 (UTC) con scripts/generate_sql.py
 
    ELIMINA todas las tablas y esquemas del sistema, con todos sus datos.
    Solo para entornos de prueba. Nunca ejecutar en producción sin respaldo.
@@ -24,14 +24,44 @@ SET XACT_ABORT ON;
 GO
 
 -- Protección: si la base no está en la versión esperada, no se ejecuta nada.
-IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0010')
+IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0011')
 BEGIN
-    RAISERROR(N'La base no esta en la version 0010. No se aplico ningun cambio.', 16, 1);
+    RAISERROR(N'La base no esta en la version 0011. No se aplico ningun cambio.', 16, 1);
     SET NOEXEC ON;
 END
 GO
 
 BEGIN TRANSACTION;
+
+-- Running downgrade 0011 -> 0010
+
+DROP TABLE ops.report_exports;
+
+GO
+
+DROP TABLE recruitment.application_outcomes;
+
+GO
+
+ALTER TABLE recruitment.application_movements DROP CONSTRAINT ck_application_movements_kind;
+
+GO
+
+ALTER TABLE recruitment.application_movements ADD CONSTRAINT ck_application_movements_kind CHECK (kind IN ('ALTA', 'AVANCE', 'RETROCESO', 'OMISION', 'DESISTIMIENTO', 'DESCARTE', 'CANCELACION', 'REACTIVACION', 'REPROGRAMACION', 'INCIDENCIA'));
+
+GO
+
+ALTER TABLE recruitment.applications DROP CONSTRAINT ck_applications_status;
+
+GO
+
+ALTER TABLE recruitment.applications ADD CONSTRAINT ck_applications_status CHECK (status IN ('ACTIVA', 'DESISTIO', 'DESCARTADA', 'CANCELADA'));
+
+GO
+
+UPDATE alembic_version SET version_num='0010' WHERE alembic_version.version_num = '0011';
+
+GO
 
 -- Running downgrade 0010 -> 0009
 

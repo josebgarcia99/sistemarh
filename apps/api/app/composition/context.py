@@ -6,6 +6,7 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from zoneinfo import ZoneInfo
 
 from fastapi import Request
 
@@ -31,6 +32,7 @@ from app.composition.recruitment import (
     CallAssistant,
     VacancyProfiles,
 )
+from app.composition.reporting import StoredReports
 from app.core.clock import Clock
 from app.core.config.settings import Environment, Settings
 from app.core.exceptions.errors import ServiceUnavailableError
@@ -51,6 +53,7 @@ from app.modules.file_management.application.reconciliation import StorageReconc
 from app.modules.file_management.application.service import FileService, UploadPipeline
 from app.modules.phone_calls.application.service import PhoneCallService
 from app.modules.recruitment.application.service import RecruitmentService
+from app.modules.reporting.application.service import ReportingService
 from app.modules.users.application.service import UserService
 from app.modules.vacancies.application.access import VacancyAccess
 from app.modules.vacancies.application.service import VacancyService
@@ -111,7 +114,14 @@ class AppContext:
         )
 
     def reconciler(self, repos: Repositories) -> StorageReconciler:
-        return StorageReconciler(repos.files, self.require_storage(), self.audit(repos), self.clock)
+        return StorageReconciler(
+            repos.files,
+            self.require_storage(),
+            self.audit(repos),
+            self.clock,
+            # Los Excel de reportes tienen su propio registro.
+            extra_known_keys=repos.reporting.export_keys,
+        )
 
     def evaluation_setup(self, repos: Repositories) -> EvaluationSetupService:
         return EvaluationSetupService(
@@ -166,6 +176,15 @@ class AppContext:
             AssessmentAssistant(self.ai_settings(repos)),
             self.audit(repos),
             self.clock,
+        )
+
+    def reporting(self, repos: Repositories) -> ReportingService:
+        return ReportingService(
+            repos.reporting,
+            StoredReports(self.storage) if self.storage is not None else None,
+            self.audit(repos),
+            self.clock,
+            ZoneInfo(self.settings.display_timezone),
         )
 
     def dispatch_cv_batch(self, batch_id: uuid.UUID) -> None:

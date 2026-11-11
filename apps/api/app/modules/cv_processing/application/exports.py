@@ -12,19 +12,13 @@ from typing import BinaryIO
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
-_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+from app.core.spreadsheets import safe_cell
+
 CLASSIFICATION_LABELS = {
     "ACEPTADO_IA": "Aceptado por IA",
     "RECHAZADO_IA": "Rechazado por IA",
     "NO_EVALUABLE": "No evaluable",
 }
-
-
-def safe_cell(value: object) -> object:
-    """Evita que un texto de un CV se interprete como fórmula al abrir el Excel."""
-    if isinstance(value, str) and value.startswith(_FORMULA_START):
-        return "'" + value
-    return value
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0010`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0011`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -412,7 +412,7 @@ Postulación: la participación de una persona en una convocatoria.
 | `candidate_id`, `campaign_id` | `UNIQUEIDENTIFIER` | Sí | Persona y convocatoria. Una postulación por persona y convocatoria. |
 | `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Vacante de la convocatoria, repetida aquí para autorizar y consultar. |
 | `stage_id` | `UNIQUEIDENTIFIER` | Sí | Etapa actual (`pipeline_stages`). |
-| `status` | `VARCHAR(20)` | Sí | `ACTIVA`, `DESISTIO`, `DESCARTADA` o `CANCELADA`. |
+| `status` | `VARCHAR(20)` | Sí | `ACTIVA` (en proceso) o el estado en que la dejó su resultado final: `CONTRATADA`, `DESCARTADA` (no contratada), `DESISTIO`, `NO_LOCALIZADA`, `CANCELADA` (vacante cancelada) u `OTRO_CIERRE`. |
 | `cv_file_id` | `UNIQUEIDENTIFIER` | No | Su CV (`files.file_assets`). |
 | `evaluation_item_id` | `UNIQUEIDENTIFIER` | No | Evaluación inicial de la IA (`ai.cv_batch_items`). |
 | `ai_classification`, `ai_score` | `VARCHAR(20)`, `NUMERIC(5,2)` | No | Copia de la clasificación y puntuación iniciales. No cambian aunque el CV se vuelva a evaluar ni cuando RH mueve a la persona. |
@@ -429,12 +429,31 @@ Historial de una postulación. Solo recibe altas; la plantilla de permisos niega
 | --- | --- | --- | --- |
 | `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
 | `application_id`, `sequence` | `UNIQUEIDENTIFIER`, `INT` | Sí | Postulación y número de orden dentro de su historial (único). |
-| `kind` | `VARCHAR(20)` | Sí | `ALTA`, `AVANCE`, `RETROCESO`, `OMISION`, `DESISTIMIENTO`, `DESCARTE`, `CANCELACION`, `REACTIVACION`, `REPROGRAMACION` o `INCIDENCIA`. |
+| `kind` | `VARCHAR(20)` | Sí | `ALTA`, `AVANCE`, `RETROCESO`, `OMISION`, `DESISTIMIENTO`, `DESCARTE`, `CANCELACION`, `REACTIVACION`, `REPROGRAMACION`, `INCIDENCIA`, `CONTRATACION`, `NO_LOCALIZADO` o `CIERRE`. |
 | `from_stage_id`, `to_stage_id` | `UNIQUEIDENTIFIER` | No | Etapa de origen y de destino. En una omisión, `from_stage_id` es la etapa omitida. |
 | `note` | `NVARCHAR(500)` | No | Motivo o descripción. |
 | `due_at` | `DATETIME2(3)` | No | Nueva fecha, en una reprogramación. |
 | `group_id` | `UNIQUEIDENTIFIER` | No | Agrupa los movimientos de una misma operación masiva. |
 | `occurred_at`, `actor_user_id` | | | Cuándo y quién. `actor_user_id` vacío si lo hizo el sistema. |
+
+### `recruitment.application_outcomes`
+
+Resultado final de una postulación (sección 23). Lo registra siempre una persona. Al reabrir la postulación el registro se anula, no se borra; por eso una postulación puede tener varios, pero solo uno vigente.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `application_id`, `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Postulación y su vacante. |
+| `outcome` | `VARCHAR(20)` | Sí | `CONTRATADO`, `NO_CONTRATADO`, `DESISTIO`, `NO_LOCALIZADO`, `VACANTE_CANCELADA` u `OTRO_CIERRE`. «En proceso» es no tener ninguno vigente. |
+| `reason` | `NVARCHAR(500)` | No | Motivo. Obligatorio en la aplicación salvo en una contratación. |
+| `notes` | `NVARCHAR(MAX)` | No | Observaciones. |
+| `start_date` | `DATE` | No | Fecha de incorporación. Solo en una contratación (restricción `CHECK`). |
+| `recorded_at`, `recorded_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | Sí | Cuándo y quién lo registró. `recorded_by` nunca va vacío: el sistema y la IA no registran resultados. |
+| `voided_at`, `voided_by`, `void_reason` | | No | Cuándo, quién y por qué lo anuló al reabrir la postulación. |
+
+Índices: `uq_application_outcomes_current`, único y filtrado (`voided_at IS NULL`) sobre `application_id`: un solo resultado vigente por postulación; e `ix_application_outcomes_vacancy (vacancy_id, outcome, recorded_at)`.
+
+La migración `0011` crea el resultado final de las postulaciones que ya estaban cerradas, a partir del movimiento con el que se cerraron.
 
 ### `recruitment.question_banks` y `recruitment.question_bank_versions`
 
@@ -531,6 +550,26 @@ Registro de auditoría. Solo recibe inserciones; la plantilla de permisos niega 
 | `details` | `NVARCHAR(MAX)` | Sí | Detalle en JSON (`ISJSON`). Nunca contiene contraseñas, tokens ni claves. |
 
 Índices: `ix_audit_events_occurred_at`, `ix_audit_events_actor (actor_user_id, occurred_at)` e `ix_audit_events_action (action, occurred_at)`.
+
+### `ops.report_exports`
+
+Un registro por cada Excel de reportes generado. El archivo está en el almacenamiento documental del servidor (`generated/reports`). Solo recibe altas.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria; es también el nombre del archivo guardado. |
+| `kind` | `VARCHAR(20)` | Sí | `INDICADORES` o `POSTULACIONES`. |
+| `name` | `NVARCHAR(200)` | Sí | Nombre con el que se descarga. |
+| `filters` | `NVARCHAR(MAX)` | Sí | JSON (`ISJSON`) con los filtros pedidos, con nombres legibles. |
+| `vacancy_ids` | `NVARCHAR(MAX)` | Sí | JSON (`ISJSON`) con las vacantes cuyos datos contiene. Al descargar se comprueba que quien lo pide las siga viendo todas. |
+| `row_count` | `INT` | Sí | Vacantes (indicadores) o postulaciones (postulaciones) incluidas. |
+| `storage_key` | `VARCHAR(200)` | Sí | Ubicación lógica del archivo. Única. |
+| `size_bytes`, `sha256` | `BIGINT`, `VARCHAR(64)` | Sí | Tamaño y huella del archivo. |
+| `created_at`, `created_by` | | Sí | Cuándo y quién lo generó. |
+
+Índice: `ix_report_exports_user (created_by, created_at)`.
+
+Los tableros no tienen tablas propias: sus cifras se calculan en cada consulta a partir de las tablas anteriores.
 
 ## Esquema `dbo`
 

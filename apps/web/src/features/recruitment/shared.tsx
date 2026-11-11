@@ -21,7 +21,16 @@ export const STATUS_STYLES: Record<ApplicationStatus, string> = {
   DESISTIO: "bg-neutral-soft text-neutral-ink",
   DESCARTADA: "bg-accent-red-soft text-accent-red-ink",
   CANCELADA: "bg-neutral-soft text-neutral-ink",
+  CONTRATADA: "bg-accent-blue-soft text-accent-blue-ink",
+  NO_LOCALIZADA: "bg-neutral-soft text-neutral-ink",
+  OTRO_CIERRE: "bg-neutral-soft text-neutral-ink",
 };
+export const dateFormat = new Intl.DateTimeFormat("es-MX", { timeZone: "UTC", dateStyle: "medium" });
+
+/** Un día «AAAA-MM-DD» en texto, sin desplazarlo por la zona horaria. */
+export function formatDay(day: string): string {
+  return dateFormat.format(new Date(`${day}T00:00:00Z`));
+}
 
 export function FeedbackLine({ feedback }: { feedback: Feedback }) {
   if (!feedback) return null;

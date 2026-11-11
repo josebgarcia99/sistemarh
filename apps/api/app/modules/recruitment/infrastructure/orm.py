@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 import sqlalchemy as sa
@@ -18,6 +18,7 @@ from app.infrastructure.database.base import (
     SCHEMA_VACANCY,
     Base,
     UTCDateTime,
+    long_text,
 )
 
 _S = SCHEMA_RECRUITMENT
@@ -168,3 +169,37 @@ class ApplicationMovementRow(Base):
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
         GUID, sa.ForeignKey(_USER_FK), nullable=True
     )
+
+
+class ApplicationOutcomeRow(Base):
+    __tablename__ = "application_outcomes"
+    __table_args__ = (
+        # Una postulación tiene, como mucho, un resultado final vigente.
+        sa.Index(
+            "uq_application_outcomes_current",
+            "application_id",
+            unique=True,
+            mssql_where=sa.text("voided_at IS NULL"),
+            sqlite_where=sa.text("voided_at IS NULL"),
+        ),
+        sa.Index("ix_application_outcomes_vacancy", "vacancy_id", "outcome", "recorded_at"),
+        {"schema": _S},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID, primary_key=True)
+    application_id: Mapped[uuid.UUID] = mapped_column(GUID, sa.ForeignKey(f"{_S}.applications.id"))
+    vacancy_id: Mapped[uuid.UUID] = mapped_column(
+        GUID, sa.ForeignKey(f"{SCHEMA_VACANCY}.vacancies.id")
+    )
+    outcome: Mapped[str] = mapped_column(sa.String(20))
+    reason: Mapped[str | None] = mapped_column(sa.Unicode(500), nullable=True)
+    notes: Mapped[str | None] = mapped_column(long_text(), nullable=True)
+    start_date: Mapped[date | None] = mapped_column(sa.Date, nullable=True)
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    # Nunca vacío: el resultado final no lo registra el sistema ni la IA.
+    recorded_by: Mapped[uuid.UUID] = mapped_column(GUID, sa.ForeignKey(_USER_FK))
+    voided_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    voided_by: Mapped[uuid.UUID | None] = mapped_column(
+        GUID, sa.ForeignKey(_USER_FK), nullable=True
+    )
+    void_reason: Mapped[str | None] = mapped_column(sa.Unicode(500), nullable=True)

@@ -160,6 +160,10 @@ export function CandidatesWorkspace({ vacancyId, vacancyName, canEdit, canManage
             )}
           </div>
         </div>
+        <p className="text-ink-muted">
+          Plazas cubiertas: {board.hires} de {board.positions}
+          {board.hires >= board.positions && board.positions > 0 ? " · vacante cubierta" : ""}
+        </p>
         {campaign && !open && (
           <p className="rounded-2xl bg-surface px-4 py-3">
             Esta convocatoria está cerrada: se consulta, pero ya no admite movimientos.

@@ -42,6 +42,7 @@ containers =
     app.modules.recruitment
     app.modules.phone_calls
     app.modules.assessments
+    app.modules.reporting
 
 [importlinter:contract:capas-system]
 name = capas del modulo system
@@ -174,4 +175,26 @@ forbidden_modules =
     app.modules.ai_settings
     app.modules.vacancies
     app.modules.vacancy_transfers
+    app.modules.system
+
+# Los reportes son un modelo de lectura: solo su infraestructura consulta las
+# tablas de los demás módulos. Sus cálculos no dependen de nadie.
+[importlinter:contract:reportes-independiente]
+name = el calculo de reportes no depende de otros modulos de negocio
+type = forbidden
+source_modules =
+    app.modules.reporting.domain
+    app.modules.reporting.application
+forbidden_modules =
+    app.modules.recruitment
+    app.modules.phone_calls
+    app.modules.assessments
+    app.modules.cv_processing
+    app.modules.evaluation_setup
+    app.modules.file_management
+    app.modules.ai_settings
+    app.modules.vacancies
+    app.modules.vacancy_transfers
+    app.modules.users
+    app.modules.authentication
     app.modules.system

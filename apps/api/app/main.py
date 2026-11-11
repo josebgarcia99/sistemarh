@@ -42,6 +42,7 @@ from app.modules.evaluation_setup.api.router import router as evaluation_setup_r
 from app.modules.file_management.api.router import router as files_router
 from app.modules.phone_calls.api.router import router as phone_calls_router
 from app.modules.recruitment.api.router import router as recruitment_router
+from app.modules.reporting.api.router import router as reporting_router
 from app.modules.system.api.router import router as system_router
 from app.modules.system.application.health import HealthCheck
 from app.modules.system.infrastructure.checks import build_default_checks
@@ -113,6 +114,7 @@ def create_app(
     api.include_router(recruitment_router)
     api.include_router(phone_calls_router)
     api.include_router(assessments_router)
+    api.include_router(reporting_router)
     api.include_router(audit_router)
     app.include_router(api)
     return app

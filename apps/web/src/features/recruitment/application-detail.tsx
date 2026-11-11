@@ -20,20 +20,26 @@ import {
   annotate,
   type ApplicationDetail,
   APPLICATION_STATUS_LABELS,
-  changeStatus,
   formatMonths,
   getApplication,
   MOVEMENT_LABELS,
   moveApplications,
-  type StatusAction,
+  OUTCOME_KINDS,
+  OUTCOME_LABELS,
+  type OutcomeInput,
+  type OutcomeKind,
+  recordOutcome,
+  reopenApplication,
   updateCandidate,
 } from "@/lib/api/recruitment";
 import { type DialogProps, Field, MoveDialog } from "./dialogs";
 import {
   AI_STYLES,
+  areaClass,
   dateTimeFormat,
   type Feedback,
   FeedbackLine,
+  formatDay,
   pillClass,
   STATUS_STYLES,
 } from "./shared";
@@ -45,14 +51,7 @@ type Props = {
   canEdit: boolean;
   onBack: () => void;
 };
-type Dialog = "move" | "note" | StatusAction | null;
-
-const STATUS_ACTIONS: Record<StatusAction, { button: string; title: string; done: string }> = {
-  DESISTIMIENTO: { button: "Desistió", title: "Registrar desistimiento", done: "Desistimiento registrado." },
-  DESCARTE: { button: "Descartar", title: "Descartar la postulación", done: "Postulación descartada." },
-  CANCELACION: { button: "Cancelar proceso", title: "Cancelar el proceso de esta persona", done: "Proceso cancelado." },
-  REACTIVACION: { button: "Reactivar", title: "Reactivar la postulación", done: "Postulación reactivada." },
-};
+type Dialog = "move" | "note" | "outcome" | "reopen" | null;
 
 /** Expediente de una postulación: datos, evaluación inicial, historial y llamadas. */
 export function ApplicationDetailView({ applicationId, vacancyId, vacancyName, canEdit, onBack }: Props) {
@@ -138,14 +137,12 @@ export function ApplicationDetailView({ applicationId, vacancyId, vacancyName, c
             Incidencia o reprogramación
           </button>
           {active ? (
-            (["DESISTIMIENTO", "DESCARTE", "CANCELACION"] as const).map((action) => (
-              <button key={action} type="button" className={dangerButtonClass} onClick={() => setDialog(action)}>
-                {STATUS_ACTIONS[action].button}
-              </button>
-            ))
+            <button type="button" className={dangerButtonClass} onClick={() => setDialog("outcome")}>
+              Registrar resultado final
+            </button>
           ) : (
-            <button type="button" className={secondaryButtonClass} onClick={() => setDialog("REACTIVACION")}>
-              Reactivar
+            <button type="button" className={secondaryButtonClass} onClick={() => setDialog("reopen")}>
+              Reabrir proceso
             </button>
           )}
         </section>
@@ -165,7 +162,9 @@ export function ApplicationDetailView({ applicationId, vacancyId, vacancyName, c
           <AssessmentsSection applicationId={application.id} vacancyId={vacancyId} active={active} />
           <DossierSection detail={detail} canEdit={canEdit} />
         </div>
-        <section className={`${cardClass} flex min-w-0 flex-[1_1_300px] flex-col gap-3`}>
+        <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-6">
+        <OutcomeCard detail={detail} />
+        <section className={`${cardClass} flex flex-col gap-3`}>
           <h2 className="text-xl font-medium">Historial</h2>
           <ol aria-label="Historial de movimientos" className="flex flex-col gap-2">
             {[...detail.movements].reverse().map((movement) => (
@@ -187,6 +186,7 @@ export function ApplicationDetailView({ applicationId, vacancyId, vacancyName, c
             ))}
           </ol>
         </section>
+        </div>
       </div>
 
       {dialog === "move" && (
@@ -215,14 +215,26 @@ export function ApplicationDetailView({ applicationId, vacancyId, vacancyName, c
           }
         />
       )}
-      {dialog && dialog !== "move" && dialog !== "note" && (
-        <ReasonDialog
-          title={STATUS_ACTIONS[dialog].title}
+      {dialog === "outcome" && (
+        <OutcomeDialog
+          name={application.full_name}
           busy={busy}
           feedback={feedback}
           onClose={() => setDialog(null)}
-          onSubmit={(note) =>
-            run(() => changeStatus(application.id, dialog, note), STATUS_ACTIONS[dialog].done)
+          onSubmit={(input) =>
+            run(() => recordOutcome(application.id, input), "Resultado final registrado.")
+          }
+        />
+      )}
+      {dialog === "reopen" && (
+        <ReasonDialog
+          title="Reabrir el proceso de esta persona"
+          description="El resultado final anterior queda anulado, con tu nombre y el motivo. No se borra."
+          busy={busy}
+          feedback={feedback}
+          onClose={() => setDialog(null)}
+          onSubmit={(reason) =>
+            run(() => reopenApplication(application.id, reason), "Proceso reabierto.")
           }
         />
       )}
@@ -364,16 +376,152 @@ function EvaluationCard({ detail }: { detail: ApplicationDetail }) {
   );
 }
 
-function ReasonDialog({
-  title,
+function OutcomeCard({ detail }: { detail: ApplicationDetail }) {
+  const current = detail.outcomes.find((item) => item.voided_at === null);
+  const voided = detail.outcomes.filter((item) => item.voided_at !== null);
+  return (
+    <section className={`${cardClass} flex flex-col gap-3`} aria-label="Resultado final">
+      <h2 className="text-xl font-medium">Resultado final</h2>
+      {current ? (
+        <div className="flex flex-col gap-1 rounded-2xl bg-surface px-4 py-3">
+          <p className="text-lg font-medium">{OUTCOME_LABELS[current.outcome] ?? current.outcome}</p>
+          <p className="text-sm text-ink-muted">
+            {dateTimeFormat.format(new Date(current.recorded_at))} · {current.recorded_by_name ?? "—"}
+          </p>
+          {current.start_date && <p>Fecha de incorporación: {formatDay(current.start_date)}</p>}
+          {current.reason && <p>Motivo: {current.reason}</p>}
+          {current.notes && <p className="whitespace-pre-line text-sm">{current.notes}</p>}
+        </div>
+      ) : (
+        <p className="text-ink-muted">
+          {detail.application.status === "ACTIVA"
+            ? "En proceso. El resultado lo registra una persona; la IA no decide contrataciones."
+            : "Cerrada antes de que se registraran los resultados finales."}
+        </p>
+      )}
+      {voided.length > 0 && (
+        <ul aria-label="Resultados anulados" className="flex flex-col gap-2">
+          {voided.map((item) => (
+            <li key={item.id} className="rounded-2xl bg-surface px-4 py-3 text-sm">
+              <p>
+                <span className="line-through">{OUTCOME_LABELS[item.outcome] ?? item.outcome}</span>{" "}
+                · anulado
+              </p>
+              <p className="text-ink-muted">
+                {dateTimeFormat.format(new Date(item.voided_at ?? item.recorded_at))} ·{" "}
+                {item.voided_by_name ?? "—"}
+              </p>
+              {item.void_reason && <p>{item.void_reason}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function OutcomeDialog({
+  name,
   busy,
   feedback,
   onClose,
   onSubmit,
-}: DialogProps & { title: string; onSubmit: (note: string) => void }) {
+}: DialogProps & { name: string; onSubmit: (input: OutcomeInput) => void }) {
+  const [outcome, setOutcome] = useState<OutcomeKind>("CONTRATADO");
+  const [reason, setReason] = useState("");
+  const [notes, setNotes] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const hired = outcome === "CONTRATADO";
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    onSubmit({
+      outcome,
+      reason: reason.trim() || null,
+      notes: notes.trim() || null,
+      start_date: hired && startDate ? startDate : null,
+    });
+  }
+  return (
+    <Modal
+      title={`Resultado final de ${name}`}
+      description="Cierra el proceso de esta persona en la vacante. Queda registrado con tu nombre y la fecha, y cuenta en los indicadores."
+      onClose={onClose}
+    >
+      <form onSubmit={submit} noValidate className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <label htmlFor="outcome-kind" className="text-sm text-ink-muted">
+            Resultado
+          </label>
+          <select
+            id="outcome-kind"
+            className={fieldClass}
+            value={outcome}
+            onChange={(event) => setOutcome(event.target.value as OutcomeKind)}
+          >
+            {OUTCOME_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {OUTCOME_LABELS[kind]}
+              </option>
+            ))}
+          </select>
+        </div>
+        {hired && (
+          <div className="flex flex-col gap-2">
+            <label htmlFor="outcome-start" className="text-sm text-ink-muted">
+              Fecha de incorporación (opcional)
+            </label>
+            <input
+              id="outcome-start"
+              type="date"
+              className={fieldClass}
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+            />
+          </div>
+        )}
+        <Field
+          id="outcome-reason"
+          label={hired ? "Motivo (opcional)" : "Motivo"}
+          value={reason}
+          onChange={setReason}
+        />
+        <div className="flex flex-col gap-2">
+          <label htmlFor="outcome-notes" className="text-sm text-ink-muted">
+            Observaciones (opcional)
+          </label>
+          <textarea
+            id="outcome-notes"
+            rows={3}
+            className={areaClass}
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
+        </div>
+        <FeedbackLine feedback={feedback} />
+        <div className="flex flex-wrap justify-end gap-3">
+          <button type="button" className={secondaryButtonClass} onClick={onClose}>
+            Cancelar
+          </button>
+          <button type="submit" className={primaryButtonClass} disabled={busy}>
+            {busy ? "Guardando…" : "Registrar resultado"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function ReasonDialog({
+  title,
+  description,
+  busy,
+  feedback,
+  onClose,
+  onSubmit,
+}: DialogProps & { title: string; description: string; onSubmit: (note: string) => void }) {
   const [note, setNote] = useState("");
   return (
-    <Modal title={title} description="El motivo queda en el historial de la persona." onClose={onClose}>
+    <Modal title={title} description={description} onClose={onClose}>
       <form
         onSubmit={(event) => {
           event.preventDefault();

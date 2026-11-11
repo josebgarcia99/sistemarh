@@ -12,6 +12,7 @@ import { useSession } from "./use-session";
 const NAV_ITEMS: { href: string; label: string; adminOnly: boolean }[] = [
   { href: "/", label: "Inicio", adminOnly: false },
   { href: "/vacantes", label: "Vacantes", adminOnly: false },
+  { href: "/indicadores", label: "Indicadores", adminOnly: false },
   { href: "/bancos", label: "Bancos", adminOnly: false },
   { href: "/etapas", label: "Etapas", adminOnly: true },
   { href: "/formularios", label: "Formularios", adminOnly: true },

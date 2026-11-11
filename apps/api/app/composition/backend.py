@@ -21,6 +21,7 @@ from app.modules.evaluation_setup.domain.models import EvaluationSetupRepository
 from app.modules.file_management.domain.models import FileRepository
 from app.modules.phone_calls.domain.models import PhoneCallRepository
 from app.modules.recruitment.domain.models import RecruitmentRepository
+from app.modules.reporting.domain.models import ReportingSource
 from app.modules.users.domain.repository import UserRepository
 from app.modules.vacancies.domain.models import VacancyRepository
 from app.modules.vacancy_transfers.domain.models import TransferRepository
@@ -40,6 +41,7 @@ class Repositories:
     recruitment: RecruitmentRepository
     phone_calls: PhoneCallRepository
     assessments: AssessmentRepository
+    reporting: ReportingSource
 
 
 class Backend(Protocol):

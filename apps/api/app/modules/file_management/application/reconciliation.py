@@ -53,11 +53,14 @@ class StorageReconciler:
         storage: FileStorage,
         audit: AuditLog,
         clock: Callable[[], datetime],
+        extra_known_keys: Callable[[], set[str]] | None = None,
     ) -> None:
         self._files = files
         self._storage = storage
         self._audit = audit
         self._clock = clock
+        # Archivos del almacenamiento que lleva otro registro (los reportes).
+        self._extra_known_keys = extra_known_keys
 
     def run(
         self,
@@ -69,7 +72,7 @@ class StorageReconciler:
         """``verify_hashes``: cuántos archivos confirmados recalcular (``None`` = todos)."""
         report = ReconciliationReport()
         now = self._clock()
-        known_keys: set[str] = set()
+        known_keys: set[str] = set(self._extra_known_keys() if self._extra_known_keys else ())
         in_progress: set[str] = set()
 
         for asset in self._files.list_by_status(FileStatus.RECIBIENDO):

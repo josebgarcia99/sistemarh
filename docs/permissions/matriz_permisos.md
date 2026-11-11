@@ -14,6 +14,8 @@ Todo se deniega por defecto y el permiso se evalúa en el backend en cada operac
 | Ver vacante, candidatos, evaluaciones y expedientes | Sí | Sí | Sí | Sí | No |
 | Descargar CV, Excel y ZIP | Sí | Sí | Sí | Sí | No |
 | Ver reportes e histórico de la vacante | Sí | Sí | Sí | Sí | No |
+| Generar y descargar reportes en Excel de la vacante | Sí | Sí | Sí | Sí | No |
+| Registrar el resultado final de una postulación (contratación incluida) o reabrirla | Sí | Sí | Sí | No | No |
 | Editar datos de la vacante y cambiar su estado | Sí | Sí | No | No | No |
 | Compartir y revocar accesos | Sí | Sí | No | No | No |
 | Transferir el responsable | Sí | No | No | No | No |

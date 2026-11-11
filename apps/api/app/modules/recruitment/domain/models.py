@@ -6,13 +6,16 @@
 - Una convocatoria es un periodo de reclutamiento de la vacante; fija la versión
   de las etapas con la que trabaja, para que cambiar las etapas no altere el pasado.
 - Cada cambio queda en el historial de movimientos; nada se borra al avanzar.
+- El resultado final (contratado, no contratado, desistió…) lo registra siempre
+  una persona. Cierra la postulación y guarda quién, cuándo y por qué; si se
+  reabre, el registro se anula pero no se borra.
 """
 
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Protocol
@@ -97,6 +100,43 @@ class ApplicationStatus(StrEnum):
     DESISTIO = "DESISTIO"
     DESCARTADA = "DESCARTADA"
     CANCELADA = "CANCELADA"
+    CONTRATADA = "CONTRATADA"
+    NO_LOCALIZADA = "NO_LOCALIZADA"
+    OTRO_CIERRE = "OTRO_CIERRE"
+
+
+class OutcomeKind(StrEnum):
+    """Resultados finales de una postulación (sección 23). Mientras no tiene
+    ninguno vigente, la postulación está «en proceso»."""
+
+    CONTRATADO = "CONTRATADO"
+    NO_CONTRATADO = "NO_CONTRATADO"
+    DESISTIO = "DESISTIO"
+    NO_LOCALIZADO = "NO_LOCALIZADO"
+    VACANTE_CANCELADA = "VACANTE_CANCELADA"
+    OTRO_CIERRE = "OTRO_CIERRE"
+
+
+IN_PROCESS = "EN_PROCESO"
+
+# Cada resultado final deja la postulación en un estado.
+OUTCOME_STATUS: dict[OutcomeKind, ApplicationStatus] = {
+    OutcomeKind.CONTRATADO: ApplicationStatus.CONTRATADA,
+    OutcomeKind.NO_CONTRATADO: ApplicationStatus.DESCARTADA,
+    OutcomeKind.DESISTIO: ApplicationStatus.DESISTIO,
+    OutcomeKind.NO_LOCALIZADO: ApplicationStatus.NO_LOCALIZADA,
+    OutcomeKind.VACANTE_CANCELADA: ApplicationStatus.CANCELADA,
+    OutcomeKind.OTRO_CIERRE: ApplicationStatus.OTRO_CIERRE,
+}
+STATUS_OUTCOME: dict[ApplicationStatus, OutcomeKind] = {
+    status: outcome for outcome, status in OUTCOME_STATUS.items()
+}
+
+
+def outcome_of(status: ApplicationStatus) -> str:
+    """El resultado final que corresponde a un estado; «EN_PROCESO» si sigue activa."""
+    outcome = STATUS_OUTCOME.get(status)
+    return outcome.value if outcome else IN_PROCESS
 
 
 @dataclass
@@ -131,6 +171,22 @@ class MovementKind(StrEnum):
     REACTIVACION = "REACTIVACION"
     REPROGRAMACION = "REPROGRAMACION"
     INCIDENCIA = "INCIDENCIA"
+    CONTRATACION = "CONTRATACION"
+    NO_LOCALIZADO = "NO_LOCALIZADO"
+    CIERRE = "CIERRE"
+
+
+OUTCOME_MOVEMENT: dict[OutcomeKind, MovementKind] = {
+    OutcomeKind.CONTRATADO: MovementKind.CONTRATACION,
+    OutcomeKind.NO_CONTRATADO: MovementKind.DESCARTE,
+    OutcomeKind.DESISTIO: MovementKind.DESISTIMIENTO,
+    OutcomeKind.NO_LOCALIZADO: MovementKind.NO_LOCALIZADO,
+    OutcomeKind.VACANTE_CANCELADA: MovementKind.CANCELACION,
+    OutcomeKind.OTRO_CIERRE: MovementKind.CIERRE,
+}
+MOVEMENT_OUTCOME: dict[MovementKind, OutcomeKind] = {
+    movement: outcome for outcome, movement in OUTCOME_MOVEMENT.items()
+}
 
 
 @dataclass(frozen=True)
@@ -149,6 +205,26 @@ class Movement:
     group_id: uuid.UUID | None = None
     # Orden dentro del historial de la postulación (1, 2, 3…).
     sequence: int = 0
+
+
+@dataclass
+class Outcome:
+    """Registro de un resultado final. Siempre lo captura una persona."""
+
+    id: uuid.UUID
+    application_id: uuid.UUID
+    vacancy_id: uuid.UUID
+    outcome: OutcomeKind
+    recorded_at: datetime
+    recorded_by: uuid.UUID
+    reason: str | None = None
+    notes: str | None = None
+    # Fecha de incorporación; solo en una contratación.
+    start_date: date | None = None
+    # Al reabrir la postulación el registro se anula; no se borra.
+    voided_at: datetime | None = None
+    voided_by: uuid.UUID | None = None
+    void_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -221,4 +297,18 @@ class RecruitmentRepository(Protocol):
 
     def movements(self, application_id: uuid.UUID) -> list[Movement]:
         """Del más antiguo al más reciente."""
+        ...
+
+    def add_outcome(self, outcome: Outcome) -> None: ...
+
+    def save_outcome(self, outcome: Outcome) -> None: ...
+
+    def outcomes(self, application_id: uuid.UUID) -> list[Outcome]:
+        """Del más reciente al más antiguo, incluidos los anulados."""
+        ...
+
+    def current_outcome(self, application_id: uuid.UUID) -> Outcome | None: ...
+
+    def hires(self, vacancy_id: uuid.UUID) -> int:
+        """Contrataciones vigentes de la vacante."""
         ...

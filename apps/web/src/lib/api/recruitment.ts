@@ -41,13 +41,44 @@ const campaignSchema = z.object({
 });
 export type Campaign = z.infer<typeof campaignSchema>;
 
-export const applicationStatusSchema = z.enum(["ACTIVA", "DESISTIO", "DESCARTADA", "CANCELADA"]);
+export const applicationStatusSchema = z.enum([
+  "ACTIVA",
+  "DESISTIO",
+  "DESCARTADA",
+  "CANCELADA",
+  "CONTRATADA",
+  "NO_LOCALIZADA",
+  "OTRO_CIERRE",
+]);
 export type ApplicationStatus = z.infer<typeof applicationStatusSchema>;
 export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
   ACTIVA: "Activa",
   DESISTIO: "Desistió",
-  DESCARTADA: "Descartada",
-  CANCELADA: "Cancelada",
+  DESCARTADA: "No contratada",
+  CANCELADA: "Vacante cancelada",
+  CONTRATADA: "Contratada",
+  NO_LOCALIZADA: "No localizada",
+  OTRO_CIERRE: "Otro cierre",
+};
+
+/** Resultados finales de una postulación. Siempre los registra una persona. */
+export const OUTCOME_KINDS = [
+  "CONTRATADO",
+  "NO_CONTRATADO",
+  "DESISTIO",
+  "NO_LOCALIZADO",
+  "VACANTE_CANCELADA",
+  "OTRO_CIERRE",
+] as const;
+export type OutcomeKind = (typeof OUTCOME_KINDS)[number];
+export const OUTCOME_LABELS: Record<string, string> = {
+  EN_PROCESO: "En proceso",
+  CONTRATADO: "Contratado",
+  NO_CONTRATADO: "No contratado",
+  DESISTIO: "Desistió",
+  NO_LOCALIZADO: "No localizado",
+  VACANTE_CANCELADA: "Vacante cancelada",
+  OTRO_CIERRE: "Otro cierre",
 };
 export const AI_LABELS: Record<string, string> = {
   ACEPTADO_IA: "Aceptado por IA",
@@ -63,6 +94,7 @@ const applicationSchema = z.object({
   phone: z.string().nullable(),
   stage_id: z.string(),
   status: applicationStatusSchema,
+  outcome: z.string(),
   ai_classification: z.string().nullable(),
   ai_score: z.string().nullable(),
   cv_file_id: z.string().nullable(),
@@ -77,6 +109,8 @@ const boardSchema = z.object({
   campaign: campaignSchema.nullable(),
   pipeline: pipelineSchema.nullable(),
   applications: z.array(applicationSchema),
+  positions: z.number(),
+  hires: z.number(),
 });
 export type Board = z.infer<typeof boardSchema>;
 
@@ -91,7 +125,24 @@ export const MOVEMENT_LABELS: Record<string, string> = {
   REACTIVACION: "Reactivación",
   REPROGRAMACION: "Reprogramación",
   INCIDENCIA: "Incidencia",
+  CONTRATACION: "Contratación",
+  NO_LOCALIZADO: "No localizado",
+  CIERRE: "Otro cierre",
 };
+
+const outcomeSchema = z.object({
+  id: z.string(),
+  outcome: z.string(),
+  reason: z.string().nullable(),
+  notes: z.string().nullable(),
+  start_date: z.string().nullable(),
+  recorded_at: z.string(),
+  recorded_by_name: z.string().nullable(),
+  voided_at: z.string().nullable(),
+  voided_by_name: z.string().nullable(),
+  void_reason: z.string().nullable(),
+});
+export type Outcome = z.infer<typeof outcomeSchema>;
 
 const movementSchema = z.object({
   id: z.string(),
@@ -160,11 +211,17 @@ const detailSchema = z.object({
       incomplete: z.number(),
     })
     .nullable(),
+  outcomes: z.array(outcomeSchema),
 });
 export type ApplicationDetail = z.infer<typeof detailSchema>;
 
 export type CandidateInput = { full_name: string; email: string | null; phone: string | null };
-export type StatusAction = "DESISTIMIENTO" | "DESCARTE" | "CANCELACION" | "REACTIVACION";
+export type OutcomeInput = {
+  outcome: OutcomeKind;
+  reason: string | null;
+  notes: string | null;
+  start_date: string | null;
+};
 
 export function getBoard(vacancyId: string, campaignId: string | null, signal?: AbortSignal) {
   return apiFetch(`/vacancies/${vacancyId}/applications`, {
@@ -219,10 +276,19 @@ export function updateCandidate(applicationId: string, input: CandidateInput) {
   });
 }
 
-export function changeStatus(applicationId: string, action: StatusAction, note: string) {
-  return apiFetch(`/applications/${applicationId}/status`, {
+export function recordOutcome(applicationId: string, input: OutcomeInput) {
+  return apiFetch(`/applications/${applicationId}/outcome`, {
     method: "POST",
-    body: { action, note },
+    body: input,
+    schema: detailSchema,
+  });
+}
+
+/** Reabre una postulación cerrada; su resultado final queda anulado. */
+export function reopenApplication(applicationId: string, reason: string) {
+  return apiFetch(`/applications/${applicationId}/reopening`, {
+    method: "POST",
+    body: { reason },
     schema: detailSchema,
   });
 }

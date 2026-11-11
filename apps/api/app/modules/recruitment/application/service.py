@@ -7,7 +7,8 @@ administrador.
 
 Ningún movimiento es automático salvo el alta desde un lote de CV, que deja a
 la persona en revisión de RH con la clasificación inicial de la IA. Avanzar,
-descartar o reactivar es siempre una decisión humana y queda registrada.
+descartar, contratar o reabrir es siempre una decisión humana y queda
+registrada con su responsable.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import re
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import date, datetime
 
 from app.core.exceptions.errors import (
     ConflictError,
@@ -30,6 +31,9 @@ from app.modules.audit.domain.models import AuditAction
 from app.modules.recruitment.domain import tenure
 from app.modules.recruitment.domain.models import (
     DEFAULT_STAGES,
+    MOVEMENT_OUTCOME,
+    OUTCOME_MOVEMENT,
+    OUTCOME_STATUS,
     Application,
     ApplicationStatus,
     Campaign,
@@ -39,6 +43,8 @@ from app.modules.recruitment.domain.models import (
     EvaluatedCvs,
     Movement,
     MovementKind,
+    Outcome,
+    OutcomeKind,
     PipelineVersion,
     RecruitmentRepository,
     Stage,
@@ -54,13 +60,15 @@ _AI_LABELS = {
     "RECHAZADO_IA": "rechazado",
     "NO_EVALUABLE": "no evaluable",
 }
-_STATUS_ACTIONS = {
-    MovementKind.DESISTIMIENTO: ApplicationStatus.DESISTIO,
-    MovementKind.DESCARTE: ApplicationStatus.DESCARTADA,
-    MovementKind.CANCELACION: ApplicationStatus.CANCELADA,
-    MovementKind.REACTIVACION: ApplicationStatus.ACTIVA,
-}
+_SHORTCUT_OUTCOMES = (
+    OutcomeKind.DESISTIO,
+    OutcomeKind.NO_CONTRATADO,
+    OutcomeKind.VACANTE_CANCELADA,
+)
 MAX_MASS_MOVE = 200
+MAX_OUTCOME_NOTES = 2000
+# Una fecha de incorporación a más de dos años de hoy es, casi seguro, un error.
+MAX_START_DATE_DAYS = 730
 
 
 @dataclass(frozen=True)
@@ -75,6 +83,9 @@ class Board:
     campaign: Campaign | None
     pipeline: PipelineVersion | None
     applications: list[ApplicationView]
+    # Plazas de la vacante y cuántas están cubiertas por contrataciones vigentes.
+    positions: int = 0
+    hires: int = 0
 
 
 @dataclass(frozen=True)
@@ -85,6 +96,8 @@ class ApplicationDetail:
     movements: list[Movement]
     evaluation: EvaluatedCv | None
     tenure: tenure.TenureSummary | None
+    # Resultados finales, del más reciente al más antiguo (incluye anulados).
+    outcomes: list[Outcome]
 
 
 def _clean(text: str | None, limit: int) -> str:
@@ -454,16 +467,17 @@ class RecruitmentService:
     def board(
         self, actor: UserInfo, vacancy_id: uuid.UUID, campaign_id: uuid.UUID | None = None
     ) -> Board:
-        self._access.require(actor, vacancy_id, AccessLevel.LECTURA)
+        vacancy, _ = self._access.require(actor, vacancy_id, AccessLevel.LECTURA)
         # Por si un lote terminó sin poder registrar sus postulaciones.
         self.sync_evaluated(vacancy_id)
+        capacity = {"positions": vacancy.positions, "hires": self._repo.hires(vacancy_id)}
         campaigns = self._repo.campaigns(vacancy_id)
         campaign = next((c for c in campaigns if c.id == campaign_id), None)
         if campaign_id is not None and campaign is None:
             raise NotFoundError("La convocatoria no existe.")
         campaign = campaign or (campaigns[0] if campaigns else None)
         if campaign is None:
-            return Board(campaigns, None, None, [])
+            return Board(campaigns, None, None, [], **capacity)
         applications = self._repo.applications(campaign.id)
         candidates = self._repo.candidates([a.candidate_id for a in applications])
         return Board(
@@ -471,6 +485,7 @@ class RecruitmentService:
             campaign,
             self._repo.pipeline(campaign.pipeline_version_id),
             [ApplicationView(a, candidates[a.candidate_id]) for a in applications],
+            **capacity,
         )
 
     def _load(
@@ -507,6 +522,7 @@ class RecruitmentService:
             movements=self._repo.movements(application.id),
             evaluation=evaluation,
             tenure=tenure.summarize(jobs, self._clock().date()) if jobs else None,
+            outcomes=self._repo.outcomes(application.id),
         )
 
     # --- Cambios sobre una postulación ---------------------------------------------------
@@ -650,6 +666,146 @@ class RecruitmentService:
         )
         return loaded
 
+    def record_outcome(
+        self,
+        actor: UserInfo,
+        application_id: uuid.UUID,
+        outcome: OutcomeKind,
+        *,
+        reason: str | None,
+        notes: str | None = None,
+        start_date: date | None = None,
+        ip: str | None = None,
+    ) -> Application:
+        """Registra el resultado final de una postulación y la cierra.
+
+        Lo captura una persona con permiso de colaboración sobre la vacante;
+        el sistema nunca lo decide. Todo resultado lleva motivo, salvo la
+        contratación, que puede llevar la fecha de incorporación.
+        """
+        application = self._load(actor, application_id, AccessLevel.COLABORACION)
+        if application.status is not ApplicationStatus.ACTIVA:
+            raise ConflictError(
+                "La postulación ya tiene un resultado final. Reábrela para cambiarlo."
+            )
+        hired = outcome is OutcomeKind.CONTRATADO
+        reason = _clean(reason, 500) or None
+        if not hired and len(reason or "") < 5:
+            raise ValidationFailedError("Escribe el motivo.")
+        notes = (notes or "").strip()[:MAX_OUTCOME_NOTES] or None
+        now = self._clock()
+        if start_date is not None:
+            if not hired:
+                raise ValidationFailedError(
+                    "La fecha de incorporación solo aplica a una contratación."
+                )
+            if abs((start_date - now.date()).days) > MAX_START_DATE_DAYS:
+                raise ValidationFailedError("Revisa la fecha de incorporación.")
+        if hired:
+            vacancy, _ = self._access.require(
+                actor, application.vacancy_id, AccessLevel.COLABORACION
+            )
+            if self._repo.hires(vacancy.id) >= vacancy.positions:
+                plazas = "1 plaza" if vacancy.positions == 1 else f"{vacancy.positions} plazas"
+                raise ConflictError(
+                    f"La vacante tiene {plazas} y ya está cubierta. Si se abrió otra plaza, "
+                    "actualiza la vacante antes de registrar la contratación."
+                )
+        application.status = OUTCOME_STATUS[outcome]
+        application.updated_at = now
+        self._repo.save_application(application)
+        self._repo.add_outcome(
+            Outcome(
+                id=new_sequential_uuid(),
+                application_id=application.id,
+                vacancy_id=application.vacancy_id,
+                outcome=outcome,
+                recorded_at=now,
+                recorded_by=actor.id,
+                reason=reason,
+                notes=notes,
+                start_date=start_date,
+            )
+        )
+        self._movements(
+            [
+                Movement(
+                    new_sequential_uuid(),
+                    application.id,
+                    OUTCOME_MOVEMENT[outcome],
+                    now,
+                    actor.id,
+                    from_stage_id=application.stage_id,
+                    note=reason,
+                )
+            ]
+        )
+        self._audit.record(
+            AuditAction.RESULTADO_FINAL_REGISTRADO,
+            actor_user_id=actor.id,
+            resource_type="postulacion",
+            resource_id=application.id,
+            ip=ip,
+            details={
+                "vacante": str(application.vacancy_id),
+                "resultado": outcome.value,
+                # Decisión humana sobre una persona que la IA no clasificó como aceptada.
+                "no_aceptada_por_ia": hired
+                and application.ai_classification in ("RECHAZADO_IA", "NO_EVALUABLE"),
+            },
+        )
+        return application
+
+    def reopen(
+        self,
+        actor: UserInfo,
+        application_id: uuid.UUID,
+        *,
+        reason: str | None,
+        ip: str | None = None,
+    ) -> Application:
+        """Reabre una postulación cerrada. El resultado anterior queda anulado,
+        con quién lo anuló y por qué; no se borra."""
+        application = self._load(actor, application_id, AccessLevel.COLABORACION)
+        if application.status is ApplicationStatus.ACTIVA:
+            raise ConflictError("La postulación ya está activa.")
+        reason = _clean(reason, 500)
+        if len(reason) < 5:
+            raise ValidationFailedError("Escribe el motivo.")
+        now = self._clock()
+        previous = self._repo.current_outcome(application.id)
+        if previous is not None:
+            previous.voided_at, previous.voided_by, previous.void_reason = now, actor.id, reason
+            self._repo.save_outcome(previous)
+        application.status = ApplicationStatus.ACTIVA
+        application.updated_at = now
+        self._repo.save_application(application)
+        self._movements(
+            [
+                Movement(
+                    new_sequential_uuid(),
+                    application.id,
+                    MovementKind.REACTIVACION,
+                    now,
+                    actor.id,
+                    from_stage_id=application.stage_id,
+                    note=reason,
+                )
+            ]
+        )
+        self._audit.record(
+            AuditAction.RESULTADO_FINAL_ANULADO,
+            actor_user_id=actor.id,
+            resource_type="postulacion",
+            resource_id=application.id,
+            ip=ip,
+            details={
+                "vacante": str(application.vacancy_id),
+                "resultado_anulado": previous.outcome.value if previous else None,
+            },
+        )
+        return application
+
     def change_status(
         self,
         actor: UserInfo,
@@ -659,45 +815,14 @@ class RecruitmentService:
         note: str | None,
         ip: str | None = None,
     ) -> Application:
-        """Desistimiento, descarte, cancelación o reactivación. Siempre con motivo."""
-        application = self._load(actor, application_id, AccessLevel.COLABORACION)
-        status = _STATUS_ACTIONS.get(action)
-        if status is None:
+        """Atajos de desistimiento, descarte, cancelación y reactivación.
+        Son resultados finales: quedan registrados igual que los demás."""
+        if action is MovementKind.REACTIVACION:
+            return self.reopen(actor, application_id, reason=note, ip=ip)
+        outcome = MOVEMENT_OUTCOME.get(action)
+        if outcome is None or outcome not in _SHORTCUT_OUTCOMES:
             raise ValidationFailedError("La acción no es válida.")
-        note = _clean(note, 500)
-        if len(note) < 5:
-            raise ValidationFailedError("Escribe el motivo.")
-        active = application.status is ApplicationStatus.ACTIVA
-        if (status is ApplicationStatus.ACTIVA) == active:
-            raise ConflictError(
-                "La postulación ya está activa." if active else "La postulación no está activa."
-            )
-        now = self._clock()
-        application.status = status
-        application.updated_at = now
-        self._repo.save_application(application)
-        self._movements(
-            [
-                Movement(
-                    new_sequential_uuid(),
-                    application.id,
-                    action,
-                    now,
-                    actor.id,
-                    from_stage_id=application.stage_id,
-                    note=note,
-                )
-            ]
-        )
-        self._audit.record(
-            AuditAction.POSTULACION_ESTADO_CAMBIADO,
-            actor_user_id=actor.id,
-            resource_type="postulacion",
-            resource_id=application.id,
-            ip=ip,
-            details={"vacante": str(application.vacancy_id), "estado": status.value},
-        )
-        return application
+        return self.record_outcome(actor, application_id, outcome, reason=note, ip=ip)
 
     def annotate(
         self,

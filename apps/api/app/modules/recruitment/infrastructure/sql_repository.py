@@ -16,12 +16,15 @@ from app.modules.recruitment.domain.models import (
     Candidate,
     Movement,
     MovementKind,
+    Outcome,
+    OutcomeKind,
     PipelineVersion,
     Stage,
     StageKind,
 )
 from app.modules.recruitment.infrastructure.orm import (
     ApplicationMovementRow,
+    ApplicationOutcomeRow,
     ApplicationRow,
     CampaignRow,
     CandidateRow,
@@ -34,17 +37,19 @@ def _names(model: type) -> tuple[str, ...]:
     return tuple(f.name for f in fields(model) if f.name != "id")
 
 
-_CAMPAIGN, _CANDIDATE, _APPLICATION, _MOVEMENT = (
+_CAMPAIGN, _CANDIDATE, _APPLICATION, _MOVEMENT, _OUTCOME = (
     _names(Campaign),
     _names(Candidate),
     _names(Application),
     _names(Movement),
+    _names(Outcome),
 )
 _ENUMS = {
     Campaign: {"status": CampaignStatus},
     Application: {"status": ApplicationStatus},
     Movement: {"kind": MovementKind},
     Candidate: {},
+    Outcome: {"outcome": OutcomeKind},
 }
 
 
@@ -246,3 +251,38 @@ class SqlRecruitmentRepository:
             .order_by(ApplicationMovementRow.sequence)
         ).scalars()
         return [_entity(Movement, row, _MOVEMENT) for row in rows]
+
+    # --- Resultados finales --------------------------------------------------------------
+
+    def add_outcome(self, outcome: Outcome) -> None:
+        self._session.add(ApplicationOutcomeRow(id=outcome.id, **_values(outcome, _OUTCOME)))
+        self._session.flush()
+
+    def save_outcome(self, outcome: Outcome) -> None:
+        self._save(ApplicationOutcomeRow, outcome, _OUTCOME)
+
+    def outcomes(self, application_id: uuid.UUID) -> list[Outcome]:
+        rows = self._session.execute(
+            sa.select(ApplicationOutcomeRow)
+            .where(ApplicationOutcomeRow.application_id == application_id)
+            .order_by(ApplicationOutcomeRow.recorded_at.desc(), ApplicationOutcomeRow.id.desc())
+        ).scalars()
+        return [_entity(Outcome, row, _OUTCOME) for row in rows]
+
+    def current_outcome(self, application_id: uuid.UUID) -> Outcome | None:
+        row = self._session.execute(
+            sa.select(ApplicationOutcomeRow).where(
+                ApplicationOutcomeRow.application_id == application_id,
+                ApplicationOutcomeRow.voided_at.is_(None),
+            )
+        ).scalar_one_or_none()
+        return _entity(Outcome, row, _OUTCOME) if row is not None else None
+
+    def hires(self, vacancy_id: uuid.UUID) -> int:
+        return self._session.execute(
+            sa.select(sa.func.count()).where(
+                ApplicationOutcomeRow.vacancy_id == vacancy_id,
+                ApplicationOutcomeRow.outcome == OutcomeKind.CONTRATADO.value,
+                ApplicationOutcomeRow.voided_at.is_(None),
+            )
+        ).scalar_one()

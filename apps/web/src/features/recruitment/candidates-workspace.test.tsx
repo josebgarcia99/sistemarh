@@ -36,6 +36,7 @@ function makeApplication(overrides: Partial<Application> = {}): Application {
     phone: null,
     stage_id: "s2",
     status: "ACTIVA",
+    outcome: "EN_PROCESO",
     ai_classification: "ACEPTADO_IA",
     ai_score: "87.50",
     cv_file_id: "f1",
@@ -59,6 +60,8 @@ function makeBoard(overrides: Partial<Board> = {}): Board {
     campaign: CAMPAIGN,
     pipeline: PIPELINE,
     applications: [makeApplication(), BETO],
+    positions: 2,
+    hires: 0,
     ...overrides,
   };
 }
@@ -87,6 +90,7 @@ function makeDetail(overrides: Partial<ApplicationDetail> = {}): ApplicationDeta
       overlaps: 0,
       incomplete: 0,
     },
+    outcomes: [],
     ...overrides,
   };
 }
@@ -193,16 +197,13 @@ describe("CandidatesWorkspace", () => {
     expect(screen.queryByRole("button", { name: /Agregar|Cerrar convocatoria|Abrir convocatoria/ })).toBeNull();
   });
 
-  it("abre el expediente con historial, evaluación y permanencia, y registra un desistimiento", async () => {
-    const fetchMock = mockApi({
+  it("abre el expediente con historial, evaluación y permanencia", async () => {
+    mockApi({
       [`GET ${BOARD_URL}`]: { body: makeBoard() },
       ["GET /api/v1/applications/a1"]: { body: makeDetail() },
       ["GET /api/v1/applications/a1/calls"]: { body: [] },
       ["GET /api/v1/applications/a1/assessments"]: { body: { items: [], restricted: [], writable: [] } },
       ["GET /api/v1/applications/a1/syntheses"]: { body: { latest: null, total: 0, hidden: false } },
-      ["POST /api/v1/applications/a1/status"]: {
-        body: makeDetail({ application: makeApplication({ status: "DESISTIO" }) }),
-      },
     });
     const user = userEvent.setup();
     renderWorkspace();
@@ -223,11 +224,84 @@ describe("CandidatesWorkspace", () => {
     );
     expect(await screen.findByText("Todavía no hay llamadas registradas.")).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: "Desistió" }));
-    const dialog = screen.getByRole("dialog");
-    await user.type(within(dialog).getByLabelText("Motivo"), "Aceptó otra oferta");
+    expect(within(screen.getByRole("region", { name: "Resultado final" })).getByText(/En proceso/)).toBeTruthy();
+  });
+
+  it("registra una contratación con fecha de incorporación y permite reabrir el proceso", async () => {
+    const hired = makeDetail({
+      application: makeApplication({ status: "CONTRATADA", outcome: "CONTRATADO" }),
+      outcomes: [
+        {
+          id: "o1",
+          outcome: "CONTRATADO",
+          reason: null,
+          notes: "Acepta la oferta.",
+          start_date: "2026-12-01",
+          recorded_at: "2026-11-13T18:00:00Z",
+          recorded_by_name: "Reclutadora de Prueba",
+          voided_at: null,
+          voided_by_name: null,
+          void_reason: null,
+        },
+      ],
+    });
+    const reopened = makeDetail({
+      outcomes: [
+        { ...hired.outcomes[0], voided_at: "2026-11-14T18:00:00Z", voided_by_name: "Reclutadora de Prueba", void_reason: "No se presentó" },
+      ],
+    });
+    let current = makeDetail();
+    const fetchMock = mockApi({
+      [`GET ${BOARD_URL}`]: { body: makeBoard({ hires: 1 }) },
+      ["GET /api/v1/applications/a1"]: () => ({ body: current }),
+      ["GET /api/v1/applications/a1/calls"]: { body: [] },
+      ["GET /api/v1/applications/a1/assessments"]: { body: { items: [], restricted: [], writable: [] } },
+      ["GET /api/v1/applications/a1/syntheses"]: { body: { latest: null, total: 0, hidden: false } },
+      ["POST /api/v1/applications/a1/outcome"]: () => {
+        current = hired;
+        return { body: hired };
+      },
+      ["POST /api/v1/applications/a1/reopening"]: () => {
+        current = reopened;
+        return { body: reopened };
+      },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    expect(await screen.findByText("Plazas cubiertas: 1 de 2")).toBeTruthy();
+    await user.click(await screen.findByRole("button", { name: "Ana Pérez" }));
+
+    await user.click(await screen.findByRole("button", { name: "Registrar resultado final" }));
+    let dialog = screen.getByRole("dialog");
+    // La fecha de incorporación solo se pide en una contratación.
+    await user.selectOptions(within(dialog).getByLabelText("Resultado"), "DESISTIO");
+    expect(within(dialog).queryByLabelText(/Fecha de incorporación/)).toBeNull();
+    await user.selectOptions(within(dialog).getByLabelText("Resultado"), "CONTRATADO");
+    await user.type(within(dialog).getByLabelText(/Fecha de incorporación/), "2026-12-01");
+    await user.type(within(dialog).getByLabelText(/Observaciones/), "Acepta la oferta.");
+    await user.click(within(dialog).getByRole("button", { name: "Registrar resultado" }));
+    expect((await screen.findByRole("status")).textContent).toContain("Resultado final registrado");
+    expect(body(fetchMock, "/outcome")).toEqual({
+      outcome: "CONTRATADO",
+      reason: null,
+      notes: "Acepta la oferta.",
+      start_date: "2026-12-01",
+    });
+    const result = screen.getByRole("region", { name: "Resultado final" });
+    expect(within(result).getByText("Contratado")).toBeTruthy();
+    expect(within(result).getByText(/Fecha de incorporación: 1 dic 2026/)).toBeTruthy();
+    // Con resultado final ya no se mueve de etapa; solo se puede reabrir.
+    expect(screen.queryByRole("button", { name: "Mover de etapa" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Registrar resultado final" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Reabrir proceso" }));
+    dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Motivo"), "No se presentó");
     await user.click(within(dialog).getByRole("button", { name: "Confirmar" }));
-    expect((await screen.findByRole("status")).textContent).toContain("Desistimiento registrado");
-    expect(body(fetchMock, "/status")).toEqual({ action: "DESISTIMIENTO", note: "Aceptó otra oferta" });
+    expect((await screen.findByRole("status")).textContent).toContain("Proceso reabierto");
+    expect(body(fetchMock, "/reopening")).toEqual({ reason: "No se presentó" });
+    const voided = within(screen.getByRole("list", { name: "Resultados anulados" })).getAllByRole("listitem");
+    expect(voided[0].textContent).toContain("Contratado");
+    expect(voided[0].textContent).toContain("No se presentó");
   });
 });

@@ -19,6 +19,7 @@ from app.modules.evaluation_setup.infrastructure.sql_repository import (
 from app.modules.file_management.infrastructure.sql_repository import SqlFileRepository
 from app.modules.phone_calls.infrastructure.sql_repository import SqlPhoneCallRepository
 from app.modules.recruitment.infrastructure.sql_repository import SqlRecruitmentRepository
+from app.modules.reporting.infrastructure.sql_source import SqlReportingSource
 from app.modules.users.infrastructure.sql_repository import SqlUserRepository
 from app.modules.vacancies.infrastructure.sql_repository import SqlVacancyRepository
 from app.modules.vacancy_transfers.infrastructure.sql_repository import SqlTransferRepository
@@ -45,6 +46,7 @@ class SqlBackend:
                 recruitment=SqlRecruitmentRepository(session),
                 phone_calls=SqlPhoneCallRepository(session),
                 assessments=SqlAssessmentRepository(session),
+                reporting=SqlReportingSource(session),
             )
             session.commit()
         except BaseException:

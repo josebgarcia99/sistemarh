@@ -29,6 +29,8 @@ Abre http://localhost:3000. La primera terminal muestra los tres usuarios de eje
 
 **Para probar las evaluaciones posteriores.** En el expediente de una persona, baja a «Evaluaciones posteriores» y pulsa «Registrar evaluación». Prueba técnica: agrega criterios a la rúbrica con sus puntos y guarda; la calificación la calcula el sistema. Psicometría: elige el documento «Reporte psicométrico ficticio.docx» y pulsa «Resumir con IA». Estudio socioeconómico: elige «Estudio escaneado ficticio.docx» y pulsa «Leer el formulario escaneado con IA». Más abajo, «Expediente por etapas» muestra las fuentes de cada etapa y permite generar la síntesis. Como administradora, «Formularios» permite cambiar el formulario del estudio.
 
+**Para probar resultados finales, indicadores y reportes.** En el expediente de una persona pulsa «Registrar resultado final», elige «Contratado», pon la fecha de incorporación y guarda: la tarjeta «Resultado final» muestra quién lo registró y la persona ya no se mueve de etapa. Con otra persona registra «Desistió» con su motivo y después «Reabrir proceso»: el resultado anterior queda anulado, no borrado. Vuelve a «Inicio» para ver el tablero y entra a «Indicadores»: prueba los periodos, la pestaña «Histórico de candidatos» con el filtro «Resultado final» y «Descargar en Excel». Entra como `admin@demo.test` para ver, además, la carga por responsable y el uso de IA.
+
 **Para probar las ayudas de IA.** En «Auxiliar Contable» abre «Perfil, prompt y evaluación de CV», pulsa «Llenar con IA desde un documento», elige «Perfil Auxiliar Contable.docx» y pulsa «Leer con IA». Guarda el perfil, ve a «Prompt de evaluación», genera el borrador y pulsa «Proponer mejoras con IA». El proveedor simulado no lee el documento: devuelve siempre el mismo perfil de ejemplo.
 
 Si ya lo habías instalado antes, repite `pip install -r apps/api/requirements.lock`: se añadieron bibliotecas.
@@ -162,6 +164,7 @@ Si Sistemas prefiere ejecutar T-SQL en lugar de Alembic, los scripts equivalente
 | `actualizacion_0007_a_0008.sql` | Base que ya tiene la versión `0007` |
 | `actualizacion_0008_a_0009.sql` | Base que ya tiene la versión `0008` |
 | `actualizacion_0009_a_0010.sql` | Base que ya tiene la versión `0009` |
+| `actualizacion_0010_a_0011.sql` | Base que ya tiene la versión `0010` |
 | `permisos_usuario_aplicacion.sql` | Plantilla de permisos mínimos para el usuario de la aplicación |
 | `reversion_completa.sql` | Elimina todo. Solo para bases de prueba |
 

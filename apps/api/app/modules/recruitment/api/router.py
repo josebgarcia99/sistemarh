@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -18,8 +18,11 @@ from app.modules.recruitment.domain.models import (
     Campaign,
     Movement,
     MovementKind,
+    Outcome,
+    OutcomeKind,
     PipelineVersion,
     StageKind,
+    outcome_of,
 )
 
 router = APIRouter(tags=["reclutamiento"])
@@ -97,6 +100,8 @@ class ApplicationOut(BaseModel):
     phone: str | None
     stage_id: uuid.UUID
     status: str
+    # Resultado final: EN_PROCESO mientras la postulación sigue activa.
+    outcome: str
     ai_classification: str | None
     ai_score: Decimal | None
     cv_file_id: uuid.UUID | None
@@ -115,6 +120,7 @@ class ApplicationOut(BaseModel):
             phone=candidate.phone,
             stage_id=application.stage_id,
             status=application.status.value,
+            outcome=outcome_of(application.status),
             ai_classification=application.ai_classification,
             ai_score=application.ai_score,
             cv_file_id=application.cv_file_id,
@@ -129,6 +135,8 @@ class BoardOut(BaseModel):
     campaign: CampaignOut | None
     pipeline: PipelineOut | None
     applications: list[ApplicationOut]
+    positions: int
+    hires: int
 
     @classmethod
     def of(cls, board: Board) -> BoardOut:
@@ -137,6 +145,8 @@ class BoardOut(BaseModel):
             campaign=CampaignOut.of(board.campaign) if board.campaign else None,
             pipeline=PipelineOut.of(board.pipeline) if board.pipeline else None,
             applications=[ApplicationOut.of(view) for view in board.applications],
+            positions=board.positions,
+            hires=board.hires,
         )
 
 
@@ -163,6 +173,33 @@ class MoveIn(BaseModel):
 class StatusIn(BaseModel):
     action: Literal["DESISTIMIENTO", "DESCARTE", "CANCELACION", "REACTIVACION"]
     note: str = Field(max_length=500)
+
+
+class OutcomeIn(BaseModel):
+    outcome: OutcomeKind
+    # Obligatorio salvo en una contratación.
+    reason: str | None = Field(default=None, max_length=500)
+    notes: str | None = Field(default=None, max_length=2000)
+    # Fecha de incorporación; solo en una contratación.
+    start_date: date | None = None
+
+
+class ReopenIn(BaseModel):
+    reason: str = Field(max_length=500)
+
+
+class OutcomeOut(BaseModel):
+    id: uuid.UUID
+    outcome: str
+    reason: str | None
+    notes: str | None
+    start_date: date | None
+    recorded_at: datetime
+    recorded_by_name: str | None
+    # Con fecha de anulación, el registro ya no está vigente.
+    voided_at: datetime | None
+    voided_by_name: str | None
+    void_reason: str | None
 
 
 class NoteIn(BaseModel):
@@ -220,11 +257,14 @@ class ApplicationDetailOut(BaseModel):
     movements: list[MovementOut]
     evaluation: EvaluationOut | None
     tenure: TenureOut | None
+    outcomes: list[OutcomeOut]
 
 
 def _detail_out(repos: Repositories, detail: ApplicationDetail) -> ApplicationDetailOut:
     stages = {stage.id: stage.name for stage in detail.pipeline.stages}
     actors = {m.actor_user_id for m in detail.movements if m.actor_user_id}
+    actors |= {o.recorded_by for o in detail.outcomes}
+    actors |= {o.voided_by for o in detail.outcomes if o.voided_by}
     names = {uid: user.full_name for uid, user in repos.users.get_many(list(actors)).items()}
 
     def movement(m: Movement) -> MovementOut:
@@ -238,6 +278,20 @@ def _detail_out(repos: Repositories, detail: ApplicationDetail) -> ApplicationDe
             note=m.note,
             due_at=m.due_at,
             mass=m.group_id is not None,
+        )
+
+    def outcome(o: Outcome) -> OutcomeOut:
+        return OutcomeOut(
+            id=o.id,
+            outcome=o.outcome.value,
+            reason=o.reason,
+            notes=o.notes,
+            start_date=o.start_date,
+            recorded_at=o.recorded_at,
+            recorded_by_name=names.get(o.recorded_by),
+            voided_at=o.voided_at,
+            voided_by_name=names.get(o.voided_by) if o.voided_by else None,
+            void_reason=o.void_reason,
         )
 
     evaluation, summary = detail.evaluation, detail.tenure
@@ -265,6 +319,7 @@ def _detail_out(repos: Repositories, detail: ApplicationDetail) -> ApplicationDe
         )
         if summary
         else None,
+        outcomes=[outcome(o) for o in detail.outcomes],
     )
 
 
@@ -455,6 +510,50 @@ def change_status(
             note=body.note,
             ip=client_ip(request),
         )
+        return _detail_out(repos, service.detail(principal.user, application_id))
+
+
+@router.post(
+    "/applications/{application_id}/outcome",
+    response_model=ApplicationDetailOut,
+    summary="Registra el resultado final de la postulación",
+)
+def record_outcome(
+    application_id: uuid.UUID,
+    body: OutcomeIn,
+    request: Request,
+    principal: Principal = _user,
+    context: AppContext = _context,
+) -> ApplicationDetailOut:
+    with context.require_backend().transaction() as repos:
+        service = context.recruitment(repos)
+        service.record_outcome(
+            principal.user,
+            application_id,
+            body.outcome,
+            reason=body.reason,
+            notes=body.notes,
+            start_date=body.start_date,
+            ip=client_ip(request),
+        )
+        return _detail_out(repos, service.detail(principal.user, application_id))
+
+
+@router.post(
+    "/applications/{application_id}/reopening",
+    response_model=ApplicationDetailOut,
+    summary="Reabre una postulación cerrada y anula su resultado final",
+)
+def reopen_application(
+    application_id: uuid.UUID,
+    body: ReopenIn,
+    request: Request,
+    principal: Principal = _user,
+    context: AppContext = _context,
+) -> ApplicationDetailOut:
+    with context.require_backend().transaction() as repos:
+        service = context.recruitment(repos)
+        service.reopen(principal.user, application_id, reason=body.reason, ip=client_ip(request))
         return _detail_out(repos, service.detail(principal.user, application_id))
 
 

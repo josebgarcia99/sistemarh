@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Actualización 0003 -> 0004
    Versión del esquema: 0003 -> 0004
-   Generado: 2026-11-11 19:31 (UTC) con scripts/generate_sql.py
+   Generado: 2026-11-11 20:11 (UTC) con scripts/generate_sql.py
 
    Aplica solo los cambios de la versión 0004 sobre una base que ya
    está en la versión 0003. Si está en otra versión, no hace nada.
