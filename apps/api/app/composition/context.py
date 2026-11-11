@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from fastapi import Request
 
+from app.composition.ai import env_api_keys
 from app.composition.backend import Backend, Repositories
 from app.composition.file_access import VacancyFileAccessPolicy
 from app.core.clock import Clock
@@ -15,6 +16,8 @@ from app.core.security.master_key import MasterKey
 from app.core.security.passwords import PasswordHasher
 from app.infrastructure.antivirus.scanner import DisabledScanner, MalwareScanner
 from app.infrastructure.storage.local import LocalFileStorage
+from app.modules.ai_settings.application.service import AiSettingsService
+from app.modules.ai_settings.domain.models import ProviderClient, ProviderCode
 from app.modules.audit.application.service import AuditLog
 from app.modules.authentication.application.service import AuthService
 from app.modules.authentication.domain.models import AuthPolicy
@@ -35,6 +38,7 @@ class AppContext:
     storage: LocalFileStorage | None = None
     scanner: MalwareScanner = field(default_factory=DisabledScanner)
     master_key: MasterKey | None = None
+    ai_clients: dict[ProviderCode, ProviderClient] = field(default_factory=dict)
 
     def require_backend(self) -> Backend:
         if self.backend is None:
@@ -73,6 +77,16 @@ class AppContext:
 
     def reconciler(self, repos: Repositories) -> StorageReconciler:
         return StorageReconciler(repos.files, self.require_storage(), self.audit(repos), self.clock)
+
+    def ai_settings(self, repos: Repositories) -> AiSettingsService:
+        return AiSettingsService(
+            repos.ai,
+            self.audit(repos),
+            self.clock,
+            cipher=self.master_key,
+            clients=self.ai_clients,
+            env_keys=env_api_keys(self.settings),
+        )
 
     def audit(self, repos: Repositories) -> AuditLog:
         return AuditLog(repos.audit, self.clock)

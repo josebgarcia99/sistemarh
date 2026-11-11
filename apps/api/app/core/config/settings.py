@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     # repositorio. Cifra las API keys de IA y los documentos de clase sensible.
     master_key_file: Path | None = None
 
+    # API keys inyectadas por Sistemas como variables de entorno del servidor.
+    # Alternativa a registrarlas en la pantalla; nunca van en el repositorio.
+    anthropic_api_key: SecretStr | None = None
+    openai_api_key: SecretStr | None = None
+    # Versión de la API de Anthropic que se envía en cada solicitud.
+    anthropic_api_version: str = "2026-10-21"
+
     # Sin clave maestra, los documentos de clase sensible no se aceptan. Esta
     # opción los admite sin cifrar; solo para desarrollo con datos sintéticos.
     allow_unencrypted_sensitive_files: bool = False

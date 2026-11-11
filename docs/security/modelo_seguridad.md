@@ -115,3 +115,20 @@ Estado al 11 de noviembre de 2026.
 | Sin clave | Los documentos ordinarios funcionan igual; los sensibles no se aceptan |
 
 **Pendiente:** el procedimiento de rotación (cambiar la clave maestra y volver a cifrar lo existente) no está construido. Mientras no exista, la clave no debe cambiarse una vez que haya documentos cifrados.
+
+## Configuración de IA: lo construido (Fase 4, primera parte)
+
+| Aspecto | Cómo quedó |
+| --- | --- |
+| Pantalla | "Configuración de inteligencia artificial", solo para administradores: registrar, sustituir y revocar la clave; probar la conexión; habilitar o deshabilitar; límite de gasto mensual; modelo de cada operación |
+| Dónde está la clave | Cifrada con la clave maestra en `ai.provider_credentials`. El navegador la envía una sola vez, por HTTPS, y nunca la recibe de vuelta: solo ve `••••` y los últimos cuatro caracteres |
+| Sustituir y revocar | Sustituir crea un registro nuevo y borra el texto cifrado del anterior. Revocar borra el texto cifrado y deshabilita el proveedor |
+| Clave por variable de entorno | `RECLU_ANTHROPIC_API_KEY` y `RECLU_OPENAI_API_KEY`. La pantalla la muestra como "definida por Sistemas" y no permite cambiarla ni revocarla |
+| Probar la conexión | Pide al proveedor su lista de modelos. No envía ningún documento ni dato personal |
+| Modelos | No hay identificadores de modelos en el código: la lista sale de lo que cada proveedor informa. Si un proveedor retira un modelo, deja de poder asignarse |
+| Errores | Los mensajes los redacta la aplicación; nunca incluyen la clave ni la respuesta completa del proveedor |
+| Auditoría | Registro, sustitución, revocación, pruebas, cambios de proveedor y asignaciones. Solo se anota la terminación de la clave |
+
+**Sin verificar:** la aplicación nunca se ha conectado a Anthropic ni a OpenAI. Las pruebas usan proveedores simulados y claves ficticias. La dirección, la cabecera de autorización y la versión de la API de Anthropic (`2026-10-21`, configurable) se tomaron de la documentación pública de cada proveedor consultada el 11 de noviembre de 2026.
+
+**Pendiente:** registro de consumo y costos, aplicación del límite mensual y validación de capacidades antes de usar un modelo. Llegan con el procesamiento de CV.

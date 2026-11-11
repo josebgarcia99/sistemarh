@@ -50,6 +50,11 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "documento.no_disponible": "Documento no disponible",
   "documento.eliminado": "Documento eliminado",
   "almacenamiento.conciliado": "Conciliación del almacenamiento",
+  "ia.clave_registrada": "API key registrada",
+  "ia.clave_revocada": "API key revocada",
+  "ia.conexion_probada": "Prueba de conexión con proveedor de IA",
+  "ia.proveedor_actualizado": "Proveedor de IA actualizado",
+  "ia.modelo_asignado": "Modelo de IA asignado",
 };
 
 export function listAuditEvents(

@@ -40,6 +40,11 @@ class AuditAction(StrEnum):
     DOCUMENTO_NO_DISPONIBLE = "documento.no_disponible"
     DOCUMENTO_ELIMINADO = "documento.eliminado"
     ALMACENAMIENTO_CONCILIADO = "almacenamiento.conciliado"
+    IA_CLAVE_REGISTRADA = "ia.clave_registrada"
+    IA_CLAVE_REVOCADA = "ia.clave_revocada"
+    IA_CONEXION_PROBADA = "ia.conexion_probada"
+    IA_PROVEEDOR_ACTUALIZADO = "ia.proveedor_actualizado"
+    IA_MODELO_ASIGNADO = "ia.modelo_asignado"
 
 
 @dataclass(frozen=True)

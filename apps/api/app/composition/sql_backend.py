@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.composition.backend import Repositories
+from app.modules.ai_settings.infrastructure.sql_repository import SqlAiRepository
 from app.modules.audit.infrastructure.sql_repository import SqlAuditRepository
 from app.modules.authentication.infrastructure.sql_repository import SqlSessionRepository
 from app.modules.file_management.infrastructure.sql_repository import SqlFileRepository
@@ -31,6 +32,7 @@ class SqlBackend:
                 vacancies=SqlVacancyRepository(session),
                 transfers=SqlTransferRepository(session),
                 files=SqlFileRepository(session),
+                ai=SqlAiRepository(session),
             )
             session.commit()
         except BaseException:

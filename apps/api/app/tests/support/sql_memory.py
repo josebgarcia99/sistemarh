@@ -20,6 +20,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.composition.sql_backend import SqlBackend
 from app.infrastructure.database.base import (
+    SCHEMA_AI,
     SCHEMA_AUTH,
     SCHEMA_FILES,
     SCHEMA_OPS,
@@ -44,6 +45,7 @@ def build_test_backend() -> SqlBackend:
             SCHEMA_OPS: None,
             SCHEMA_VACANCY: None,
             SCHEMA_FILES: None,
+            SCHEMA_AI: None,
         }
     )
     Base.metadata.create_all(scoped)

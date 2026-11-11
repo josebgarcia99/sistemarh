@@ -9,6 +9,7 @@ from collections.abc import Mapping
 
 from fastapi import APIRouter, FastAPI
 
+from app.composition.ai import build_provider_clients
 from app.composition.backend import Backend
 from app.composition.context import AppContext
 from app.composition.denials import register_denial_audit
@@ -21,6 +22,8 @@ from app.core.security.master_key import MasterKey
 from app.core.security.passwords import Argon2Hasher, PasswordHasher
 from app.infrastructure.antivirus.scanner import ClamdScanner, DisabledScanner, MalwareScanner
 from app.infrastructure.storage.local import LocalFileStorage
+from app.modules.ai_settings.api.router import router as ai_router
+from app.modules.ai_settings.domain.models import ProviderClient, ProviderCode
 from app.modules.audit.api.router import router as audit_router
 from app.modules.authentication.api.router import router as auth_router
 from app.modules.authentication.domain.models import AuthPolicy
@@ -88,6 +91,7 @@ def create_app(
     storage: LocalFileStorage | None = None,
     scanner: MalwareScanner | None = None,
     master_key: MasterKey | None = None,
+    ai_clients: dict[ProviderCode, ProviderClient] | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
@@ -96,7 +100,7 @@ def create_app(
     docs_enabled = settings.environment is not Environment.PRODUCTION
     app = FastAPI(
         title=settings.app_name,
-        version="0.3.0",
+        version="0.4.0",
         openapi_url=f"{settings.api_prefix}/openapi.json" if docs_enabled else None,
         docs_url=f"{settings.api_prefix}/docs" if docs_enabled else None,
         redoc_url=None,
@@ -114,6 +118,7 @@ def create_app(
         storage=storage if storage is not None else build_storage(settings),
         scanner=scanner or build_scanner(settings),
         master_key=master_key if master_key is not None else build_master_key(settings),
+        ai_clients=ai_clients if ai_clients is not None else build_provider_clients(settings),
     )
 
     app.add_middleware(RequestContextMiddleware)
@@ -127,6 +132,7 @@ def create_app(
     api.include_router(vacancies_router)
     api.include_router(transfers_router)
     api.include_router(files_router)
+    api.include_router(ai_router)
     api.include_router(audit_router)
     app.include_router(api)
     return app

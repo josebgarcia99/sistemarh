@@ -36,6 +36,7 @@ containers =
     app.modules.vacancies
     app.modules.vacancy_transfers
     app.modules.file_management
+    app.modules.ai_settings
 
 [importlinter:contract:capas-system]
 name = capas del modulo system
@@ -97,5 +98,19 @@ source_modules =
 forbidden_modules =
     app.modules.vacancies
     app.modules.vacancy_transfers
+    app.modules.users
+    app.modules.system
+
+[importlinter:contract:ia-independiente]
+name = ai_settings no depende de otros modulos de negocio
+type = forbidden
+source_modules =
+    app.modules.ai_settings.domain
+    app.modules.ai_settings.application
+    app.modules.ai_settings.infrastructure
+forbidden_modules =
+    app.modules.vacancies
+    app.modules.vacancy_transfers
+    app.modules.file_management
     app.modules.users
     app.modules.system

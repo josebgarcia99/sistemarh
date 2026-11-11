@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0004`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0005`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -183,6 +183,60 @@ Metadatos de cada documento guardado en el disco privado del servidor. El archiv
 | `deleted_at`, `deleted_by`, `deletion_reason` | `DATETIME2(3)`, `UNIQUEIDENTIFIER`, `NVARCHAR(500)` | No | Cuándo, quién y por qué se eliminó. Obligatorios si el estado es `ELIMINADO`. |
 
 Índices: `ix_file_assets_vacancy (vacancy_id, status)`, `ix_file_assets_hash (vacancy_id, sha256)` para detectar duplicados e `ix_file_assets_status (status, created_at)` para la conciliación.
+
+## Esquema `ai`: configuración de inteligencia artificial
+
+### `ai.providers`
+
+Un proveedor por fila (`ANTHROPIC`, `OPENAI`). La fila se crea la primera vez que se configura.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `code` | `VARCHAR(20)` | Sí | Clave primaria. |
+| `enabled` | `BIT` | Sí | Si sus modelos pueden usarse. |
+| `monthly_limit_usd` | `NUMERIC(12,2)` | No | Límite de gasto mensual en dólares. Vacío: sin límite. |
+| `last_test_at`, `last_test_ok`, `last_test_error` | `DATETIME2(3)`, `BIT`, `NVARCHAR(300)` | No | Resultado de la última prueba de conexión. El error es un mensaje redactado por la aplicación, no la respuesta del proveedor. |
+| `updated_at`, `updated_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | No | Último cambio y quién lo hizo. |
+
+### `ai.provider_credentials`
+
+API keys de los proveedores, **cifradas con la clave maestra** (que no está en la base). Sustituir una clave crea una fila nueva y revoca la anterior.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `provider_code` | `VARCHAR(20)` | Sí | Proveedor (`ai.providers`). |
+| `ciphertext` | `NVARCHAR(MAX)` | No | Texto cifrado (AES-256-GCM). Se borra al revocar o sustituir: una fila revocada no conserva el secreto. |
+| `last4` | `VARCHAR(4)` | Sí | Últimos cuatro caracteres, para el identificador enmascarado. |
+| `master_key_id` | `VARCHAR(32)` | Sí | Identificador de la clave maestra con que se cifró. No es la clave. |
+| `created_at`, `created_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | Sí | Cuándo se registró y quién lo hizo. |
+| `revoked_at`, `revoked_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | No | Cuándo se revocó o sustituyó y quién lo hizo. |
+
+Índice: `uq_provider_credentials_active`, único sobre `provider_code` para filas sin revocar (una clave vigente por proveedor).
+
+### `ai.models`
+
+Modelos que cada proveedor informa. Se llena al probar la conexión; no hay identificadores de modelos escritos en el código.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `provider_code` | `VARCHAR(20)` | Sí | Proveedor. |
+| `model_id` | `NVARCHAR(200)` | Sí | Identificador del modelo en el proveedor. Único por proveedor. |
+| `display_name` | `NVARCHAR(200)` | Sí | Nombre para mostrar. |
+| `capabilities` | `NVARCHAR(MAX)` | No | Capacidades que declara el proveedor, en JSON. Vacío si no las informa. |
+| `is_available` | `BIT` | Sí | 0 si el proveedor dejó de listarlo en la última comprobación. |
+| `first_seen_at`, `last_seen_at` | `DATETIME2(3)` | Sí | Primera y última vez que el proveedor lo listó. |
+
+### `ai.operation_assignments`
+
+Modelo asignado a cada operación (extracción de CV, evaluación, generación de prompts, etc.).
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `operation` | `VARCHAR(40)` | Sí | Clave primaria. Una de las ocho operaciones. |
+| `model_ref` | `UNIQUEIDENTIFIER` | No | Modelo asignado (`ai.models`). Vacío: sin asignar. |
+| `updated_at`, `updated_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | No | Último cambio y quién lo hizo. |
 
 ## Esquema `ops`: operación
 

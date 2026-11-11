@@ -12,6 +12,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.modules.ai_settings.domain.models import AiRepository
 from app.modules.audit.domain.models import AuditRepository
 from app.modules.authentication.domain.models import SessionRepository
 from app.modules.file_management.domain.models import FileRepository
@@ -28,6 +29,7 @@ class Repositories:
     vacancies: VacancyRepository
     transfers: TransferRepository
     files: FileRepository
+    ai: AiRepository
 
 
 class Backend(Protocol):
