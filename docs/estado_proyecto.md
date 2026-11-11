@@ -176,6 +176,7 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - 11 nov 2026: Fase 3 construida: almacenamiento, validación, antivirus, descarga autorizada, eliminación controlada, conciliación, manifiesto de respaldos y pantalla de documentos.
 - 11 nov 2026: Fase 4, primera parte: clave maestra y cifrado por archivo de los documentos sensibles; su carga queda habilitada.
 - 11 nov 2026: Fase 4, primera parte: configuración de IA (claves cifradas, prueba de conexión, registro de modelos y asignaciones).
+- 11 nov 2026: modo demostración (`scripts/demo.py`) para ver las pantallas sin SQL Server: datos en memoria que se borran al cerrar y proveedores de IA simulados. No sustituye a SQL Server.
 - 11 nov 2026: el servidor de desarrollo de Next.js cortaba las cargas de más de 10 MB al reenviarlas a la API; se amplió el límite a 25 MB. Lo detectó el recorrido en navegador.
 
 ## Decisiones tomadas

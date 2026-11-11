@@ -2,6 +2,29 @@
 
 Hay dos formas de ejecutar el proyecto en desarrollo. Ninguna toca servidores ni bases de datos de producción.
 
+## Solo ver las pantallas: modo demostración
+
+Para mirar el avance sin instalar SQL Server, Docker ni el controlador ODBC. Requisitos: Python 3.12 o posterior y Node.js 22 o posterior.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r apps/api/requirements.lock
+python scripts/demo.py             # deja esta terminal abierta
+```
+
+En otra terminal:
+
+```bash
+cd apps/web
+npm ci
+npm run dev
+```
+
+Abre http://localhost:3000. La primera terminal muestra los tres usuarios de ejemplo y la contraseña, que cambia en cada arranque.
+
+**Qué es y qué no es.** Arranca la API real con los datos en memoria (el mismo motor de las pruebas automáticas), tres usuarios y tres vacantes ficticias, y proveedores de IA simulados. Todo se borra al cerrar. No es SQL Server, no valida nada de SQL Server y no sustituye a la base de datos real en ningún entorno. Se niega a arrancar si `RECLU_ENVIRONMENT` es `production` e ignora cualquier otra variable `RECLU_`.
+
 ## Opción A: procesos locales
 
 Requisitos: Python 3.12 o posterior y Node.js 22 o posterior.

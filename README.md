@@ -16,7 +16,7 @@ apps/
   worker/     Tareas Celery; importa los casos de uso de la API
   web/        Interfaz Next.js (TypeScript estricto, Tailwind)
 database/     Migraciones Alembic y scripts T-SQL para Sistemas (database/sqlserver)
-scripts/      Generador de los scripts T-SQL
+scripts/      Generador de los scripts T-SQL y modo demostración (demo.py)
 infrastructure/
   docker/     Imágenes y Docker Compose de desarrollo
 docs/         Arquitectura, permisos, base de datos, seguridad, pruebas, despliegue
