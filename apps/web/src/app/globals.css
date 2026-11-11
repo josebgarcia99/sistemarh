@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/*
+ * Sistema visual aprobado (lienzo de diseño, 10 nov 2026).
+ * Los colores de acento se usan en puntos, barras y fondos suaves; el texto
+ * sobre ellos va en los tonos "-ink" para cumplir contraste AA.
+ */
+@theme {
+  --color-ink: #10141a;
+  --color-ink-muted: #5a6170;
+  --color-ground: #ecedf0;
+  --color-ground-cool: #dce2ef;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f1f2f5;
+  --color-line: rgb(16 20 26 / 0.1);
+
+  --color-accent-blue: #83a2db;
+  --color-accent-blue-soft: #dce6f7;
+  --color-accent-blue-ink: #27457f;
+  --color-accent-red: #ce6969;
+  --color-accent-red-soft: #f5dcdc;
+  --color-accent-red-ink: #8a2b2b;
+  --color-neutral-soft: #e9ebf0;
+  --color-neutral-ink: #3a4150;
+
+  --font-sans: "Outfit Variable", "Avenir Next", "Segoe UI", sans-serif;
+
+  --radius-card: 2.25rem;
+  --radius-tile: 1.625rem;
+}
+
+body {
+  background: linear-gradient(165deg, var(--color-ground) 0%, var(--color-ground-cool) 100%);
+  background-attachment: fixed;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}

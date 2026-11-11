@@ -1,0 +1,83 @@
+# Entorno de DESARROLLO. No usar en producción.
+# Desde la raíz del repositorio:
+#   docker compose --env-file .env -f infrastructure/docker/docker-compose.dev.yml up --build
+#
+# SQL Server: por omisión se usa la instancia indicada en RECLU_DATABASE_URL.
+# Para levantar un SQL Server 2022 local de desarrollo, añade:  --profile sqlserver-local
+
+name: reclutamiento-dev
+
+services:
+  redis:
+    image: redis:7-alpine
+    # Redis es solo la cola: no necesita persistencia.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/python.Dockerfile
+      target: api
+    environment:
+      RECLU_ENVIRONMENT: development
+      RECLU_LOG_LEVEL: ${RECLU_LOG_LEVEL:-INFO}
+      RECLU_DATABASE_URL: ${RECLU_DATABASE_URL:-}
+      RECLU_REDIS_URL: redis://redis:6379/0
+      RECLU_STORAGE_ROOT: /srv/reclutamiento/storage
+      RECLU_AI_ALLOW_REAL_DOCUMENTS: "false"
+    volumes:
+      # Los documentos viven en el equipo anfitrión, nunca dentro del contenedor.
+      - type: bind
+        source: ${RECLU_STORAGE_HOST_PATH:?Define RECLU_STORAGE_HOST_PATH en .env}
+        target: /srv/reclutamiento/storage
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/python.Dockerfile
+      target: worker
+    environment:
+      RECLU_ENVIRONMENT: development
+      RECLU_LOG_LEVEL: ${RECLU_LOG_LEVEL:-INFO}
+      RECLU_DATABASE_URL: ${RECLU_DATABASE_URL:-}
+      RECLU_REDIS_URL: redis://redis:6379/0
+      RECLU_STORAGE_ROOT: /srv/reclutamiento/storage
+      RECLU_AI_ALLOW_REAL_DOCUMENTS: "false"
+    volumes:
+      - type: bind
+        source: ${RECLU_STORAGE_HOST_PATH:?Define RECLU_STORAGE_HOST_PATH en .env}
+        target: /srv/reclutamiento/storage
+    depends_on:
+      - redis
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/web.Dockerfile
+      target: dev
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
+
+  sqlserver:
+    profiles: ["sqlserver-local"]
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      # Sin valor por omisión: si queda vacía, SQL Server se niega a iniciar.
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-}
+    volumes:
+      - sqlserver-dev-data:/var/opt/mssql
+    ports:
+      - "127.0.0.1:1433:1433"
+
+volumes:
+  sqlserver-dev-data:

@@ -1,0 +1,30 @@
+[importlinter]
+root_package = app
+
+# El núcleo y la infraestructura compartida no conocen los módulos de negocio.
+[importlinter:contract:core-sin-modulos]
+name = core no depende de modules
+type = forbidden
+source_modules =
+    app.core
+forbidden_modules =
+    app.modules
+
+[importlinter:contract:infraestructura-sin-modulos]
+name = infrastructure compartida no depende de modules
+type = forbidden
+source_modules =
+    app.infrastructure
+forbidden_modules =
+    app.modules
+
+# Dentro de cada módulo las dependencias apuntan hacia el dominio.
+[importlinter:contract:capas-system]
+name = capas del modulo system
+type = layers
+layers =
+    api
+    infrastructure
+    application
+containers =
+    app.modules.system
