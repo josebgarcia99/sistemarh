@@ -2,8 +2,8 @@
 
 ``Backend.transaction()`` abre una unidad de trabajo: confirma al salir sin
 errores y revierte si hubo una excepción. Dentro de ella, los módulos reciben
-sus repositorios. Existen dos implementaciones: SQL Server (producción) y en
-memoria (pruebas aisladas, mientras no haya una instancia de SQL Server).
+sus repositorios. La única implementación es ``SqlBackend`` (SQLAlchemy sobre
+SQL Server); las pruebas la ejecutan sobre un motor en memoria.
 """
 
 from __future__ import annotations
@@ -15,6 +15,8 @@ from typing import Protocol
 from app.modules.audit.domain.models import AuditRepository
 from app.modules.authentication.domain.models import SessionRepository
 from app.modules.users.domain.repository import UserRepository
+from app.modules.vacancies.domain.models import VacancyRepository
+from app.modules.vacancy_transfers.domain.models import TransferRepository
 
 
 @dataclass(frozen=True)
@@ -22,6 +24,8 @@ class Repositories:
     users: UserRepository
     sessions: SessionRepository
     audit: AuditRepository
+    vacancies: VacancyRepository
+    transfers: TransferRepository
 
 
 class Backend(Protocol):

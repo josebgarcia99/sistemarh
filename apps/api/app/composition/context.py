@@ -15,6 +15,8 @@ from app.modules.audit.application.service import AuditLog
 from app.modules.authentication.application.service import AuthService
 from app.modules.authentication.domain.models import AuthPolicy
 from app.modules.users.application.service import UserService
+from app.modules.vacancies.application.service import VacancyService
+from app.modules.vacancy_transfers.application.service import TransferService
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,26 @@ class AppContext:
 
     def user_service(self, repos: Repositories) -> UserService:
         return UserService(repos.users, repos.sessions, self.audit(repos), self.hasher, self.clock)
+
+    def transfer_service(self, repos: Repositories) -> TransferService:
+        return TransferService(
+            repos.vacancies,
+            repos.transfers,
+            repos.users,
+            self.user_service(repos),
+            self.audit(repos),
+            self.clock,
+        )
+
+    def vacancy_service(self, repos: Repositories) -> VacancyService:
+        return VacancyService(
+            repos.vacancies,
+            repos.users,
+            self.audit(repos),
+            self.clock,
+            # El historial de responsables empieza al crear la vacante.
+            on_created=self.transfer_service(repos).record_creation,
+        )
 
 
 def get_context(request: Request) -> AppContext:

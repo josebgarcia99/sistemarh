@@ -58,3 +58,9 @@ class UserPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class DirectoryEntry(BaseModel):
+    id: uuid.UUID
+    full_name: str
+    email: str

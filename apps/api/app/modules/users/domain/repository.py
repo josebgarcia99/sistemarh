@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Protocol
 
@@ -19,6 +20,10 @@ class UserRepository(Protocol):
     def list(self, *, search: str | None, offset: int, limit: int) -> tuple[list[User], int]: ...
 
     def count_active_admins(self) -> int: ...
+
+    def get_many(self, user_ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, User]: ...
+
+    def search_active(self, *, search: str, limit: int) -> list[User]: ...
 
 
 class SessionRevoker(Protocol):

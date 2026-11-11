@@ -37,7 +37,7 @@ from datetime import UTC, datetime, timedelta  # noqa: E402
 
 from app.core.security.passwords import Argon2Hasher  # noqa: E402
 from app.modules.authentication.api.dependencies import CSRF_HEADER  # noqa: E402
-from app.tests.support.memory_backend import MemoryBackend  # noqa: E402
+from app.tests.support.sql_memory import build_test_backend  # noqa: E402
 
 ADMIN_EMAIL = "admin@ejemplo.test"
 ADMIN_PASSWORD = "Clave-Maestra-2026"
@@ -68,8 +68,8 @@ def clock() -> FakeClock:
 
 
 @pytest.fixture
-def backend() -> MemoryBackend:
-    return MemoryBackend()
+def backend():
+    return build_test_backend()
 
 
 @pytest.fixture

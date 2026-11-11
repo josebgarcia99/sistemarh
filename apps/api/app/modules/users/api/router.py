@@ -7,8 +7,9 @@ import uuid
 from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.composition.context import AppContext, client_ip, get_context
-from app.modules.authentication.api.dependencies import Principal, require_admin
+from app.modules.authentication.api.dependencies import Principal, require_admin, require_user
 from app.modules.users.api.schemas import (
+    DirectoryEntry,
     PasswordResetIn,
     PasswordResetOut,
     UserCreateIn,
@@ -35,6 +36,23 @@ def list_users(
     return UserPage(
         items=[UserOut.from_domain(u) for u in users], total=total, page=page, page_size=page_size
     )
+
+
+@router.get(
+    "/directory",
+    response_model=list[DirectoryEntry],
+    summary="Buscar usuarios activos para compartir una vacante",
+)
+def user_directory(
+    search: str = Query(min_length=2, max_length=100),
+    _: Principal = Depends(require_user),  # noqa: B008
+    context: AppContext = Depends(get_context),  # noqa: B008
+) -> list[DirectoryEntry]:
+    # Disponible para cualquier usuario con sesión, pero solo devuelve lo mínimo
+    # para elegir a una persona: nunca rol, actividad ni datos de la cuenta.
+    with context.require_backend().transaction() as repos:
+        users = repos.users.search_active(search=search.strip(), limit=10)
+    return [DirectoryEntry(id=u.id, full_name=u.full_name, email=u.email) for u in users]
 
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED, summary="Alta")

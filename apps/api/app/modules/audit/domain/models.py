@@ -25,6 +25,15 @@ class AuditAction(StrEnum):
     USUARIO_CONTRASENA_RESTABLECIDA = "usuario.contrasena_restablecida"
     USUARIO_DESACTIVADO = "usuario.desactivado"
     USUARIO_ACTIVADO = "usuario.activado"
+    VACANTE_CREADA = "vacante.creada"
+    VACANTE_ACTUALIZADA = "vacante.actualizada"
+    VACANTE_ESTADO_CAMBIADO = "vacante.estado_cambiado"
+    VACANTE_COMPARTIDA = "vacante.compartida"
+    VACANTE_ACCESO_MODIFICADO = "vacante.acceso_modificado"
+    VACANTE_ACCESO_REVOCADO = "vacante.acceso_revocado"
+    VACANTE_PERMISO_SENSIBLE = "vacante.permiso_sensible_cambiado"
+    VACANTE_TRANSFERIDA = "vacante.transferida"
+    TRANSFERENCIA_MASIVA = "transferencia_masiva.completada"
 
 
 @dataclass(frozen=True)

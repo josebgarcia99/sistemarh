@@ -24,6 +24,8 @@ from app.modules.system.api.router import router as system_router
 from app.modules.system.application.health import HealthCheck
 from app.modules.system.infrastructure.checks import build_default_checks
 from app.modules.users.api.router import router as users_router
+from app.modules.vacancies.api.router import router as vacancies_router
+from app.modules.vacancy_transfers.api.router import router as transfers_router
 
 
 def build_sql_backend(settings: Settings) -> Backend | None:
@@ -83,6 +85,8 @@ def create_app(
     api.include_router(system_router)
     api.include_router(auth_router)
     api.include_router(users_router)
+    api.include_router(vacancies_router)
+    api.include_router(transfers_router)
     api.include_router(audit_router)
     app.include_router(api)
     return app

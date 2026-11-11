@@ -33,6 +33,8 @@ containers =
     app.modules.users
     app.modules.authentication
     app.modules.audit
+    app.modules.vacancies
+    app.modules.vacancy_transfers
 
 [importlinter:contract:capas-system]
 name = capas del modulo system
@@ -65,4 +67,18 @@ source_modules =
     app.modules.users.application
 forbidden_modules =
     app.modules.authentication
+    app.modules.system
+
+# Vacantes no conoce a usuarios, sesiones ni transferencias: usa sus propios
+# puertos (UserLookup) y un aviso de alta (on_created).
+[importlinter:contract:vacantes-independiente]
+name = el dominio de vacancies no depende de otros modulos de negocio
+type = forbidden
+source_modules =
+    app.modules.vacancies.domain
+    app.modules.vacancies.application
+forbidden_modules =
+    app.modules.users
+    app.modules.authentication
+    app.modules.vacancy_transfers
     app.modules.system

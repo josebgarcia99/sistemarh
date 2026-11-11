@@ -1,13 +1,12 @@
-"""Comprobación ESTRUCTURAL de los repositorios SQLAlchemy y de la migración.
+"""Repositorios SQLAlchemy y migraciones, sin una instancia de SQL Server.
 
-Todavía no hay una instancia de SQL Server autorizada. Estas pruebas ejecutan
-los repositorios reales sobre un motor en memoria solo para detectar errores de
-mapeo y de consultas, y generan el T-SQL de la migración sin conectarse.
+- Los repositorios reales se ejecutan sobre un motor en memoria (ver
+  ``app/tests/support/sql_memory.py``).
+- Las migraciones se convierten a T-SQL sin conectarse y se comprueba que
+  definen las mismas tablas y columnas que el modelo.
 
-NO validan el comportamiento en SQL Server (tipos, intercalación, bloqueos,
-paginación OFFSET/FETCH). Eso queda pendiente y está anotado en
-``docs/estado_proyecto.md``. La aplicación sigue rechazando cualquier motor
-distinto de SQL Server.
+Nada de esto valida el comportamiento propio de SQL Server; lo pendiente está
+anotado en ``docs/estado_proyecto.md``.
 """
 
 from __future__ import annotations
@@ -17,41 +16,25 @@ import os
 from pathlib import Path
 
 import pytest
-import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.composition.sql_backend import SqlBackend
-from app.infrastructure.database.base import SCHEMA_AUTH, SCHEMA_OPS, Base
+from app.infrastructure.database.base import Base
 from app.main import create_app
 from app.modules.audit.infrastructure import orm as _audit_orm  # noqa: F401
 from app.modules.authentication.api.dependencies import CSRF_HEADER
 from app.modules.authentication.infrastructure import orm as _auth_orm  # noqa: F401
 from app.modules.users.infrastructure import orm as _users_orm  # noqa: F401
-from app.modules.users.infrastructure.orm import RoleRow
 from app.tests.conftest import new_client
+from app.tests.support.sql_memory import build_test_backend
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 @pytest.fixture
 def sql_backend() -> SqlBackend:
-    engine = sa.create_engine(
-        "sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    ).execution_options(schema_translate_map={SCHEMA_AUTH: None, SCHEMA_OPS: None})
-    Base.metadata.create_all(engine)
-    factory = sessionmaker(bind=engine, expire_on_commit=False)
-    with factory() as session:
-        session.add_all(
-            [
-                RoleRow(code="ADMINISTRADOR", name="Administrador"),
-                RoleRow(code="RECLUTADOR", name="Reclutador"),
-            ]
-        )
-        session.commit()
-    return SqlBackend(factory)
+    return build_test_backend()
 
 
 def test_el_flujo_de_usuarios_funciona_con_los_repositorios_sqlalchemy(
@@ -164,6 +147,10 @@ def test_la_migracion_genera_t_sql_para_sql_server(monkeypatch):
         "ISJSON(details) = 1",
         "INSERT INTO auth.roles",
         "CONSTRAINT pk_users PRIMARY KEY (id)",
+        "CREATE SCHEMA [vacancy]",
+        "CREATE TABLE vacancy.vacancies",
+        "CREATE UNIQUE INDEX uq_vacancy_members_active",
+        "WHERE revoked_at IS NULL",
     ):
         assert fragment in sql, f"Falta en el T-SQL generado: {fragment}"
     # Ninguna tabla tiene columna de identidad: este comando fallaría en SQL Server.
@@ -189,6 +176,7 @@ def test_el_modelo_y_la_migracion_definen_las_mismas_columnas(monkeypatch):
 
     # Columnas que solo existen en SQL Server y el ORM no necesita leer.
     only_in_database = {"auth.users": {"row_version"}}
+    assert len(Base.metadata.tables) >= 10
     for table in Base.metadata.tables.values():
         qualified = f"{table.schema}.{table.name}"
         start = sql.index(f"CREATE TABLE {qualified} (")

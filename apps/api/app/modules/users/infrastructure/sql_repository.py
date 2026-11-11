@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
@@ -95,3 +96,26 @@ class SqlUserRepository:
             .join(UserRoleRow, UserRoleRow.user_id == UserRow.id)
             .where(UserRow.is_active.is_(True), UserRoleRow.role_code == Role.ADMINISTRADOR.value)
         ).scalar_one()
+
+    def get_many(self, user_ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, User]:
+        ids = list(set(user_ids))
+        if not ids:
+            return {}
+        rows = self._session.execute(self._query().where(UserRow.id.in_(ids))).all()
+        return {row[0].id: self._to_domain(*row) for row in rows}
+
+    def search_active(self, *, search: str, limit: int) -> list[User]:
+        pattern = f"%{_escape_like(search.lower())}%"
+        rows = self._session.execute(
+            self._query()
+            .where(
+                UserRow.is_active.is_(True),
+                sa.or_(
+                    sa.func.lower(UserRow.email).like(pattern, escape="\\"),
+                    sa.func.lower(UserRow.full_name).like(pattern, escape="\\"),
+                ),
+            )
+            .order_by(UserRow.full_name, UserRow.id)
+            .limit(limit)
+        ).all()
+        return [self._to_domain(*row) for row in rows]

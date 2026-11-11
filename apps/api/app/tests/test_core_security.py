@@ -8,7 +8,7 @@ from app.core.ids import new_sequential_uuid
 from app.core.security.passwords import validate_password
 from app.core.security.tokens import generate_token, hash_token
 from app.modules.audit.application.service import AuditLog
-from app.tests.support.memory_backend import MemoryBackend
+from app.tests.support.sql_memory import build_test_backend
 
 
 def _sql_server_sort_key(value) -> bytes:
@@ -57,7 +57,7 @@ def test_el_token_de_sesion_se_guarda_solo_como_hash():
 
 
 def test_la_auditoria_rechaza_campos_con_secretos(clock):
-    backend = MemoryBackend()
+    backend = build_test_backend()
     with backend.transaction() as repos:
         log = AuditLog(repos.audit, clock)
         with pytest.raises(ValueError, match="no admite"):
