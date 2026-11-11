@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -10,6 +11,7 @@ from fastapi import Request
 
 from app.composition.ai import env_api_keys
 from app.composition.backend import Backend, Repositories
+from app.composition.cv_processing import AiEvaluator, ApprovedRubrics, StoredCvFiles
 from app.composition.file_access import VacancyFileAccessPolicy
 from app.core.clock import Clock
 from app.core.config.settings import Environment, Settings
@@ -23,6 +25,7 @@ from app.modules.ai_settings.domain.models import ProviderClient, ProviderCode
 from app.modules.audit.application.service import AuditLog
 from app.modules.authentication.application.service import AuthService
 from app.modules.authentication.domain.models import AuthPolicy
+from app.modules.cv_processing.application.service import CvBatchService
 from app.modules.evaluation_setup.application.service import EvaluationSetupService
 from app.modules.file_management.application.reconciliation import StorageReconciler
 from app.modules.file_management.application.service import FileService, UploadPipeline
@@ -45,6 +48,8 @@ class AppContext:
     ai_clients: dict[ProviderCode, ProviderClient] = field(default_factory=dict)
     # Espera entre reintentos de una llamada a un proveedor (las pruebas no esperan).
     ai_sleep: Callable[[float], None] = time.sleep
+    # Cómo se ejecutan los trabajos en segundo plano: celery, thread o inline.
+    job_mode: str = "thread"
 
     def require_backend(self) -> Backend:
         if self.backend is None:
@@ -88,6 +93,22 @@ class AppContext:
         return EvaluationSetupService(
             repos.evaluation_setup, VacancyAccess(repos.vacancies), self.audit(repos), self.clock
         )
+
+    def cv_batches(self, repos: Repositories) -> CvBatchService:
+        return CvBatchService(
+            repos.cv_batches,
+            VacancyAccess(repos.vacancies),
+            StoredCvFiles(repos.files, self.require_storage(), self.file_service(repos)),
+            ApprovedRubrics(repos.evaluation_setup),
+            AiEvaluator(self.ai_settings(repos)),
+            self.audit(repos),
+            self.clock,
+        )
+
+    def dispatch_cv_batch(self, batch_id: uuid.UUID) -> None:
+        from app.composition.cv_jobs import dispatch
+
+        dispatch(self, batch_id)
 
     def ai_settings(self, repos: Repositories) -> AiSettingsService:
         return AiSettingsService(

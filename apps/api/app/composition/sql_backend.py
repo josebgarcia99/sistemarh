@@ -11,6 +11,7 @@ from app.composition.backend import Repositories
 from app.modules.ai_settings.infrastructure.sql_repository import SqlAiRepository
 from app.modules.audit.infrastructure.sql_repository import SqlAuditRepository
 from app.modules.authentication.infrastructure.sql_repository import SqlSessionRepository
+from app.modules.cv_processing.infrastructure.sql_repository import SqlCvBatchRepository
 from app.modules.evaluation_setup.infrastructure.sql_repository import (
     SqlEvaluationSetupRepository,
 )
@@ -37,6 +38,7 @@ class SqlBackend:
                 files=SqlFileRepository(session),
                 ai=SqlAiRepository(session),
                 evaluation_setup=SqlEvaluationSetupRepository(session),
+                cv_batches=SqlCvBatchRepository(session),
             )
             session.commit()
         except BaseException:

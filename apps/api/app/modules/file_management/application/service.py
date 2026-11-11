@@ -21,6 +21,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from typing import BinaryIO
 
 from app.core.exceptions.errors import (
     NotFoundError,
@@ -40,6 +41,8 @@ from app.modules.file_management.domain.filetypes import (
     sanitize_filename,
 )
 from app.modules.file_management.domain.models import (
+    GENERATED_CONTENT_TYPES,
+    GENERATED_TYPES,
     SENSITIVE_CLASSES,
     STORAGE_FOLDERS,
     Actor,
@@ -241,6 +244,8 @@ class FileService:
     ) -> FileAsset:
         sensitive_class = SENSITIVE_CLASSES.get(document_type)
         self._policy.require_write(actor, vacancy_id, sensitive_class)
+        if document_type in GENERATED_TYPES:
+            raise ValidationFailedError("Ese tipo de documento lo genera el sistema.")
         if sensitive_class is not None and not self._sensitive_allowed:
             raise ValidationFailedError(
                 "Los documentos de psicometría y estudios socioeconómicos se guardan "
@@ -322,6 +327,77 @@ class FileService:
         )
         return asset, duplicates
 
+    # --- Archivos generados --------------------------------------------------------------
+
+    def store_generated(
+        self,
+        *,
+        vacancy_id: uuid.UUID,
+        document_type: DocumentType,
+        name: str,
+        write: Callable[[BinaryIO], None],
+        created_by: uuid.UUID,
+    ) -> FileAsset:
+        """Guarda una exportación producida por el sistema (Excel o ZIP).
+
+        Primero se escribe y confirma el archivo y después se registra. Si la
+        transacción no llega a confirmarse, queda un archivo sin registro que la
+        conciliación lleva a cuarentena.
+        """
+        if document_type not in GENERATED_TYPES:
+            raise ValueError("Solo para documentos generados por el sistema.")
+        name = sanitize_filename(name)
+        extension = extension_of(name)
+        file_id = new_sequential_uuid()
+        key = self._storage.new_key("generated", STORAGE_FOLDERS[document_type], file_id)
+        try:
+            with self._storage.open_temp(file_id) as handle:
+                write(handle)
+            digest = hashlib.sha256()
+            size = 0
+            with open(self._storage.temp_path(file_id), "rb") as handle:
+                while chunk := handle.read(1024 * 1024):
+                    digest.update(chunk)
+                    size += len(chunk)
+            self._storage.commit(file_id, key)
+        except BaseException:
+            self._storage.discard_temp(file_id)
+            raise
+        now = self._clock()
+        asset = FileAsset(
+            id=file_id,
+            vacancy_id=vacancy_id,
+            document_type=document_type,
+            sensitive_class=None,
+            original_name=name,
+            extension=extension,
+            storage_backend=self._storage.backend_name,
+            storage_key=key,
+            status=FileStatus.CONFIRMADO,
+            uploaded_by=created_by,
+            created_at=now,
+            content_type=GENERATED_CONTENT_TYPES.get(extension),
+            size_bytes=size,
+            sha256=digest.hexdigest(),
+            stored_size_bytes=size,
+            stored_sha256=digest.hexdigest(),
+            confirmed_at=now,
+        )
+        self._files.add(asset)
+        self._audit.record(
+            AuditAction.EXPORTACION_GENERADA,
+            actor_user_id=created_by,
+            resource_type=RESOURCE,
+            resource_id=asset.id,
+            details={
+                "vacante": str(vacancy_id),
+                "tipo": document_type.value,
+                "tamano": size,
+                "sha256": asset.sha256,
+            },
+        )
+        return asset
+
     # --- Consulta ------------------------------------------------------------------------
 
     def list_for_vacancy(self, actor: Actor, vacancy_id: uuid.UUID) -> list[FileAsset]:
@@ -330,7 +406,8 @@ class FileService:
         return [
             asset
             for asset in self._files.list_for_vacancy(vacancy_id, FileStatus.CONFIRMADO)
-            if asset.sensitive_class is None or asset.sensitive_class in visible
+            if asset.document_type not in GENERATED_TYPES
+            and (asset.sensitive_class is None or asset.sensitive_class in visible)
         ]
 
     def _authorized(self, actor: Actor, file_id: uuid.UUID) -> FileAsset:

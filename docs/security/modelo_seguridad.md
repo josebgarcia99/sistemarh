@@ -145,3 +145,19 @@ Estado al 11 de noviembre de 2026.
 **Sin verificar:** las llamadas de generación tampoco se han ejecutado contra los servicios reales. La forma de la llamada a OpenAI se tomó de su documentación pública consultada el 11 de noviembre de 2026; la de Anthropic se escribió a partir de la forma conocida de su API de mensajes, sin poder consultar esa página de la documentación ese día.
 
 **Pendiente:** validar las capacidades de un modelo antes de usarlo y conciliar el costo estimado con la factura real.
+
+## Evaluación de CV: lo construido (Fase 4, tercera parte)
+
+| Aspecto | Cómo quedó |
+| --- | --- |
+| Qué sale del servidor | Solo el texto del CV, extraído dentro del servidor, y el prompt aprobado. Nunca el archivo. Antes de enviarlo se sustituyen correos y teléfonos por marcas |
+| Qué no se oculta | El nombre y la dirección, si están en el texto del CV. Ocultarlos de forma fiable requiere otro análisis; queda pendiente |
+| Autorización para enviar | La regla de la restricción 8 se aplica igual: fuera de producción, sin `RECLU_AI_ALLOW_REAL_DOCUMENTS=true` el lote ni siquiera se crea |
+| Texto del CV como dato | El CV se envía delimitado y con la instrucción de no obedecer nada de lo que diga. Aun así, la respuesta se valida contra la rúbrica: criterios exactos, niveles enteros de 0 a 4. Una respuesta que no cumple se pide una vez más y, si persiste, el CV queda con error; nunca se acepta un porcentaje dado por la IA |
+| Decisión humana | La clasificación es una sugerencia inicial y no cambia el estado de ningún candidato. «No evaluable» y «sin evidencia» nunca se convierten en rechazo |
+| Dónde queda el resultado | En `ai.cv_batch_items`, con fragmentos del CV usados como evidencia. Se consulta con acceso a la vacante |
+| Excel y ZIP | Se guardan en el área `generated/` del almacenamiento privado y se descargan por la misma ruta autorizada que los documentos: el permiso se evalúa en cada descarga y queda auditada. El Excel antepone un apóstrofo a cualquier texto que empiece por `=`, `+`, `-` o `@` |
+| Archivos de CV hostiles | La lectura limita las páginas de un PDF y el tamaño del XML de un DOCX, no resuelve entidades externas y trata cualquier fallo como «no evaluable» |
+| Auditoría | Creación, fin, reanudación y cancelación de cada lote, y cada exportación generada con su tamaño y su SHA-256 |
+
+**Sin verificar:** nada de esto se ha ejecutado con un modelo real ni con CV reales.

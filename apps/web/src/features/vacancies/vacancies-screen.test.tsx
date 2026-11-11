@@ -318,8 +318,8 @@ describe("VacanciesScreen", () => {
     const user = userEvent.setup();
     renderApp(<VacanciesScreen />, { session: recruiter });
     await user.click(await screen.findByRole("button", { name: "Abrir Analista de Nómina" }));
-    await user.click(await screen.findByRole("button", { name: "Perfil y prompt de evaluación" }));
-    expect(await screen.findByRole("heading", { name: "Perfil y prompt" })).toBeTruthy();
+    await user.click(await screen.findByRole("button", { name: "Perfil, prompt y evaluación de CV" }));
+    expect(await screen.findByRole("heading", { name: "Perfil y evaluación" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Guardar perfil" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Volver a vacantes" }));
     expect(await screen.findByRole("heading", { name: "Vacantes" })).toBeTruthy();

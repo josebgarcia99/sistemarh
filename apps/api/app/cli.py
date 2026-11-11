@@ -49,7 +49,7 @@ def create_admin(context: AppContext, *, email: str, full_name: str, password: s
 
 
 def _build_context(backend: Backend | None = None) -> AppContext:
-    from app.main import build_master_key, build_sql_backend, build_storage
+    from app.composition.bootstrap import build_master_key, build_sql_backend, build_storage
 
     settings = get_settings()
     return AppContext(
@@ -63,7 +63,7 @@ def _build_context(backend: Backend | None = None) -> AppContext:
     )
 
 
-SCHEMA_VERSION = "0007"
+SCHEMA_VERSION = "0008"
 _SAMPLE_SIZE = 200
 
 

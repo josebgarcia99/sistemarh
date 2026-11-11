@@ -20,7 +20,9 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
     configure_logging(settings.log_level)
 
     broker_url = settings.redis_url.get_secret_value() if settings.redis_url else None
-    celery_app = Celery("reclutamiento", broker=broker_url, include=["worker.jobs.system"])
+    celery_app = Celery(
+        "reclutamiento", broker=broker_url, include=["worker.jobs.system", "worker.jobs.cv"]
+    )
     celery_app.conf.update(
         # Los mensajes llevan solo identificadores, nunca contenido ni secretos.
         task_serializer="json",

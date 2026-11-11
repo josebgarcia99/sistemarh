@@ -29,6 +29,7 @@ import {
   saveProfile,
   updatePrompt,
 } from "@/lib/api/evaluation";
+import { CvEvaluationTab } from "./cv-evaluation-tab";
 
 type Props = {
   vacancyId: string;
@@ -71,17 +72,17 @@ function FeedbackLine({ feedback }: { feedback: Feedback }) {
   );
 }
 
-/** Perfil de puesto y prompt de evaluación de una vacante. */
+/** Perfil de puesto, prompt de evaluación y evaluación de CV de una vacante. */
 export function EvaluationWorkspace({ vacancyId, vacancyName, canEdit, canApprove, onBack }: Props) {
-  const [tab, setTab] = useState<"profile" | "prompt">("profile");
+  const [tab, setTab] = useState<"profile" | "prompt" | "cv">("profile");
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-ink-muted">{vacancyName}</p>
-          <h1 className="text-4xl font-medium tracking-tight sm:text-5xl">Perfil y prompt</h1>
+          <h1 className="text-4xl font-medium tracking-tight sm:text-5xl">Perfil y evaluación</h1>
           <p className="mt-2 max-w-3xl text-ink-muted">
-            El perfil describe el puesto. De él sale el prompt con el que la IA hará la revisión
+            El perfil describe el puesto. De él sale el prompt con el que la IA hace la revisión
             inicial de los CV; solo se usa una versión aprobada.
           </p>
         </div>
@@ -94,6 +95,7 @@ export function EvaluationWorkspace({ vacancyId, vacancyName, canEdit, canApprov
           [
             ["profile", "Perfil de puesto"],
             ["prompt", "Prompt de evaluación"],
+            ["cv", "Evaluación de CV"],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -109,11 +111,11 @@ export function EvaluationWorkspace({ vacancyId, vacancyName, canEdit, canApprov
           </button>
         ))}
       </div>
-      {tab === "profile" ? (
-        <ProfileTab vacancyId={vacancyId} canEdit={canEdit} />
-      ) : (
+      {tab === "profile" && <ProfileTab vacancyId={vacancyId} canEdit={canEdit} />}
+      {tab === "prompt" && (
         <PromptTab vacancyId={vacancyId} canEdit={canEdit} canApprove={canApprove} />
       )}
+      {tab === "cv" && <CvEvaluationTab vacancyId={vacancyId} canEdit={canEdit} />}
     </>
   );
 }

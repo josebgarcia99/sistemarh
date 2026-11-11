@@ -15,6 +15,7 @@ from typing import Protocol
 from app.modules.ai_settings.domain.models import AiRepository
 from app.modules.audit.domain.models import AuditRepository
 from app.modules.authentication.domain.models import SessionRepository
+from app.modules.cv_processing.domain.models import CvBatchRepository
 from app.modules.evaluation_setup.domain.models import EvaluationSetupRepository
 from app.modules.file_management.domain.models import FileRepository
 from app.modules.users.domain.repository import UserRepository
@@ -32,6 +33,7 @@ class Repositories:
     files: FileRepository
     ai: AiRepository
     evaluation_setup: EvaluationSetupRepository
+    cv_batches: CvBatchRepository
 
 
 class Backend(Protocol):

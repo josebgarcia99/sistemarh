@@ -38,6 +38,7 @@ containers =
     app.modules.file_management
     app.modules.ai_settings
     app.modules.evaluation_setup
+    app.modules.cv_processing
 
 [importlinter:contract:capas-system]
 name = capas del modulo system
@@ -114,4 +115,20 @@ forbidden_modules =
     app.modules.vacancy_transfers
     app.modules.file_management
     app.modules.users
+    app.modules.system
+
+# La evaluación de CV no conoce documentos, prompts ni proveedores de IA: usa
+# sus propios puertos (CvFiles, Rubrics, Evaluator), conectados en composition.
+[importlinter:contract:cv-independiente]
+name = cv_processing no depende de documentos, prompts ni IA
+type = forbidden
+source_modules =
+    app.modules.cv_processing.domain
+    app.modules.cv_processing.application
+    app.modules.cv_processing.infrastructure
+forbidden_modules =
+    app.modules.file_management
+    app.modules.evaluation_setup
+    app.modules.ai_settings
+    app.modules.vacancy_transfers
     app.modules.system

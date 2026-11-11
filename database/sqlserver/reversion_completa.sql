@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Reversión completa (DESTRUCTIVO)
-   Versión del esquema: 0007 -> (vacía)
-   Generado: 2026-11-11 15:56 (UTC) con scripts/generate_sql.py
+   Versión del esquema: 0008 -> (vacía)
+   Generado: 2026-11-11 17:28 (UTC) con scripts/generate_sql.py
 
    ELIMINA todas las tablas y esquemas del sistema, con todos sus datos.
    Solo para entornos de prueba. Nunca ejecutar en producción sin respaldo.
@@ -24,14 +24,36 @@ SET XACT_ABORT ON;
 GO
 
 -- Protección: si la base no está en la versión esperada, no se ejecuta nada.
-IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0007')
+IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0008')
 BEGIN
-    RAISERROR(N'La base no esta en la version 0007. No se aplico ningun cambio.', 16, 1);
+    RAISERROR(N'La base no esta en la version 0008. No se aplico ningun cambio.', 16, 1);
     SET NOEXEC ON;
 END
 GO
 
 BEGIN TRANSACTION;
+
+-- Running downgrade 0008 -> 0007
+
+DROP TABLE ai.cv_batch_items;
+
+GO
+
+DROP TABLE ai.cv_batches;
+
+GO
+
+ALTER TABLE files.file_assets DROP CONSTRAINT ck_file_assets_document_type;
+
+GO
+
+ALTER TABLE files.file_assets ADD CONSTRAINT ck_file_assets_document_type CHECK (document_type IN ('CV', 'PERFIL_PUESTO', 'PSICOMETRIA', 'PRUEBA_TECNICA', 'ESTUDIO_SOCIOECONOMICO', 'ADJUNTO'));
+
+GO
+
+UPDATE alembic_version SET version_num='0007' WHERE alembic_version.version_num = '0008';
+
+GO
 
 -- Running downgrade 0007 -> 0006
 

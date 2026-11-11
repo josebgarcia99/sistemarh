@@ -283,7 +283,7 @@ export function VacancyPanel({ vacancyId, onClose, initialNotice, onOpenEvaluati
             className={`${secondaryButtonClass} self-start`}
             onClick={() => onOpenEvaluation(vacancy)}
           >
-            Perfil y prompt de evaluación
+            Perfil, prompt y evaluación de CV
           </button>
         </section>
       )}

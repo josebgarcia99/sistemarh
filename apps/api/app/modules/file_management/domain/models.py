@@ -21,6 +21,9 @@ class DocumentType(StrEnum):
     PRUEBA_TECNICA = "PRUEBA_TECNICA"
     ESTUDIO_SOCIOECONOMICO = "ESTUDIO_SOCIOECONOMICO"
     ADJUNTO = "ADJUNTO"
+    # Generados por el sistema; nadie los carga.
+    REPORTE_EVALUACION = "REPORTE_EVALUACION"
+    PAQUETE_CV = "PAQUETE_CV"
 
 
 # Carpeta física de cada tipo. Ningún nombre de persona aparece en el disco.
@@ -31,6 +34,15 @@ STORAGE_FOLDERS: dict[DocumentType, str] = {
     DocumentType.PRUEBA_TECNICA: "technical_tests",
     DocumentType.ESTUDIO_SOCIOECONOMICO: "socioeconomic_studies",
     DocumentType.ADJUNTO: "attachments",
+    DocumentType.REPORTE_EVALUACION: "evaluation_reports",
+    DocumentType.PAQUETE_CV: "cv_packages",
+}
+
+# Exportaciones que produce el sistema. Viven en el área ``generated``.
+GENERATED_TYPES = frozenset({DocumentType.REPORTE_EVALUACION, DocumentType.PAQUETE_CV})
+GENERATED_CONTENT_TYPES = {
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "zip": "application/zip",
 }
 
 # Tipos que exigen un permiso adicional por persona, además del acceso a la vacante.

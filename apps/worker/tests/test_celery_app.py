@@ -35,3 +35,9 @@ def test_la_tarea_ping_esta_registrada_y_responde():
     app.loader.import_default_modules()
     assert "system.ping" in app.tasks
     assert ping.apply().get() == {"status": "ok"}
+
+
+def test_la_tarea_de_lotes_de_cv_esta_registrada():
+    app = _app()
+    app.loader.import_default_modules()
+    assert "cv.process_batch" in app.tasks

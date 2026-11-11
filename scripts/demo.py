@@ -9,6 +9,7 @@ QUÉ ES Y QUÉ NO ES
 - NO es SQL Server y no valida nada de SQL Server. No sustituye a la base de
   datos real en ningún entorno: solo sirve para mirar las pantallas.
 - Los proveedores de IA están simulados: no se conecta a Anthropic ni a OpenAI.
+  La "evaluación" de CV que muestra es inventada, solo para ver las pantallas.
 - Los documentos se guardan en una carpeta temporal que se elimina al cerrar.
 - Se niega a arrancar si el entorno está configurado como producción.
 - Solo escucha en este equipo (127.0.0.1).
@@ -17,7 +18,10 @@ QUÉ ES Y QUÉ NO ES
 # ruff: noqa: E402  (las importaciones de la API van después de ajustar la ruta)
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+import re
 import secrets
 import shutil
 import signal
@@ -45,6 +49,7 @@ from app.main import create_app
 from app.modules.ai_settings.domain.models import (
     DiscoveredModel,
     Generation,
+    Operation,
     ProviderCode,
     ProviderError,
 )
@@ -52,6 +57,7 @@ from app.modules.file_management.domain.models import DocumentType
 from app.modules.users.domain.models import Role
 from app.modules.vacancies.application.service import VacancyData
 from app.modules.vacancies.domain.models import AccessType, VacancyStatus, WorkMode
+from app.tests.support.sample_files import pdf_cv
 from app.tests.support.sql_memory import build_test_backend
 
 ADMIN_EMAIL = "admin@demo.test"
@@ -61,6 +67,21 @@ SAMPLE_PDF = (
     b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
     b"% Documento ficticio del modo demostracion\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"
 )
+
+
+# CV ficticios: tres con texto y uno "escaneado" (sin texto), que no se puede evaluar.
+SAMPLE_CVS = [
+    (
+        f"CV Persona Ficticia {number}.pdf",
+        pdf_cv(
+            f"Persona Ficticia {number} - curriculum inventado para la demostracion",
+            f"Analista de nomina, {number + 1} anios de experiencia en calculo de IMSS e ISR",
+            "Excel intermedio y timbrado de recibos",
+            f"Correo: persona{number}@ejemplo.test  Telefono: 55 0000 000{number}",
+        ),
+    )
+    for number in (1, 2, 3)
+] + [("CV Escaneado Ficticio.pdf", pdf_cv())]
 
 
 class SimulatedProvider:
@@ -81,10 +102,46 @@ class SimulatedProvider:
         ]
 
     def generate(self, api_key, model, *, system, user, max_output_tokens) -> Generation:
-        # Respuesta fija con un consumo inventado, para ver la pantalla de costos.
-        return Generation(
-            "OK", input_tokens=len(system + user) // 4 + 50, output_tokens=40, complete=True
+        # Consumo inventado, para ver la pantalla de costos.
+        tokens = len(system + user) // 4 + 50
+        if "<<<CV" not in user:
+            return Generation("OK", input_tokens=tokens, output_tokens=40, complete=True)
+        # "Evaluación" inventada: los niveles salen del contenido del CV, sin
+        # ningún análisis real. Sirve solo para ver la pantalla de resultados.
+        codes = sorted(
+            set(re.findall(r"^(C\d+)\. ", system, re.MULTILINE)), key=lambda c: int(c[1:])
         )
+        seed = hashlib.sha256(user.encode()).digest()
+        criteria = []
+        for index, code in enumerate(codes):
+            level = seed[index % len(seed)] % 5
+            missing = seed[(index + 7) % len(seed)] % 9 == 0
+            criteria.append(
+                {
+                    "id": code,
+                    "nivel": None if missing else level,
+                    "sin_evidencia": missing,
+                    "evidencia": "" if missing else "Fragmento simulado del CV.",
+                    "justificacion": "Respuesta simulada del modo demostración.",
+                }
+            )
+        body = {
+            "evaluable": True,
+            "motivo_no_evaluable": None,
+            "criterios": criteria,
+            "calidad_documental": {
+                "redaccion": 3,
+                "ortografia": 3,
+                "organizacion": 2,
+                "claridad": 3,
+                "coherencia": 3,
+                "completitud": 2,
+                "posible_error_de_digitalizacion": False,
+            },
+            "observaciones": "Evaluación simulada: no la produjo ningún modelo real.",
+        }
+        text = json.dumps(body, ensure_ascii=False)
+        return Generation(text, input_tokens=tokens, output_tokens=len(text) // 4, complete=True)
 
 
 def seed(app, password: str) -> None:
@@ -147,20 +204,55 @@ def seed(app, password: str) -> None:
                 positions=3,
             ),
         )
-        asset = context.file_service(repos).begin_upload(
+        # Perfil y prompt aprobado, para poder evaluar CV sin más preparación.
+        setup = context.evaluation_setup(repos)
+        setup.save_profile(
             ana,
-            vacancy_id=payroll.id,
-            document_type=DocumentType.CV,
-            original_name="CV Persona Ficticia.pdf",
-            declared_size=len(SAMPLE_PDF),
+            payroll.id,
+            {
+                "objective": "Calcular y pagar la nómina quincenal sin errores.",
+                "experience": "Dos años en nómina.",
+                "education": "Licenciatura en Contaduría o afín.",
+                "functions": ["Calcular nómina", "Timbrar recibos"],
+                "responsibilities": ["Cumplir las fechas de pago"],
+                "knowledge": ["IMSS", "ISR"],
+                "skills": ["Atención al detalle"],
+                "certifications": [],
+                "must_have": ["Experiencia en cálculo de nómina", "Manejo de Excel intermedio"],
+                "nice_to_have": ["Conocimiento de CONTPAQi Nóminas"],
+                "ambiguities": [],
+            },
+            change_note=None,
+            expected_version=0,
         )
+        draft = setup.generate(ana, payroll.id)
+        review = setup.submit(ana, draft.id, expected_revision=draft.revision)
+        setup.approve(ana, review.id, expected_revision=review.revision)
+
+        # Proveedor simulado listo para evaluar (la clave no es real).
+        ai = context.ai_settings(repos)
+        ai.set_key(admin, ProviderCode.ANTHROPIC, "clave-simulada-demo-0000")
+        ai.test_connection(admin, ProviderCode.ANTHROPIC)
+        ai.update_provider(admin, ProviderCode.ANTHROPIC, enabled=True, monthly_limit_usd=None)
+        model = next(m for m in ai.models(admin, ProviderCode.ANTHROPIC) if "grande" in m.model_id)
+        ai.assign(admin, Operation.EVALUACION_DOCUMENTAL, model.id)
+
     pipeline = context.upload_pipeline()
-    receiver = pipeline.receiver(asset)
-    receiver.write(SAMPLE_PDF)
-    receiver.close()
-    outcome = pipeline.store(asset, receiver)
-    with context.require_backend().transaction() as repos:
-        context.file_service(repos).finish_upload(ana, asset.id, outcome)
+    for name, content in SAMPLE_CVS:
+        with context.require_backend().transaction() as repos:
+            asset = context.file_service(repos).begin_upload(
+                ana,
+                vacancy_id=payroll.id,
+                document_type=DocumentType.CV,
+                original_name=name,
+                declared_size=len(content),
+            )
+        receiver = pipeline.receiver(asset)
+        receiver.write(content)
+        receiver.close()
+        outcome = pipeline.store(asset, receiver)
+        with context.require_backend().transaction() as repos:
+            context.file_service(repos).finish_upload(ana, asset.id, outcome)
 
 
 def main() -> int:
@@ -175,6 +267,8 @@ def main() -> int:
             storage_root=None,
             master_key_file=None,
             storage_min_free_bytes=0,
+            # Los proveedores son simulados: ningún documento sale de este equipo.
+            ai_allow_real_documents=True,
         ),
         health_checks={"demostracion": lambda: True},
         backend=build_test_backend(),
@@ -184,6 +278,8 @@ def main() -> int:
             ProviderCode.ANTHROPIC: SimulatedProvider("anthropic"),
             ProviderCode.OPENAI: SimulatedProvider("openai"),
         },
+        # El motor en memoria tiene una sola conexión: los lotes se procesan al momento.
+        job_mode="inline",
     )
     # La contraseña se genera en cada arranque; no hay credenciales en el código.
     password = os.environ.get("DEMO_PASSWORD") or f"Demo-{secrets.token_urlsafe(9)}"

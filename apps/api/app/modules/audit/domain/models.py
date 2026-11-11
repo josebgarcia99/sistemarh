@@ -54,6 +54,11 @@ class AuditAction(StrEnum):
     PROMPT_APROBADO = "prompt.aprobado"
     PROMPT_ARCHIVADO = "prompt.archivado"
     PROMPT_DUPLICADO = "prompt.duplicado"
+    EXPORTACION_GENERADA = "exportacion.generada"
+    LOTE_CV_CREADO = "lote_cv.creado"
+    LOTE_CV_TERMINADO = "lote_cv.terminado"
+    LOTE_CV_REANUDADO = "lote_cv.reanudado"
+    LOTE_CV_CANCELADO = "lote_cv.cancelado"
 
 
 @dataclass(frozen=True)

@@ -463,6 +463,36 @@ class AiSettingsService:
         model = self._assigned_model(operation)
         return ResolvedModel(model.provider_code, model.model_id, self._usable_key(model))
 
+    def _precheck(self, model: Model, carries_document: bool) -> tuple[str, bool]:
+        """Clave utilizable, autorización para enviar documentos y límite de gasto.
+        Devuelve la clave y si el modelo tiene precio capturado."""
+        api_key = self._usable_key(model)
+        code = model.provider_code
+        if carries_document and not self._documents_allowed:
+            raise ValidationFailedError(
+                "En este entorno no está autorizado enviar documentos a proveedores de IA "
+                "(RECLU_AI_ALLOW_REAL_DOCUMENTS)."
+            )
+        priced = model.input_price is not None and model.output_price is not None
+        limit = self._repo.get_provider(code).monthly_limit_usd
+        now = self._clock()
+        if limit is not None:
+            if not priced:
+                raise ValidationFailedError(
+                    "El proveedor tiene un límite de gasto mensual, pero el modelo no tiene "
+                    "precio capturado. Captúralo en Configuración de IA para poder aplicarlo."
+                )
+            if self._repo.provider_cost(code, *month_bounds(now.year, now.month)) >= limit:
+                raise ConflictError(
+                    f"Se alcanzó el límite de gasto mensual de {PROVIDER_NAMES[code]}. "
+                    "Un administrador puede ampliarlo en Configuración de IA."
+                )
+        return api_key, priced
+
+    def ensure_ready(self, operation: Operation, *, carries_document: bool = False) -> None:
+        """Falla con un mensaje claro si la operación no se puede ejecutar ahora."""
+        self._precheck(self._assigned_model(operation), carries_document)
+
     # --- Precios y consumo ---------------------------------------------------------------
 
     def set_prices(
@@ -546,27 +576,9 @@ class AiSettingsService:
             if not isinstance(operation, Operation):
                 raise ValidationFailedError("La operación no existe.")
             model = self._assigned_model(operation)
-        api_key = self._usable_key(model)
+        api_key, priced = self._precheck(model, carries_document)
         code = model.provider_code
-        if carries_document and not self._documents_allowed:
-            raise ValidationFailedError(
-                "En este entorno no está autorizado enviar documentos a proveedores de IA "
-                "(RECLU_AI_ALLOW_REAL_DOCUMENTS)."
-            )
-        priced = model.input_price is not None and model.output_price is not None
-        limit = self._repo.get_provider(code).monthly_limit_usd
         now = self._clock()
-        if limit is not None:
-            if not priced:
-                raise ValidationFailedError(
-                    "El proveedor tiene un límite de gasto mensual, pero el modelo no tiene "
-                    "precio capturado. Captúralo en Configuración de IA para poder aplicarlo."
-                )
-            if self._repo.provider_cost(code, *month_bounds(now.year, now.month)) >= limit:
-                raise ConflictError(
-                    f"Se alcanzó el límite de gasto mensual de {PROVIDER_NAMES[code]}. "
-                    "Un administrador puede ampliarlo en Configuración de IA."
-                )
 
         started = time.monotonic()
         attempts = 0

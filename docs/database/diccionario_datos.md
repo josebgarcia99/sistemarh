@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0007`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0008`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -176,7 +176,7 @@ Metadatos de cada documento guardado en el disco privado del servidor. El archiv
 | --- | --- | --- | --- |
 | `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. También es el nombre del archivo en el disco. |
 | `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Vacante a la que pertenece (`vacancy.vacancies`). Determina quién puede verlo. |
-| `document_type` | `VARCHAR(40)` | Sí | `CV`, `PERFIL_PUESTO`, `PSICOMETRIA`, `PRUEBA_TECNICA`, `ESTUDIO_SOCIOECONOMICO` o `ADJUNTO`. |
+| `document_type` | `VARCHAR(40)` | Sí | `CV`, `PERFIL_PUESTO`, `PSICOMETRIA`, `PRUEBA_TECNICA`, `ESTUDIO_SOCIOECONOMICO` o `ADJUNTO`. Los generados por el sistema, que nadie carga, son `REPORTE_EVALUACION` (Excel de un lote) y `PAQUETE_CV` (ZIP de originales); se guardan en el área `generated/`. |
 | `sensitive_class` | `VARCHAR(40)` | No | `PSICOMETRIA` o `ESTUDIO_SOCIOECONOMICO` si exige el permiso adicional; vacío en documentos ordinarios. |
 | `original_name` | `NVARCHAR(200)` | Sí | Nombre original, saneado. Solo se usa para mostrarlo y al descargar; nunca para ubicar el archivo. |
 | `extension` | `VARCHAR(10)` | Sí | Extensión en minúsculas. |
@@ -313,6 +313,50 @@ Criterios de la rúbrica de cada versión del prompt.
 | `weight` | `NUMERIC(6,2)` | Sí | Peso en la puntuación, de 0 a 100. |
 | `levels` | `NVARCHAR(MAX)` | Sí | Descripción de los niveles 0 a 4, en JSON. |
 | `origin` | `VARCHAR(20)` | Sí | `PERFIL` (sale de un requisito del perfil) o `MANUAL` (añadido por una persona). |
+
+### `ai.cv_batches`
+
+Un lote de evaluación de CV: qué vacante, con qué versión aprobada del prompt, en qué estado está y qué archivos generó.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Vacante (`vacancy.vacancies`). |
+| `prompt_version_id` | `UNIQUEIDENTIFIER` | Sí | Versión del prompt con que se evalúa (`ai.prompt_versions`). No cambia aunque después se apruebe otra. |
+| `status` | `VARCHAR(30)` | Sí | `PENDIENTE`, `EN_COLA`, `PROCESANDO`, `COMPLETADO`, `COMPLETADO_CON_INCIDENCIAS`, `FALLIDO` o `CANCELADO`. |
+| `total` | `INT` | Sí | Número de CV del lote. |
+| `error` | `NVARCHAR(500)` | No | Motivo por el que el lote se detuvo, en palabras para la persona. |
+| `created_at`, `created_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | Sí | Cuándo y quién lo inició. |
+| `started_at`, `finished_at` | `DATETIME2(3)` | No | Inicio y fin del procesamiento. |
+| `report_file_id` | `UNIQUEIDENTIFIER` | No | `Reporte_Evaluacion.xlsx` más reciente (`files.file_assets`). |
+| `accepted_zip_file_id`, `rejected_zip_file_id`, `unevaluable_zip_file_id` | `UNIQUEIDENTIFIER` | No | ZIP más recientes de cada clasificación (`files.file_assets`). |
+| `runner_token` | `VARCHAR(40)` | No | Proceso que tiene reservado el lote. |
+| `lease_until` | `DATETIME2(3)` | No | Hasta cuándo vale la reserva. Vencida, otro proceso puede tomar el lote. |
+
+Índices: `ix_cv_batches_vacancy (vacancy_id, created_at)` e `ix_cv_batches_status (status)`.
+
+### `ai.cv_batch_items`
+
+Un CV dentro de un lote, con su resultado. La clasificación es la sugerencia inicial de la IA y no se modifica con decisiones posteriores.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `batch_id` | `UNIQUEIDENTIFIER` | Sí | Lote (`ai.cv_batches`). |
+| `file_id` | `UNIQUEIDENTIFIER` | Sí | El CV (`files.file_assets`). Único por lote. |
+| `position` | `INT` | Sí | Orden dentro del lote. Único por lote. |
+| `status` | `VARCHAR(20)` | Sí | `PENDIENTE`, `EVALUADO` o `FALLIDO`. |
+| `step` | `VARCHAR(20)` | Sí | Último paso completado: `RECIBIDO`, `TEXTO_EXTRAIDO`, `ANALIZADO` o `CALIFICADO`. |
+| `attempts` | `INT` | Sí | Veces que se ha intentado evaluar. |
+| `classification` | `VARCHAR(20)` | No | `ACEPTADO_IA`, `RECHAZADO_IA` o `NO_EVALUABLE`. |
+| `score` | `NUMERIC(5,2)` | No | Puntuación de 0 a 100 calculada por el sistema. Vacía si no es evaluable. |
+| `result` | `NVARCHAR(MAX)` | No | JSON con el nivel, la evidencia y la justificación de cada criterio, la calidad documental, las observaciones y el motivo si no es evaluable. Contiene fragmentos del CV. |
+| `error_code`, `error_message` | `VARCHAR(40)`, `NVARCHAR(500)` | No | Por qué falló: `proveedor`, `respuesta_invalida`, `archivo_no_disponible` u `original_sin_evaluar`. |
+| `duplicate_of` | `UNIQUEIDENTIFIER` | No | Otro CV del mismo lote con el mismo contenido, del que se toma el resultado. |
+| `execution_id` | `UNIQUEIDENTIFIER` | No | Llamada al proveedor (`ai.executions`). Sin clave foránea. |
+| `updated_at` | `DATETIME2(3)` | Sí | Último cambio. |
+
+Índices: `ix_cv_batch_items_status (batch_id, status)` e `ix_cv_batch_items_file (file_id)`.
 
 ## Esquema `ops`: operación
 
