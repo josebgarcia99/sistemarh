@@ -152,6 +152,43 @@ def test_seguridad_4_cambiar_el_uuid_en_la_url_no_da_acceso(vacancy, other, recr
     assert recruiter_client.get(base).json()["version"] == 1
 
 
+def test_los_accesos_denegados_a_vacantes_quedan_auditados(
+    vacancy, other, recruiter_client, admin_client
+):
+    other_client, other_id = other
+    base = f"/api/v1/vacancies/{vacancy['id']}"
+
+    def denials() -> list[dict]:
+        return admin_client.get(
+            "/api/v1/audit/events", params={"action": "acceso.denegado", "page_size": 100}
+        ).json()["items"]
+
+    # Una vacante que no existe no es un acceso denegado.
+    assert other_client.get(f"/api/v1/vacancies/{uuid.uuid4()}").status_code == 404
+    assert denials() == []
+
+    # Sin acceso: responde "no encontrado", pero el intento queda registrado.
+    assert other_client.get(base).status_code == 404
+    hidden = denials()
+    assert len(hidden) == 1
+    assert hidden[0]["result"] == "DENEGADO"
+    assert hidden[0]["actor_user_id"] == other_id
+    assert hidden[0]["details"] == {"metodo": "GET", "ruta": base, "motivo": "no_encontrado"}
+
+    # Con acceso de lectura, intentar modificar también queda registrado.
+    assert _share(recruiter_client, vacancy["id"], other_id, "LECTURA").status_code == 204
+    status_url = f"{base}/status"
+    assert (
+        other_client.post(status_url, json={"status": "ABIERTA", "version": 1}).status_code == 403
+    )
+    assert len(denials()) == 2
+    # El reloj de las pruebas no avanza solo: se busca por motivo, no por orden.
+    (last,) = [event for event in denials() if event["details"]["motivo"] == "sin_permiso"]
+    assert last["actor_user_id"] == other_id
+    assert last["details"] == {"metodo": "POST", "ruta": status_url, "motivo": "sin_permiso"}
+    assert recruiter_client.get(base).json()["status"] == "BORRADOR"
+
+
 # --- Seguridad 2 y 3: compartir y revocar ------------------------------------------------
 
 

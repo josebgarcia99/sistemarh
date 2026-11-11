@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Instalación completa
    Versión del esquema: (vacía) -> 0002
-   Generado: 2026-11-11 00:45 (UTC) con scripts/generate_sql.py
+   Generado: 2026-11-11 01:04 (UTC) con scripts/generate_sql.py
 
    Crea todos los esquemas y tablas en una base de datos VACÍA.
 

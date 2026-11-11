@@ -43,5 +43,10 @@ class UTCDateTime(TypeDecorator[datetime]):
         return None if value is None else value.replace(tzinfo=UTC)
 
 
+def long_text() -> sa.Unicode:
+    """Texto largo: ``NVARCHAR(MAX)`` en SQL Server (``NTEXT`` está obsoleto)."""
+    return sa.Unicode()
+
+
 class Base(DeclarativeBase):
     pass

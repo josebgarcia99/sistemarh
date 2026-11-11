@@ -190,3 +190,16 @@ def test_el_modelo_y_la_migracion_definen_las_mismas_columnas(monkeypatch):
             qualified, set()
         )
         assert migrated == expected, f"{qualified}: {migrated ^ expected}"
+
+
+def test_ninguna_columna_usa_tipos_obsoletos_de_sql_server():
+    from sqlalchemy.dialects import mssql
+
+    dialect = mssql.dialect()
+    obsolete = {
+        f"{table.name}.{column.name}"
+        for table in Base.metadata.tables.values()
+        for column in table.columns
+        if column.type.compile(dialect=dialect).upper() in {"NTEXT", "TEXT", "IMAGE"}
+    }
+    assert obsolete == set()

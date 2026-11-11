@@ -12,9 +12,8 @@ from dataclasses import dataclass
 
 from fastapi import Depends, Request
 
-from app.composition.context import AppContext, client_ip, get_context
+from app.composition.context import AppContext, get_context
 from app.core.exceptions.errors import CsrfError, PermissionDeniedError
-from app.modules.audit.domain.models import AuditAction, AuditResult
 from app.modules.authentication.domain.models import AuthSession
 from app.modules.users.domain.models import User
 
@@ -40,24 +39,15 @@ def require_user(
         sent = request.headers.get(CSRF_HEADER, "")
         if not secrets.compare_digest(sent, session.csrf_token):
             raise CsrfError("Falta el token de verificación o no coincide.")
+    # Queda disponible para auditar un rechazo posterior de esta solicitud.
+    request.state.user_id = user.id
     return Principal(user=user, session=session)
 
 
 def require_admin(
-    request: Request,
     principal: Principal = Depends(require_user),  # noqa: B008
-    context: AppContext = Depends(get_context),  # noqa: B008
 ) -> Principal:
     if not principal.user.is_admin:
-        with context.require_backend().transaction() as repos:
-            context.audit(repos).record(
-                AuditAction.ACCESO_DENEGADO,
-                result=AuditResult.DENEGADO,
-                actor_user_id=principal.user.id,
-                resource_type="ruta",
-                resource_id=request.url.path[:64],
-                ip=client_ip(request),
-                details={"metodo": request.method},
-            )
+        # El rechazo se audita de forma central (``composition.denials``).
         raise PermissionDeniedError("Esta operación es solo para administradores.")
     return principal

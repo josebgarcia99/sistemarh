@@ -40,4 +40,4 @@ Además, una prueba genérica recorre todas las rutas de la API y verifica que n
 
 **Datos de prueba.** Un generador produce CV ficticios en PDF y DOCX, versiones escaneadas para OCR y muestras hostiles: archivo de prueba de antivirus, textos con fórmulas de Excel, un CV con instrucciones ocultas para la IA y nombres de archivo con rutas.
 
-**Límite actual.** Las pruebas contra SQL Server, la persistencia en Docker y el respaldo con restauración no pueden ejecutarse hasta contar con una instancia de pruebas (decisión 2). Mientras tanto quedan escritas y marcadas como pendientes de ejecutar.
+**Límite actual.** Las pruebas contra SQL Server, la persistencia en Docker y el respaldo con restauración no pueden ejecutarse hasta contar con una instancia de pruebas (decisión 2). Mientras tanto, las pruebas de la API ejecutan los repositorios reales sobre un motor SQLite en memoria que solo existe dentro de las pruebas; eso no valida el comportamiento propio de SQL Server. El estado de cada comprobación está en `docs/estado_proyecto.md`.

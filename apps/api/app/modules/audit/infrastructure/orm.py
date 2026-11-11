@@ -8,7 +8,7 @@ from datetime import datetime
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.infrastructure.database.base import GUID, SCHEMA_OPS, Base, UTCDateTime
+from app.infrastructure.database.base import GUID, SCHEMA_OPS, Base, UTCDateTime, long_text
 
 
 class AuditEventRow(Base):
@@ -31,4 +31,4 @@ class AuditEventRow(Base):
     resource_id: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
     ip: Mapped[str | None] = mapped_column(sa.String(45), nullable=True)
     correlation_id: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
-    details: Mapped[str] = mapped_column(sa.UnicodeText)
+    details: Mapped[str] = mapped_column(long_text())

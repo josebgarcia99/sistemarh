@@ -11,7 +11,10 @@ import { useSession } from "./use-session";
 
 const NAV_ITEMS: { href: string; label: string; adminOnly: boolean }[] = [
   { href: "/", label: "Inicio", adminOnly: false },
+  { href: "/vacantes", label: "Vacantes", adminOnly: false },
   { href: "/usuarios", label: "Usuarios", adminOnly: true },
+  { href: "/transferencias", label: "Bajas", adminOnly: true },
+  { href: "/auditoria", label: "Auditoría", adminOnly: true },
 ];
 
 function initials(name: string): string {

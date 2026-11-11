@@ -2,7 +2,7 @@
 
 Plataforma web para gestionar el proceso completo de reclutamiento: vacantes, análisis de CV con IA, etapas, llamadas, pruebas, estudios, expedientes y contratación. La IA clasifica y resume; las decisiones las registra una persona.
 
-**Estado actual: Fase 2 en curso.** Funcionan el inicio de sesión y la administración de usuarios. Lo que existe y lo que falta está en [`docs/estado_proyecto.md`](docs/estado_proyecto.md).
+**Estado actual: Fase 2 construida, pendiente de validar contra SQL Server.** Funcionan el inicio de sesión, los usuarios, las vacantes, la compartición, las transferencias y la auditoría. Nada se ha ejecutado todavía contra un SQL Server real. Lo que existe y lo que falta está en [`docs/estado_proyecto.md`](docs/estado_proyecto.md).
 
 ## Arquitectura en una línea
 
@@ -15,7 +15,8 @@ apps/
   api/        API FastAPI: app/core, app/modules/<dominio>, app/infrastructure
   worker/     Tareas Celery; importa los casos de uso de la API
   web/        Interfaz Next.js (TypeScript estricto, Tailwind)
-database/     Migraciones Alembic para SQL Server
+database/     Migraciones Alembic y scripts T-SQL para Sistemas (database/sqlserver)
+scripts/      Generador de los scripts T-SQL
 infrastructure/
   docker/     Imágenes y Docker Compose de desarrollo
 docs/         Arquitectura, permisos, base de datos, seguridad, pruebas, despliegue
@@ -57,6 +58,6 @@ cd apps/web    && npm run typecheck && npm run lint && npm test && npm run build
 
 - Ningún secreto, documento real ni dato personal entra al repositorio. Revisa `.gitignore` antes de añadir archivos.
 - Las API keys de IA se registran desde la aplicación, nunca en el código ni en `.env.example`.
-- Solo SQL Server: no se usa SQLite ni PostgreSQL como sustituto.
+- Solo SQL Server: la aplicación rechaza cualquier otro motor. Las pruebas automáticas usan un motor SQLite en memoria que solo existe dentro de las pruebas y que no sustituye la validación contra SQL Server.
 - Las pruebas usan datos sintéticos.
 - Una funcionalidad no está terminada sin pruebas.

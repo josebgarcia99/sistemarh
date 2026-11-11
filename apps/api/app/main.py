@@ -11,6 +11,7 @@ from fastapi import APIRouter, FastAPI
 
 from app.composition.backend import Backend
 from app.composition.context import AppContext
+from app.composition.denials import register_denial_audit
 from app.core.clock import Clock, utc_now
 from app.core.config.settings import Environment, Settings, get_settings
 from app.core.exceptions.errors import register_exception_handlers
@@ -80,6 +81,7 @@ def create_app(
 
     app.add_middleware(RequestContextMiddleware)
     register_exception_handlers(app)
+    register_denial_audit(app)
 
     api = APIRouter(prefix=settings.api_prefix)
     api.include_router(system_router)

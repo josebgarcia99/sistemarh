@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Reversión completa (DESTRUCTIVO)
    Versión del esquema: 0002 -> (vacía)
-   Generado: 2026-11-11 00:45 (UTC) con scripts/generate_sql.py
+   Generado: 2026-11-11 01:04 (UTC) con scripts/generate_sql.py
 
    ELIMINA todas las tablas y esquemas del sistema, con todos sus datos.
    Solo para entornos de prueba. Nunca ejecutar en producción sin respaldo.

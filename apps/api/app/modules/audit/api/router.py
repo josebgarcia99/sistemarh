@@ -21,6 +21,7 @@ class AuditEventOut(BaseModel):
     action: str
     result: str
     actor_user_id: uuid.UUID | None
+    actor_name: str | None
     resource_type: str | None
     resource_id: str | None
     ip: str | None
@@ -47,8 +48,17 @@ def list_events(
         events, total = context.audit(repos).list(
             action=action, offset=(page - 1) * page_size, limit=page_size
         )
+        actors = repos.users.get_many(e.actor_user_id for e in events if e.actor_user_id)
     return AuditPage(
-        items=[AuditEventOut(**vars(event)) for event in events],
+        items=[
+            AuditEventOut(
+                **vars(event),
+                actor_name=actors[event.actor_user_id].full_name
+                if event.actor_user_id in actors
+                else None,
+            )
+            for event in events
+        ],
         total=total,
         page=page,
         page_size=page_size,

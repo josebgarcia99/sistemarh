@@ -3,6 +3,8 @@
 > Origen: propuesta de arquitectura aprobada el 10 de noviembre de 2026.
 > Este archivo es la copia de trabajo del repositorio y se actualiza en cada fase.
 
+> **Lo construido hasta hoy** (10 tablas) está descrito columna por columna en [`diccionario_datos.md`](diccionario_datos.md). Este documento es el diseño completo aprobado. Diferencias ya aplicadas: no existe `vacancy_transfer_items`; las vacantes usan una columna entera `version` en lugar de `ROWVERSION`; `recruitment_campaigns` pasa a la Fase 5. El detalle y los motivos están en [`../estado_proyecto.md`](../estado_proyecto.md).
+
 ## 13. Modelo relacional SQL Server 2022
 
 El modelo tiene 70 tablas en 10 dominios. Parte de tu lista, elimina una tabla redundante, renombra una y añade 10 que hacían falta para cumplir reglas del propio documento maestro. Los scripts T-SQL definitivos se generan cuando los pidas.
@@ -47,7 +49,7 @@ El modelo tiene 70 tablas en 10 dominios. Parte de tu lista, elimina una tabla r
 | Regla | Mecanismo |
 | --- | --- |
 | Toda vacante tiene responsable | `vacancies.owner_user_id` obligatorio con clave foránea. |
-| Un solo acceso por usuario y vacante | `UNIQUE (vacancy_id, user_id)` en `vacancy_members`. |
+| Un solo acceso vigente por usuario y vacante | Índice único filtrado sobre `(vacancy_id, user_id)` para filas sin revocar en `vacancy_members`. |
 | Una postulación por candidato y convocatoria | `UNIQUE (candidate_id, campaign_id)`. |
 | Solo prompts aprobados evalúan CV | Validación en el caso de uso y disparador en `cv_batches`. |
 | Versiones aprobadas inmutables | Disparador que rechaza cambios, salvo el paso a `ARCHIVADO`. |

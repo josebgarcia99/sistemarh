@@ -36,6 +36,14 @@ class NotFoundError(AppError):
     title = "Recurso no encontrado"
 
 
+class AccessHiddenError(NotFoundError):
+    """El recurso existe, pero el usuario no tiene ningún acceso a él.
+
+    La respuesta es idéntica a la de un recurso inexistente; la diferencia es
+    que el intento queda auditado como acceso denegado.
+    """
+
+
 class PermissionDeniedError(AppError):
     status_code = 403
     code = "sin_permiso"
@@ -112,6 +120,10 @@ def _response(status: int, code: str, title: str, detail: str, **extra: object) 
     )
 
 
+def problem_response(exc: AppError) -> JSONResponse:
+    return _response(exc.status_code, exc.code, exc.title, exc.detail)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Registra los manejadores de errores esperados.
 
@@ -121,7 +133,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(AppError)
     async def _app_error(_: Request, exc: AppError) -> JSONResponse:
-        return _response(exc.status_code, exc.code, exc.title, exc.detail)
+        return problem_response(exc)
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:

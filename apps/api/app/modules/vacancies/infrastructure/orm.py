@@ -14,6 +14,7 @@ from app.infrastructure.database.base import (
     SCHEMA_VACANCY,
     Base,
     UTCDateTime,
+    long_text,
 )
 
 _USER_FK = f"{SCHEMA_AUTH}.users.id"
@@ -35,9 +36,9 @@ class VacancyRow(Base):
     location: Mapped[str] = mapped_column(sa.Unicode(120))
     work_mode: Mapped[str] = mapped_column(sa.String(20))
     contract_type: Mapped[str] = mapped_column(sa.Unicode(80))
-    description: Mapped[str] = mapped_column(sa.UnicodeText)
+    description: Mapped[str] = mapped_column(long_text())
     positions: Mapped[int] = mapped_column(sa.Integer)
-    notes: Mapped[str | None] = mapped_column(sa.UnicodeText, nullable=True)
+    notes: Mapped[str | None] = mapped_column(long_text(), nullable=True)
     status: Mapped[str] = mapped_column(sa.String(20))
     # Obligatorio: ninguna vacante puede quedar sin responsable.
     owner_user_id: Mapped[uuid.UUID] = mapped_column(GUID, sa.ForeignKey(_USER_FK))

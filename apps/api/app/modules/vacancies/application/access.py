@@ -8,14 +8,19 @@ Regla general: se deniega todo salvo lo que aquí se concede.
 - Lectura: solo consulta.
 
 Si el usuario no tiene ningún acceso, la respuesta es "no encontrado", igual
-que si la vacante no existiera: así no se revela que existe.
+que si la vacante no existiera: así no se revela que existe. Ese intento y
+los rechazados por permiso insuficiente quedan auditados como acceso denegado.
 """
 
 from __future__ import annotations
 
 import uuid
 
-from app.core.exceptions.errors import NotFoundError, PermissionDeniedError
+from app.core.exceptions.errors import (
+    AccessHiddenError,
+    NotFoundError,
+    PermissionDeniedError,
+)
 from app.modules.vacancies.domain.models import (
     AccessLevel,
     AccessType,
@@ -55,7 +60,7 @@ class VacancyAccess:
         member = None if user.is_admin else self._vacancies.active_member(vacancy_id, user.id)
         level = effective_access(user, vacancy, member.access_type if member else None)
         if level is None:
-            raise NotFoundError("La vacante no existe.")
+            raise AccessHiddenError("La vacante no existe.")
         if level < minimum:
             raise PermissionDeniedError("Tu acceso a esta vacante no permite esta operación.")
         return vacancy, level
