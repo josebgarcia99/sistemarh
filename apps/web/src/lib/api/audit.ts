@@ -55,6 +55,14 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "ia.conexion_probada": "Prueba de conexión con proveedor de IA",
   "ia.proveedor_actualizado": "Proveedor de IA actualizado",
   "ia.modelo_asignado": "Modelo de IA asignado",
+  "perfil.version_creada": "Versión de perfil de puesto",
+  "prompt.generado": "Prompt generado",
+  "prompt.editado": "Prompt editado",
+  "prompt.enviado_a_revision": "Prompt enviado a revisión",
+  "prompt.devuelto_a_borrador": "Prompt devuelto a borrador",
+  "prompt.aprobado": "Prompt aprobado",
+  "prompt.archivado": "Prompt archivado",
+  "prompt.duplicado": "Prompt duplicado",
 };
 
 export function listAuditEvents(

@@ -8,7 +8,7 @@
 
 Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas en un entorno real (ver "No verificado todavía"). La Fase 1 (fundamentos) está terminada.
 
-**Fase 4 (Inteligencia documental): en curso.** Se construye en tres partes: (1) clave maestra, cifrado de documentos sensibles y configuración de IA; (2) perfiles de puesto y prompts; (3) procesamiento de CV con Excel y ZIP. La primera parte está construida.
+**Fase 4 (Inteligencia documental): en curso.** Se construye en tres partes: (1) clave maestra, cifrado de documentos sensibles y configuración de IA; (2) perfiles de puesto y prompts; (3) procesamiento de CV con Excel y ZIP. La primera y la segunda parte están construidas, salvo los pasos que dependen de llamar a la IA, que van en la tercera.
 
 ## Funcionalidades terminadas
 
@@ -42,9 +42,11 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 | Respaldos | Comandos para generar el manifiesto de documentos y para verificar una copia o una restauración contra él |
 | Configuración de IA | Pantalla de administrador para registrar, sustituir y revocar las API keys de Anthropic y OpenAI (cifradas con la clave maestra y nunca devueltas), probar la conexión, habilitar proveedores, fijar un límite mensual y asignar un modelo a cada una de las ocho operaciones. También admite claves inyectadas por Sistemas como variables de entorno |
 | Registro de modelos | La lista de modelos sale de lo que informa cada proveedor al probar la conexión; no hay identificadores de modelos en el código |
-| Base de datos | Migraciones `0001` (identidad y auditoría), `0002` (vacantes y transferencias), `0003` (documentos), `0004` (cifrado de documentos) y `0005` (configuración de IA): 15 tablas en los esquemas `auth`, `vacancy`, `files`, `ai` y `ops` |
-| Scripts para Sistemas | `database/sqlserver/`: instalación completa, actualizaciones entre versiones consecutivas (de `0001` a `0005`), reversión y plantilla de permisos del usuario de la aplicación |
-| Pantallas | Inicio de sesión, Inicio, Vacantes (lista, alta, detalle, compartir, documentos, historial, transferir), Usuarios, Bajas (baja con transferencia), Configuración de IA y Auditoría. El menú cambia según el rol |
+| Perfil de puesto | Captura estructurada (objetivo, funciones, requisitos indispensables y deseables, etc.) por versiones: cada corrección crea una versión nueva y las anteriores no cambian |
+| Prompt de evaluación | Diez capas y una rúbrica con escala 0 a 4, pesos y umbral. El borrador se genera del perfil con un criterio por requisito, sin inventar ninguno. Flujo borrador, en revisión, aprobado y archivado; una versión aprobada es inmutable y se duplica para cambiarla. Quien colabora edita y envía a revisión; solo el responsable o un administrador aprueba |
+| Base de datos | Migraciones `0001` (identidad y auditoría), `0002` (vacantes y transferencias), `0003` (documentos), `0004` (cifrado de documentos), `0005` (configuración de IA) y `0006` (perfiles y prompts): 18 tablas en los esquemas `auth`, `vacancy`, `files`, `ai` y `ops` |
+| Scripts para Sistemas | `database/sqlserver/`: instalación completa, actualizaciones entre versiones consecutivas (de `0001` a `0006`), reversión y plantilla de permisos del usuario de la aplicación |
+| Pantallas | Inicio de sesión, Inicio, Vacantes (lista, alta, detalle, compartir, documentos, perfil y prompt, historial, transferir), Usuarios, Bajas (baja con transferencia), Configuración de IA y Auditoría. El menú cambia según el rol |
 | Worker Celery | Configuración segura y tarea `system.ping` |
 | Reglas entre módulos | 7 contratos de `import-linter`: capas por módulo y dominios independientes |
 
@@ -54,14 +56,15 @@ Ejecutadas el 11 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 207 pruebas, todas pasan |
+| API: `pytest` | 224 pruebas, todas pasan |
 | Worker: `pytest` | 4 pruebas, todas pasan |
 | `ruff check` y `lint-imports` | Sin errores; 9 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |
-| Frontend: `vitest` | 50 pruebas, todas pasan |
+| Frontend: `vitest` | 57 pruebas, todas pasan |
 | Frontend: `next build` | Compila |
 | Recorrido en navegador real, identidad | 10 pasos: redirección sin sesión, credenciales erróneas, inicio de sesión, alta de usuario, restablecer contraseña, recarga, cierre de sesión, contraseña anterior rechazada, reclutador sin acceso a Usuarios y respuesta 403 de la API |
 | Recorrido en navegador real, vacantes | 11 pasos: alta de dos reclutadores, alta de dos vacantes, cambio de estado, compartir en lectura, la otra persona solo ve la compartida y no puede editarla, la API le niega cambiar el estado, transferencia individual, baja con transferencia, auditoría con el acceso denegado, la persona dada de baja ya no entra y el receptor queda como responsable |
+| Recorrido en navegador real, perfil y prompt | 7 pasos sobre el modo demostración: el perfil exige objetivo, se guarda como versión 1, el borrador sale con un criterio por requisito, editar actualiza la rúbrica, revisión y aprobación, duplicar crea la versión 2, y con acceso de lectura solo se consulta |
 | Recorrido en navegador real, configuración de IA | 8 pasos con proveedores simulados: registrar una clave, clave rechazada, sustituirla, conexión correcta, habilitar con límite, asignar un modelo, comprobar que la clave no aparece en la página ni en ninguna respuesta, revocar, y auditoría con solo la terminación |
 | Recorrido en navegador real, documento sensible | 3 pasos: carga de un archivo de psicometría sintético de 12 MB, comprobación de que en el disco está cifrado y descarga idéntica al original |
 | Recorrido en navegador real, documentos | 11 pasos: carga de un PDF, aviso de duplicado, rechazo de un ejecutable disfrazado y de un Word con macros, carga de 12 MB a través del frontend, descarga idéntica al original (SHA-256), descarga negada a otra persona (404) y sin sesión (401), eliminación con motivo y auditoría de todo lo anterior |
@@ -124,6 +127,8 @@ No hay todavía una instancia de SQL Server de pruebas. Por eso:
 | Tabla `file_versions` | No se crea todavía | No hay documentos versionados hasta los perfiles de puesto (Fase 4) |
 | Conciliación nocturna automática | Existe como comando y como ruta de administrador; no se ejecuta sola | Falta decidir con Sistemas si se programa con `cron` o con el worker |
 | Tablas `ai_budgets` y `ai_executions` en la primera parte de la Fase 4 | El límite mensual vive en `ai.providers`; el registro de consumo se crea con el procesamiento de CV | No hay consumo que registrar hasta que se procesen documentos |
+| Generador de prompts con IA | El borrador lo genera el sistema a partir del perfil, sin IA. La propuesta de criterios con IA y la extracción del perfil desde un PDF o Word se construyen en la tercera parte | Dependen de las llamadas a los proveedores, que se construyen con el procesamiento de CV. Así el flujo completo de aprobación ya funciona y no añade requisitos que no estén en el perfil |
+| Tablas `prompt_version_layers` y `rubric_versions` | Las capas van en una columna JSON de `ai.prompt_versions` y la rúbrica forma parte de la versión del prompt (`ai.rubric_criteria`) | Son diez capas fijas y siempre se leen juntas; un prompt y su rúbrica se aprueban como una sola cosa |
 | Carga de archivos como formulario | El archivo viaja como cuerpo de la petición | Permite escribirlo directo a la zona temporal y cortar al superar el límite, sin copias intermedias |
 
 ## Funcionalidades pendientes
@@ -160,6 +165,8 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - La lista de vacantes no muestra el número de posiciones; está en el detalle.
 - Con seis secciones en el menú del administrador, el nombre del usuario y el botón de cerrar sesión bajan a una segunda línea.
 - El límite de gasto mensual se guarda, pero todavía no se aplica: no hay consumo que medir.
+- El perfil y el prompt se abren dentro de la pantalla de Vacantes: no tienen dirección propia, así que al recargar la página se vuelve a la lista.
+- Una versión de perfil anterior se ve en la lista de versiones, pero no se puede abrir para leer su contenido.
 - El botón para elegir archivo aparece en el idioma del navegador ("Choose File" si el navegador está en inglés).
 - Si una descarga falla (por ejemplo, porque se revocó el acceso), el navegador muestra su propio aviso de descarga fallida en lugar de un mensaje de la aplicación.
 
@@ -177,6 +184,7 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - 11 nov 2026: Fase 4, primera parte: clave maestra y cifrado por archivo de los documentos sensibles; su carga queda habilitada.
 - 11 nov 2026: Fase 4, primera parte: configuración de IA (claves cifradas, prueba de conexión, registro de modelos y asignaciones).
 - 11 nov 2026: modo demostración (`scripts/demo.py`) para ver las pantallas sin SQL Server: datos en memoria que se borran al cerrar y proveedores de IA simulados. No sustituye a SQL Server.
+- 11 nov 2026: Fase 4, segunda parte: perfiles de puesto por versiones y prompts de evaluación con rúbrica y flujo de aprobación.
 - 11 nov 2026: el servidor de desarrollo de Next.js cortaba las cargas de más de 10 MB al reenviarlas a la API; se amplió el límite a 25 MB. Lo detectó el recorrido en navegador.
 
 ## Decisiones tomadas
@@ -200,5 +208,4 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 ## Próximos pasos
 
 1. Validar contra SQL Server en cuanto exista una instancia.
-2. Fase 4, segunda parte: perfiles de puesto, generador de prompts y rúbricas.
-3. Fase 4, tercera parte: procesamiento de CV, calificaciones, Excel y ZIP.
+2. Fase 4, tercera parte: llamadas a los proveedores de IA con registro de consumo, extracción del perfil desde un archivo, propuesta de criterios con IA, procesamiento de CV, calificaciones, Excel y ZIP.

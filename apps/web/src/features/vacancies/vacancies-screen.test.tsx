@@ -305,6 +305,26 @@ describe("VacanciesScreen", () => {
     );
   });
 
+  it("abre el perfil y el prompt de la vacante y permite volver a la lista", async () => {
+    const vacancy = makeVacancy();
+    mockApi({
+      "GET /api/v1/vacancies": page([vacancy]),
+      [`GET ${VACANCY_URL}`]: { body: vacancy },
+      [`GET ${VACANCY_URL}/members`]: { body: [] },
+      [`GET ${VACANCY_URL}/files`]: { body: [] },
+      [`GET ${VACANCY_URL}/ownership-history`]: initialHistory,
+      [`GET ${VACANCY_URL}/profile-versions`]: { body: [] },
+    });
+    const user = userEvent.setup();
+    renderApp(<VacanciesScreen />, { session: recruiter });
+    await user.click(await screen.findByRole("button", { name: "Abrir Analista de Nómina" }));
+    await user.click(await screen.findByRole("button", { name: "Perfil y prompt de evaluación" }));
+    expect(await screen.findByRole("heading", { name: "Perfil y prompt" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Guardar perfil" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Volver a vacantes" }));
+    expect(await screen.findByRole("heading", { name: "Vacantes" })).toBeTruthy();
+  });
+
   it("muestra el error cuando la lista no carga", async () => {
     mockApi({
       "GET /api/v1/vacancies": problem(

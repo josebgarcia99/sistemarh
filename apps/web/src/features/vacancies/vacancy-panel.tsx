@@ -49,10 +49,12 @@ type Props = {
   onClose: () => void;
   /** Aviso que se muestra al abrir el panel (por ejemplo, tras crear la vacante). */
   initialNotice?: string;
+  /** Abre el perfil de puesto y el prompt de evaluación de la vacante. */
+  onOpenEvaluation?: (vacancy: Vacancy) => void;
 };
 
 /** Panel de una vacante: datos, estado, con quién se comparte e historial. */
-export function VacancyPanel({ vacancyId, onClose, initialNotice }: Props) {
+export function VacancyPanel({ vacancyId, onClose, initialNotice, onOpenEvaluation }: Props) {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -267,6 +269,24 @@ export function VacancyPanel({ vacancyId, onClose, initialNotice }: Props) {
           socioeconómicos: esos permisos se otorgan aparte, por persona.
         </p>
       </section>
+
+      {onOpenEvaluation && (
+        <section aria-labelledby="evaluation-title" className="flex flex-col gap-3">
+          <h3 id="evaluation-title" className="text-lg font-medium">
+            Evaluación de CV
+          </h3>
+          <p className="text-sm text-ink-muted">
+            Define el perfil de puesto y el prompt con el que la IA hará la revisión inicial.
+          </p>
+          <button
+            type="button"
+            className={`${secondaryButtonClass} self-start`}
+            onClick={() => onOpenEvaluation(vacancy)}
+          >
+            Perfil y prompt de evaluación
+          </button>
+        </section>
+      )}
 
       <VacancyDocuments
         vacancyId={vacancy.id}

@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0005`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0006`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -151,6 +151,21 @@ Historial de responsables de cada vacante. Solo recibe inserciones.
 
 Índice: `ix_vacancy_ownership_history_vacancy (vacancy_id, changed_at)`.
 
+### `vacancy.job_profile_versions`
+
+Versiones del perfil de puesto de cada vacante. Cada corrección crea una fila nueva; las anteriores no cambian. La vigente es la de mayor `version_number`.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Vacante. |
+| `version_number` | `INT` | Sí | 1, 2, 3… Único por vacante. |
+| `origin` | `VARCHAR(20)` | Sí | `MANUAL` (capturado por una persona) o `IA` (extraído de un archivo; aún no se usa). |
+| `content` | `NVARCHAR(MAX)` | Sí | Perfil estructurado en JSON: objetivo, experiencia, formación, funciones, responsabilidades, conocimientos, habilidades, certificaciones, requisitos indispensables, requisitos deseables y requisitos que no están claros. |
+| `change_note` | `NVARCHAR(300)` | No | Qué cambió respecto a la versión anterior. |
+| `source_file_id` | `UNIQUEIDENTIFIER` | No | Documento del que se extrajo (`files.file_assets`). Aún no se usa. |
+| `created_at`, `created_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | Sí | Cuándo se guardó y quién lo hizo. |
+
 ## Esquema `files`: documentos
 
 ### `files.file_assets`
@@ -237,6 +252,44 @@ Modelo asignado a cada operación (extracción de CV, evaluación, generación d
 | `operation` | `VARCHAR(40)` | Sí | Clave primaria. Una de las ocho operaciones. |
 | `model_ref` | `UNIQUEIDENTIFIER` | No | Modelo asignado (`ai.models`). Vacío: sin asignar. |
 | `updated_at`, `updated_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | No | Último cambio y quién lo hizo. |
+
+### `ai.prompt_versions`
+
+Versiones del prompt de evaluación de cada vacante. Solo una versión `APROBADO` puede usarse para evaluar CV, y una vez aprobada no se modifica.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Vacante. |
+| `version_number` | `INT` | Sí | Único por vacante. |
+| `status` | `VARCHAR(20)` | Sí | `BORRADOR`, `EN_REVISION`, `APROBADO` o `ARCHIVADO`. |
+| `profile_version_id` | `UNIQUEIDENTIFIER` | Sí | Versión del perfil de la que salió (`vacancy.job_profile_versions`). |
+| `pass_threshold` | `NUMERIC(5,2)` | Sí | Puntuación mínima (mayor que 0, hasta 100) para clasificar un CV como aceptado. |
+| `layers` | `NVARCHAR(MAX)` | Sí | Las diez capas del prompt, en JSON. |
+| `revision` | `INT` | Sí | Aumenta con cada cambio; impide que dos personas se pisen. |
+| `duplicated_from` | `UNIQUEIDENTIFIER` | No | Versión de la que se copió. |
+| `created_at`, `created_by`, `updated_at`, `updated_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | Sí | Alta y último cambio. |
+| `submitted_at`, `submitted_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | No | Envío a revisión. |
+| `approved_at`, `approved_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | No | Aprobación. Obligatorios si el estado es `APROBADO`. |
+| `archived_at`, `archived_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | No | Archivo. |
+
+Índice: `ix_prompt_versions_vacancy_status (vacancy_id, status)`.
+
+### `ai.rubric_criteria`
+
+Criterios de la rúbrica de cada versión del prompt.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `prompt_version_id` | `UNIQUEIDENTIFIER` | Sí | Versión del prompt. |
+| `position` | `INT` | Sí | Orden; el criterio se identifica como C1, C2… Único por versión. |
+| `name` | `NVARCHAR(200)` | Sí | Requisito que se evalúa. |
+| `description` | `NVARCHAR(1000)` | Sí | Aclaración opcional (puede ir vacía). |
+| `kind` | `VARCHAR(20)` | Sí | `INDISPENSABLE` o `DESEABLE`. |
+| `weight` | `NUMERIC(6,2)` | Sí | Peso en la puntuación, de 0 a 100. |
+| `levels` | `NVARCHAR(MAX)` | Sí | Descripción de los niveles 0 a 4, en JSON. |
+| `origin` | `VARCHAR(20)` | Sí | `PERFIL` (sale de un requisito del perfil) o `MANUAL` (añadido por una persona). |
 
 ## Esquema `ops`: operación
 

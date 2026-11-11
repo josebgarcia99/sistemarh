@@ -10,11 +10,13 @@ import {
   secondaryButtonClass,
 } from "@/components/ui/styles";
 import { useSession } from "@/features/auth/use-session";
+import { EvaluationWorkspace } from "@/features/evaluation/evaluation-workspace";
 import { describeError } from "@/lib/api/client";
 import {
   listVacancies,
   MY_ACCESS_LABELS,
   type Scope,
+  type Vacancy,
   STATUS_LABELS,
   type VacancyStatus,
   vacancyStatusSchema,
@@ -55,6 +57,8 @@ export function VacanciesScreen() {
   const [creating, setCreating] = useState(false);
   // Aviso de alta: se muestra dentro del panel de la vacante recién creada.
   const [created, setCreated] = useState<{ id: string; message: string } | null>(null);
+  // Vacante cuyo perfil y prompt se están editando; ocupa toda la pantalla.
+  const [evaluating, setEvaluating] = useState<Vacancy | null>(null);
 
   const { data, error, isPending } = useQuery({
     queryKey: ["vacancies", { scope, status, search, page }],
@@ -64,6 +68,20 @@ export function VacanciesScreen() {
   });
   const total = data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  if (evaluating) {
+    return (
+      <EvaluationWorkspace
+        vacancyId={evaluating.id}
+        vacancyName={evaluating.name}
+        canEdit={evaluating.my_access !== "LECTURA"}
+        canApprove={
+          evaluating.my_access === "RESPONSABLE" || evaluating.my_access === "ADMINISTRADOR"
+        }
+        onBack={() => setEvaluating(null)}
+      />
+    );
+  }
 
   return (
     <>
@@ -247,6 +265,7 @@ export function VacanciesScreen() {
               key={selectedId}
               vacancyId={selectedId}
               initialNotice={created?.id === selectedId ? created.message : undefined}
+              onOpenEvaluation={setEvaluating}
               onClose={() => setSelectedId(null)}
             />
           </div>
