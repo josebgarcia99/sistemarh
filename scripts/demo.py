@@ -57,7 +57,7 @@ from app.modules.file_management.domain.models import DocumentType
 from app.modules.users.domain.models import Role
 from app.modules.vacancies.application.service import VacancyData
 from app.modules.vacancies.domain.models import AccessType, VacancyStatus, WorkMode
-from app.tests.support.sample_files import pdf_cv
+from app.tests.support.sample_files import docx_cv, pdf_cv
 from app.tests.support.sql_memory import build_test_backend
 
 ADMIN_EMAIL = "admin@demo.test"
@@ -84,6 +84,31 @@ SAMPLE_CVS = [
 ] + [("CV Escaneado Ficticio.pdf", pdf_cv())]
 
 
+# Lo que el proveedor simulado "lee" de cualquier perfil. No sale del documento.
+SIMULATED_PROFILE = {
+    "objetivo": "Registrar las operaciones contables del mes (respuesta simulada).",
+    "experiencia": "Un año en un área contable.",
+    "formacion": "Estudios en Contaduría.",
+    "funciones": ["Registrar pólizas", "Conciliar cuentas bancarias"],
+    "responsabilidades": ["Entregar el cierre mensual a tiempo"],
+    "conocimientos": ["Normas de información financiera"],
+    "habilidades": ["Orden y atención al detalle"],
+    "certificaciones": [],
+    "requisitos_indispensables": ["Experiencia en registro contable", "Manejo de Excel"],
+    "requisitos_deseables": ["Conocimiento de CONTPAQi Contabilidad"],
+    "ambiguedades": [
+        "Respuesta simulada del modo demostración: el documento no se analizó de verdad",
+        "«Manejo de Excel» no indica qué nivel",
+    ],
+}
+PROFILE_DOCUMENT = docx_cv(
+    "Perfil de puesto ficticio: Auxiliar Contable.",
+    "Objetivo: registrar las operaciones contables del mes.",
+    "Indispensable: experiencia en registro contable y manejo de Excel.",
+    "Deseable: CONTPAQi Contabilidad.",
+)
+
+
 class SimulatedProvider:
     """No se conecta a ningún servicio. Una clave terminada en MALA se rechaza."""
 
@@ -104,6 +129,35 @@ class SimulatedProvider:
     def generate(self, api_key, model, *, system, user, max_output_tokens) -> Generation:
         # Consumo inventado, para ver la pantalla de costos.
         tokens = len(system + user) // 4 + 50
+        if "<<<DOCUMENTO" in user:
+            # "Lectura" inventada de un perfil: el documento no se analiza de verdad.
+            text = json.dumps(SIMULATED_PROFILE, ensure_ascii=False)
+            return Generation(
+                text, input_tokens=tokens, output_tokens=len(text) // 4, complete=True
+            )
+        if "CRITERIOS DE LA RÚBRICA" in user:
+            codes = re.findall(r"^(C\d+)\. ", user, re.MULTILINE)
+            body = {
+                "criterios": [
+                    {
+                        "id": code,
+                        "descripcion": "Redacción simulada: busca en el CV evidencia con fechas.",
+                        "niveles": [
+                            "No hay evidencia en el CV (simulado).",
+                            "Mención sin detalle ni fechas (simulado).",
+                            "Evidencia directa pero parcial (simulado).",
+                            "Evidencia directa y suficiente (simulado).",
+                            "Evidencia que supera lo pedido (simulado).",
+                        ],
+                    }
+                    for code in codes
+                ],
+                "observaciones": ["Propuesta simulada: no la produjo ningún modelo real."],
+            }
+            text = json.dumps(body, ensure_ascii=False)
+            return Generation(
+                text, input_tokens=tokens, output_tokens=len(text) // 4, complete=True
+            )
         if "<<<CV" not in user:
             return Generation("OK", input_tokens=tokens, output_tokens=40, complete=True)
         # "Evaluación" inventada: los niveles salen del contenido del CV, sin
@@ -180,7 +234,7 @@ def seed(app, password: str) -> None:
         ).vacancy
         vacancies.change_status(ana, payroll.id, VacancyStatus.ABIERTA, expected_version=1)
         vacancies.set_member(ana, payroll.id, beto.id, AccessType.LECTURA)
-        vacancies.create(
+        accounting = vacancies.create(
             ana,
             VacancyData(
                 name="Auxiliar Contable",
@@ -191,7 +245,7 @@ def seed(app, password: str) -> None:
                 description="Vacante ficticia en borrador.",
                 positions=1,
             ),
-        )
+        ).vacancy
         vacancies.create(
             beto,
             VacancyData(
@@ -235,15 +289,30 @@ def seed(app, password: str) -> None:
         ai.test_connection(admin, ProviderCode.ANTHROPIC)
         ai.update_provider(admin, ProviderCode.ANTHROPIC, enabled=True, monthly_limit_usd=None)
         model = next(m for m in ai.models(admin, ProviderCode.ANTHROPIC) if "grande" in m.model_id)
-        ai.assign(admin, Operation.EVALUACION_DOCUMENTAL, model.id)
+        for operation in (
+            Operation.EVALUACION_DOCUMENTAL,
+            Operation.ANALISIS_PERFILES,
+            Operation.GENERACION_PROMPTS,
+        ):
+            ai.assign(admin, operation, model.id)
 
     pipeline = context.upload_pipeline()
-    for name, content in SAMPLE_CVS:
+    uploads = [(payroll.id, DocumentType.CV, name, content) for name, content in SAMPLE_CVS]
+    # Un perfil en Word para probar «Llenar con IA desde un documento».
+    uploads.append(
+        (
+            accounting.id,
+            DocumentType.PERFIL_PUESTO,
+            "Perfil Auxiliar Contable.docx",
+            PROFILE_DOCUMENT,
+        )
+    )
+    for vacancy_id, document_type, name, content in uploads:
         with context.require_backend().transaction() as repos:
             asset = context.file_service(repos).begin_upload(
                 ana,
-                vacancy_id=payroll.id,
-                document_type=DocumentType.CV,
+                vacancy_id=vacancy_id,
+                document_type=document_type,
                 original_name=name,
                 declared_size=len(content),
             )

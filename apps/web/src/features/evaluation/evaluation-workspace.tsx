@@ -11,8 +11,10 @@ import {
 } from "@/components/ui/styles";
 import { describeError } from "@/lib/api/client";
 import {
+  type CriteriaProposal,
   type CriterionInput,
   duplicatePrompt,
+  extractProfile,
   generatePrompt,
   listProfileVersions,
   listPrompts,
@@ -20,7 +22,9 @@ import {
   PROFILE_LIST_FIELDS,
   PROFILE_TEXT_FIELDS,
   type ProfileInput,
+  type ProfileProposal,
   type ProfileVersion,
+  proposeCriteria,
   PROMPT_STATUS_LABELS,
   type PromptAction,
   promptAction,
@@ -29,6 +33,7 @@ import {
   saveProfile,
   updatePrompt,
 } from "@/lib/api/evaluation";
+import { listFiles } from "@/lib/api/files";
 import { CvEvaluationTab } from "./cv-evaluation-tab";
 
 type Props = {
@@ -125,7 +130,7 @@ export function EvaluationWorkspace({ vacancyId, vacancyName, canEdit, canApprov
 type ProfileDraft = Record<(typeof PROFILE_TEXT_FIELDS)[number], string> &
   Record<(typeof PROFILE_LIST_FIELDS)[number], string>;
 
-function toDraft(version: ProfileVersion | undefined): ProfileDraft {
+function toDraft(version: ProfileVersion | ProfileProposal | undefined): ProfileDraft {
   const draft = {} as ProfileDraft;
   for (const field of PROFILE_TEXT_FIELDS) draft[field] = version?.[field] ?? "";
   for (const field of PROFILE_LIST_FIELDS) draft[field] = (version?.[field] ?? []).join("\n");
@@ -199,10 +204,17 @@ function ProfileForm({
   const [note, setNote] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
+  // Si el formulario se llenó con una propuesta de la IA, y de qué documento salió.
+  const [aiSource, setAiSource] = useState<{ fileId: string | null } | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const input = { change_note: note.trim() || null, expected_version: current?.version_number ?? 0 } as ProfileInput;
+    const input = {
+      change_note: note.trim() || null,
+      expected_version: current?.version_number ?? 0,
+      from_ai: aiSource !== null,
+      source_file_id: aiSource?.fileId ?? null,
+    } as ProfileInput;
     for (const field of PROFILE_TEXT_FIELDS) input[field] = draft[field];
     for (const field of PROFILE_LIST_FIELDS) {
       input[field] = draft[field].split("\n").map((line) => line.trim()).filter(Boolean);
@@ -230,6 +242,16 @@ function ProfileForm({
       <h2 className="text-xl font-medium">
         {current ? `Perfil vigente (versión ${current.version_number})` : "Nuevo perfil de puesto"}
       </h2>
+      {canEdit && (
+        <ProfileAssistant
+          vacancyId={vacancyId}
+          onProposal={(proposal) => {
+            setDraft(toDraft(proposal));
+            setAiSource({ fileId: proposal.source_file_id });
+            setFeedback(null);
+          }}
+        />
+      )}
       {PROFILE_TEXT_FIELDS.map((field) => (
         <div key={field} className="flex flex-col gap-2">
           <label htmlFor={`profile-${field}`} className="text-sm text-ink-muted">
@@ -289,6 +311,118 @@ function ProfileForm({
         <p className="text-sm text-ink-muted">Tu acceso a esta vacante es de solo lectura.</p>
       )}
     </form>
+  );
+}
+
+/** Llena el formulario del perfil con lo que la IA lee de un documento o de un texto. */
+function ProfileAssistant({
+  vacancyId,
+  onProposal,
+}: {
+  vacancyId: string;
+  onProposal: (proposal: ProfileProposal) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [fileId, setFileId] = useState("");
+  const [text, setText] = useState("");
+  const [feedback, setFeedback] = useState<Feedback>(null);
+  const [busy, setBusy] = useState(false);
+  // Los documentos se piden solo al abrir el panel.
+  const { data: files, error } = useQuery({
+    queryKey: ["vacancy", vacancyId, "files"],
+    queryFn: ({ signal }) => listFiles(vacancyId, signal),
+    enabled: open,
+  });
+  const documents = (files ?? []).filter((file) => file.document_type === "PERFIL_PUESTO");
+
+  async function read() {
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const proposal = await extractProfile(vacancyId, fileId ? { fileId } : { text });
+      onProposal(proposal);
+      setFeedback({
+        kind: "ok",
+        text:
+          "La IA llenó el formulario. Revísalo y corrígelo: todavía no se ha guardado." +
+          (proposal.truncated ? " El documento era muy largo y solo se leyó el inicio." : ""),
+      });
+    } catch (caught) {
+      setFeedback({ kind: "error", text: describeError(caught) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className={`${secondaryButtonClass} self-start`}
+        onClick={() => setOpen(true)}
+      >
+        Llenar con IA desde un documento
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3 rounded-3xl bg-surface p-5">
+      <p className="text-ink-muted">
+        La IA lee el perfil y llena este formulario con lo que el documento dice, sin añadir
+        nada. Después lo revisas y lo guardas tú.
+      </p>
+      {error && (
+        <p role="alert" className="text-accent-red-ink">
+          {describeError(error)}
+        </p>
+      )}
+      <div className="flex flex-col gap-2">
+        <label htmlFor="profile-source-file" className="text-sm text-ink-muted">
+          Documento de la vacante (tipo «Perfil de puesto»)
+        </label>
+        <select
+          id="profile-source-file"
+          className={fieldClass}
+          value={fileId}
+          onChange={(event) => setFileId(event.target.value)}
+        >
+          <option value="">Ninguno: pegaré el texto</option>
+          {documents.map((file) => (
+            <option key={file.id} value={file.id}>
+              {file.original_name}
+            </option>
+          ))}
+        </select>
+      </div>
+      {!fileId && (
+        <div className="flex flex-col gap-2">
+          <label htmlFor="profile-source-text" className="text-sm text-ink-muted">
+            Texto del perfil
+          </label>
+          <textarea
+            id="profile-source-text"
+            rows={5}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            className={areaClass}
+          />
+        </div>
+      )}
+      <FeedbackLine feedback={feedback} />
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          className={primaryButtonClass}
+          disabled={busy || (!fileId && text.trim().length === 0)}
+          onClick={read}
+        >
+          {busy ? "Leyendo…" : "Leer con IA"}
+        </button>
+        <button type="button" className={secondaryButtonClass} onClick={() => setOpen(false)}>
+          Cerrar
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -434,6 +568,41 @@ function PromptEditor({
       levels: [...levels],
     })),
   );
+
+  const [proposal, setProposal] = useState<CriteriaProposal | null>(null);
+  const [proposalFeedback, setProposalFeedback] = useState<Feedback>(null);
+  const [proposing, setProposing] = useState(false);
+
+  async function propose() {
+    setProposing(true);
+    setProposalFeedback(null);
+    try {
+      setProposal(await proposeCriteria(version.id));
+    } catch (caught) {
+      setProposalFeedback({ kind: "error", text: describeError(caught) });
+    } finally {
+      setProposing(false);
+    }
+  }
+  /** Copia al borrador la redacción propuesta. No guarda: eso lo hace «Guardar cambios». */
+  function applySuggestions(ids: string[]) {
+    if (!proposal) return;
+    const chosen = proposal.suggestions.filter((item) => ids.includes(item.id));
+    setCriteria(
+      criteria.map((item) => {
+        const suggestion = chosen.find((candidate) => candidate.id === item.id);
+        return suggestion
+          ? { ...item, description: suggestion.description, levels: [...suggestion.levels] }
+          : item;
+      }),
+    );
+    const rest = proposal.suggestions.filter((item) => !ids.includes(item.id));
+    setProposal(rest.length > 0 ? { ...proposal, suggestions: rest } : null);
+    setProposalFeedback({
+      kind: "ok",
+      text: "Redacción aplicada al borrador. Revísala y pulsa «Guardar cambios» para conservarla.",
+    });
+  }
 
   const act = (action: PromptAction) =>
     run(() => promptAction(version.id, action, version.revision), () => ACTION_MESSAGES[action]);
@@ -690,6 +859,77 @@ function PromptEditor({
           >
             Agregar criterio
           </button>
+        )}
+        {editable && (
+          <div className="flex flex-col gap-3 border-t border-line pt-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className={secondaryButtonClass}
+                disabled={proposing}
+                onClick={propose}
+              >
+                {proposing ? "Consultando a la IA…" : "Proponer mejoras con IA"}
+              </button>
+              <p className="flex-[1_1_300px] text-sm text-ink-muted">
+                La IA sugiere una redacción más clara para la descripción y los niveles de cada
+                criterio. No añade criterios ni requisitos, y nada cambia hasta que lo apliques.
+              </p>
+            </div>
+            <FeedbackLine feedback={proposalFeedback} />
+            {proposal && (
+              <section aria-label="Mejoras propuestas por la IA" className="flex flex-col gap-3">
+                {proposal.observations.length > 0 && (
+                  <div className="rounded-2xl bg-surface px-4 py-3">
+                    <p className="font-medium">Avisos de la IA</p>
+                    <ul className="list-disc pl-5">
+                      {proposal.observations.map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <ul className="flex flex-col gap-3">
+                  {proposal.suggestions.map((item) => (
+                    <li key={item.id} className="flex flex-col gap-2 rounded-3xl bg-surface p-4">
+                      <p className="font-medium">
+                        {item.code}. {item.name}
+                      </p>
+                      {item.description && <p>{item.description}</p>}
+                      <ol start={0} className="list-decimal pl-6 text-ink-muted">
+                        {item.levels.map((level, index) => (
+                          <li key={index}>{level}</li>
+                        ))}
+                      </ol>
+                      <button
+                        type="button"
+                        className={`${secondaryButtonClass} self-start`}
+                        onClick={() => applySuggestions([item.id])}
+                      >
+                        Aplicar a {item.code}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    className={primaryButtonClass}
+                    onClick={() => applySuggestions(proposal.suggestions.map((item) => item.id))}
+                  >
+                    Aplicar todas
+                  </button>
+                  <button
+                    type="button"
+                    className={secondaryButtonClass}
+                    onClick={() => setProposal(null)}
+                  >
+                    Descartar
+                  </button>
+                </div>
+              </section>
+            )}
+          </div>
         )}
       </section>
 

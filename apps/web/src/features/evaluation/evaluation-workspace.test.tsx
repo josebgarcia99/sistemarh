@@ -253,4 +253,139 @@ describe("EvaluationWorkspace", () => {
     const alert = await screen.findByRole("alert");
     expect(within(alert).getByText("El criterio C1 debe tener un peso mayor que cero.")).toBeTruthy();
   });
+  it("llena el perfil con la propuesta de la IA y lo guarda marcado como originado con IA", async () => {
+    const FILE_ID = "c0000000-0000-0000-0000-000000000001";
+    const proposal = {
+      ...makeProfile({ objective: "Pagar la nómina sin errores.", must_have: ["Dos años en nómina"] }),
+      ambiguities: ["«Excel intermedio» no indica qué funciones"],
+      truncated: true,
+      source_file_id: FILE_ID,
+    };
+    const fetchMock = mockApi({
+      [`GET ${PROFILE_URL}`]: { body: [] },
+      [`GET /api/v1/vacancies/${VACANCY_ID}/files`]: {
+        body: [
+          {
+            id: FILE_ID,
+            vacancy_id: VACANCY_ID,
+            document_type: "PERFIL_PUESTO",
+            sensitive: false,
+            original_name: "perfil analista.docx",
+            content_type: null,
+            size_bytes: 1200,
+            sha256: null,
+            malware_scan: null,
+            encrypted: false,
+            uploaded_by: "u1",
+            uploaded_by_name: "Reclutadora de Prueba",
+            created_at: "2026-11-11T18:00:00Z",
+          },
+        ],
+      },
+      [`POST /api/v1/vacancies/${VACANCY_ID}/profile-extractions`]: { body: proposal },
+      [`POST ${PROFILE_URL}`]: { status: 201, body: makeProfile({ origin: "IA" }) },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(await screen.findByRole("button", { name: "Llenar con IA desde un documento" }));
+    // Sin documento ni texto no hay nada que leer.
+    expect(screen.getByRole("button", { name: "Leer con IA" }).hasAttribute("disabled")).toBe(true);
+    await user.selectOptions(
+      await screen.findByLabelText(/Documento de la vacante/),
+      await screen.findByRole("option", { name: "perfil analista.docx" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Leer con IA" }));
+
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toContain("todavía no se ha guardado");
+    expect(status.textContent).toContain("solo se leyó el inicio");
+    const extraction = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/profile-extractions"));
+    expect(JSON.parse(String(extraction?.[1]?.body))).toEqual({ file_id: FILE_ID });
+    expect((screen.getByLabelText("Objetivo del puesto") as HTMLTextAreaElement).value).toBe(
+      "Pagar la nómina sin errores.",
+    );
+    expect(
+      (screen.getByLabelText("Requisitos que no están claros (uno por línea)") as HTMLTextAreaElement).value,
+    ).toContain("Excel intermedio");
+
+    // La persona corrige y guarda: viaja el origen.
+    await user.type(screen.getByLabelText("Requisitos indispensables (uno por línea)"), "\nExcel");
+    await user.click(screen.getByRole("button", { name: "Guardar perfil" }));
+    await screen.findByText(/Perfil guardado como versión 1/);
+    const saved = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).endsWith("/profile-versions") && init?.method === "POST",
+    );
+    const body = JSON.parse(String(saved?.[1]?.body));
+    expect(body.from_ai).toBe(true);
+    expect(body.source_file_id).toBe(FILE_ID);
+    expect(body.must_have).toEqual(["Dos años en nómina", "Excel"]);
+  });
+
+  it("si la IA no puede leer el perfil, muestra el motivo y no toca el formulario", async () => {
+    const fetchMock = mockApi({
+      [`GET ${PROFILE_URL}`]: { body: [makeProfile()] },
+      [`GET /api/v1/vacancies/${VACANCY_ID}/files`]: { body: [] },
+      [`POST /api/v1/vacancies/${VACANCY_ID}/profile-extractions`]: problem(
+        422,
+        "validacion",
+        "Esta operación no tiene un modelo asignado.",
+      ),
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(await screen.findByRole("button", { name: "Llenar con IA desde un documento" }));
+    await user.type(screen.getByLabelText("Texto del perfil"), "Perfil de analista de nómina");
+    await user.click(screen.getByRole("button", { name: "Leer con IA" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("modelo asignado");
+    const extraction = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/profile-extractions"));
+    expect(JSON.parse(String(extraction?.[1]?.body))).toEqual({ text: "Perfil de analista de nómina" });
+    expect((screen.getByLabelText("Objetivo del puesto") as HTMLTextAreaElement).value).toBe(
+      "Calcular la nómina.",
+    );
+  });
+
+  it("aplica al borrador la redacción que propone la IA y solo cambia al guardar", async () => {
+    const levels = ["Sin evidencia", "Menos de un año", "Uno a dos años", "Dos a cuatro", "Más de cuatro"];
+    const fetchMock = mockApi({
+      [`GET ${PROMPTS_URL}`]: { body: [makePrompt()] },
+      [`POST /api/v1/prompts/${PROMPT_ID}/criteria-proposals`]: {
+        body: {
+          suggestions: [
+            {
+              id: "70000000-0000-0000-0000-000000000001",
+              code: "C1",
+              name: "Experiencia en nómina",
+              description: "Busca puestos de nómina con fechas.",
+              levels,
+            },
+          ],
+          observations: ["«Excel intermedio» es ambiguo"],
+        },
+      },
+      [`PUT /api/v1/prompts/${PROMPT_ID}`]: { body: makePrompt({ revision: 2 }) },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(screen.getByRole("button", { name: "Prompt de evaluación" }));
+    await user.click(await screen.findByRole("button", { name: "Proponer mejoras con IA" }));
+
+    const panel = await screen.findByRole("region", { name: "Mejoras propuestas por la IA" });
+    expect(within(panel).getByText("«Excel intermedio» es ambiguo")).toBeTruthy();
+    expect(within(panel).getByText("C1. Experiencia en nómina")).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+    await user.click(within(panel).getByRole("button", { name: "Aplicar a C1" }));
+
+    expect((await screen.findByRole("status")).textContent).toContain("Guardar cambios");
+    expect(screen.queryByRole("region", { name: "Mejoras propuestas por la IA" })).toBeNull();
+    expect((screen.getByLabelText("Descripción del criterio C1") as HTMLInputElement).value).toBe(
+      "Busca puestos de nómina con fechas.",
+    );
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await screen.findByText(/Cambios guardados/);
+    const { body } = sent(fetchMock, "PUT");
+    expect(body.criteria).toHaveLength(1);
+    expect(body.criteria[0].name).toBe("Experiencia en nómina");
+    expect(body.criteria[0].weight).toBe("3.00");
+    expect(body.criteria[0].levels).toEqual(levels);
+  });
 });

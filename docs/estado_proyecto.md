@@ -8,7 +8,7 @@
 
 Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas en un entorno real (ver "No verificado todavía"). La Fase 1 (fundamentos) está terminada.
 
-**Fase 4 (Inteligencia documental): en curso.** Se construye en tres partes: (1) clave maestra, cifrado de documentos sensibles y configuración de IA; (2) perfiles de puesto y prompts; (3) procesamiento de CV con Excel y ZIP. La primera y la segunda parte están construidas. De la tercera ya están las llamadas a los proveedores (consumo, precios y límite mensual) y la **evaluación de CV por lotes con su Excel y sus ZIP**, probada con CV sintéticos y un proveedor simulado. Falta: extraer el perfil de un archivo, proponer criterios con IA, leer CV escaneados (OCR) y DOC antiguos, y la extracción estructurada del CV con el cálculo de permanencia laboral (secciones 12.2 y 12.3), que se construye con los expedientes de la Fase 5.
+**Fase 4 (Inteligencia documental): construida y probada con proveedores de IA simulados; pendiente de validar con SQL Server, con el worker y Redis, y con un modelo real.** Incluye la clave maestra y el cifrado de documentos sensibles, la configuración de IA, los perfiles de puesto y prompts, la evaluación de CV por lotes con su Excel y sus ZIP, y las dos ayudas de IA: llenar el perfil desde un documento o texto y proponer una mejor redacción de los criterios. Quedó fuera de esta fase, y se indica más abajo: leer CV escaneados (OCR) y DOC antiguos, y la extracción estructurada del CV con el cálculo de permanencia laboral (secciones 12.2 y 12.3), que se construye con los expedientes de la Fase 5.
 
 ## Funcionalidades terminadas
 
@@ -46,6 +46,8 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 | Precios y límite mensual | El administrador captura el precio de cada modelo; con él se estima el costo y se detienen las llamadas al alcanzar el límite mensual del proveedor. Pantalla con el consumo del mes y botón para probar cada modelo |
 | Perfil de puesto | Captura estructurada (objetivo, funciones, requisitos indispensables y deseables, etc.) por versiones: cada corrección crea una versión nueva y las anteriores no cambian |
 | Prompt de evaluación | Diez capas y una rúbrica con escala 0 a 4, pesos y umbral. El borrador se genera del perfil con un criterio por requisito, sin inventar ninguno. Flujo borrador, en revisión, aprobado y archivado; una versión aprobada es inmutable y se duplica para cambiarla. Quien colabora edita y envía a revisión; solo el responsable o un administrador aprueba |
+| Perfil desde un documento | En el perfil, «Llenar con IA desde un documento»: la IA lee un PDF o Word de tipo «Perfil de puesto» cargado en la vacante, o un texto pegado, y llena el formulario con lo que el documento dice, marcando los requisitos ambiguos. Es una propuesta: no se guarda hasta que la persona la revisa y pulsa guardar. La versión queda marcada como originada con IA y enlazada a su documento |
+| Mejoras a la rúbrica con IA | En un borrador, «Proponer mejoras con IA» sugiere una redacción más clara de la descripción y los niveles 0 a 4 de cada criterio. El sistema descarta cualquier criterio que no exista ya en la rúbrica, así que la IA no puede añadir requisitos. Nada cambia hasta que la persona aplica la sugerencia y guarda |
 | Lectura de CV | Se extrae el texto de PDF y de DOCX dentro del servidor. Un PDF escaneado, una imagen, un DOC antiguo, un PDF con contraseña o un archivo dañado quedan como «no evaluable» con su motivo; nunca como rechazo |
 | Evaluación de CV por lotes | Desde la vacante, con el prompt aprobado vigente. Cada CV se guarda en cuanto se evalúa; si el proveedor falla, lo evaluado se conserva y el lote se reanuda. Antes de enviar el texto se ocultan correos y teléfonos. Un CV repetido dentro del lote no se evalúa dos veces |
 | Puntuación y clasificación | La IA solo asigna un nivel de 0 a 4 por criterio; Python valida la respuesta contra la rúbrica y calcula el promedio ponderado (0 a 100). Con el umbral aprobado clasifica en `ACEPTADO_IA`, `RECHAZADO_IA` o `NO_EVALUABLE`. La calidad documental se informa aparte y no cambia la puntuación. Es una sugerencia inicial: no decide nada y no se sobrescribe |
@@ -63,15 +65,16 @@ Ejecutadas el 11 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 262 pruebas, todas pasan |
+| API: `pytest` | 269 pruebas, todas pasan |
 | Worker: `pytest` | 5 pruebas, todas pasan |
 | `ruff check` y `lint-imports` | Sin errores; 10 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |
-| Frontend: `vitest` | 65 pruebas, todas pasan |
+| Frontend: `vitest` | 68 pruebas, todas pasan |
 | Frontend: `next build` | Compila |
 | Recorrido en navegador real, identidad | 10 pasos: redirección sin sesión, credenciales erróneas, inicio de sesión, alta de usuario, restablecer contraseña, recarga, cierre de sesión, contraseña anterior rechazada, reclutador sin acceso a Usuarios y respuesta 403 de la API |
 | Recorrido en navegador real, vacantes | 11 pasos: alta de dos reclutadores, alta de dos vacantes, cambio de estado, compartir en lectura, la otra persona solo ve la compartida y no puede editarla, la API le niega cambiar el estado, transferencia individual, baja con transferencia, auditoría con el acceso denegado, la persona dada de baja ya no entra y el receptor queda como responsable |
 | Recorrido en navegador real, evaluación de CV | 9 pasos sobre el modo demostración, con CV ficticios y un proveedor simulado: la pestaña muestra el prompt aprobado y los CV sin evaluar; el lote evalúa 4 CV y deja uno como no evaluable; el detalle muestra niveles, evidencia y motivo; se descargan el Excel y los ZIP, que suman los 4 originales con su manifiesto; se repite la evaluación y el lote anterior se conserva; los archivos generados no se mezclan con los documentos; con acceso de lectura se consulta y se descarga sin poder operar; auditoría y consumo lo registran; en móvil no hay desbordamiento |
+| Recorrido en navegador real, ayudas de IA | 5 pasos sobre el modo demostración, con un proveedor simulado: la IA llena el formulario del perfil desde un Word y no guarda nada; la persona lo guarda como versión 1; la IA propone redacción para los tres criterios con sus avisos; al aplicar y guardar siguen siendo tres criterios; un texto demasiado corto se rechaza con su motivo |
 | Recorrido en navegador real, consumo de IA | 4 pasos sobre el modo demostración: con límite y sin precio la llamada se rechaza; con precio el modelo responde y se estima el costo; el consumo aparece en la tabla del mes; al alcanzar el límite mensual las llamadas se detienen |
 | Recorrido en navegador real, perfil y prompt | 7 pasos sobre el modo demostración: el perfil exige objetivo, se guarda como versión 1, el borrador sale con un criterio por requisito, editar actualiza la rúbrica, revisión y aprobación, duplicar crea la versión 2, y con acceso de lectura solo se consulta |
 | Recorrido en navegador real, configuración de IA | 8 pasos con proveedores simulados: registrar una clave, clave rechazada, sustituirla, conexión correcta, habilitar con límite, asignar un modelo, comprobar que la clave no aparece en la página ni en ninguna respuesta, revocar, y auditoría con solo la terminación |
@@ -111,6 +114,7 @@ No hay todavía una instancia de SQL Server de pruebas. Por eso:
 - **Todo lo que toca SQL Server de verdad:** ejecutar `instalacion_completa.sql` y `actualizacion_0001_a_0002.sql`, la plantilla de permisos, crear el usuario maestro con el comando, iniciar sesión contra la base, la paginación `OFFSET/FETCH`, la intercalación en las búsquedas, los índices únicos filtrados, la restricción `ISJSON` y dos ediciones simultáneas reales de una vacante.
 - **La atomicidad de la baja con transferencia en SQL Server.** La prueba de "si falla a la mitad no cambia nada" pasa sobre el motor en memoria; falta repetirla en SQL Server.
 - **Anthropic y OpenAI reales.** La aplicación nunca se ha conectado a ningún proveedor de IA: todas las pruebas usan proveedores simulados y claves ficticias. La forma de la llamada se tomó de la documentación pública de cada proveedor.
+- **Las ayudas de IA con un modelo real.** La lectura del perfil y la propuesta de criterios se probaron con respuestas programadas. Falta ver qué tan fiel es un modelo real al documento y si respeta el formato.
 - **La evaluación de CV con un modelo real.** Todo se probó con un proveedor simulado que devuelve respuestas programadas. No se sabe todavía qué tan bien sigue un modelo real el formato pedido ni qué calidad tienen sus niveles y evidencias; eso se mide cuando haya claves, con CV sintéticos primero.
 - **El worker y la cola.** La tarea `cv.process_batch` está registrada y su lógica se probó ejecutándola en el momento; nunca ha corrido dentro de un worker de Celery con Redis. Tampoco se probó la reanudación automática al arrancar el worker.
 - **Dos procesos sobre el mismo lote en SQL Server.** La reserva del lote se probó sobre el motor en memoria; falta comprobar la sentencia con bloqueos reales.
@@ -140,7 +144,7 @@ No hay todavía una instancia de SQL Server de pruebas. Por eso:
 | Tabla `file_versions` | No se crea todavía | No hay documentos versionados hasta los perfiles de puesto (Fase 4) |
 | Conciliación nocturna automática | Existe como comando y como ruta de administrador; no se ejecuta sola | Falta decidir con Sistemas si se programa con `cron` o con el worker |
 | Tabla `ai_budgets` | No existe: el límite mensual vive en `ai.providers` y el consumo en `ai.executions` | Un límite por proveedor es un solo dato |
-| Generador de prompts con IA | El borrador lo genera el sistema a partir del perfil, sin IA. La propuesta de criterios con IA y la extracción del perfil desde un PDF o Word se construyen en la tercera parte | Dependen de las llamadas a los proveedores, que se construyen con el procesamiento de CV. Así el flujo completo de aprobación ya funciona y no añade requisitos que no estén en el perfil |
+| Generador de prompts con IA | El borrador lo genera el sistema a partir del perfil, con un criterio por requisito y sin IA. La IA interviene después y solo para mejorar la redacción de los criterios que ya existen | Garantiza que el prompt no contenga requisitos que no estén en el perfil (sección 11.3) y que el flujo funcione aunque no haya proveedor configurado |
 | Tablas `prompt_version_layers` y `rubric_versions` | Las capas van en una columna JSON de `ai.prompt_versions` y la rúbrica forma parte de la versión del prompt (`ai.rubric_criteria`) | Son diez capas fijas y siempre se leen juntas; un prompt y su rúbrica se aprueban como una sola cosa |
 | Tablas `cv_processing_batches`, `cv_documents`, `cv_evaluations` y `cv_evaluation_scores` | Dos tablas: `ai.cv_batches` y `ai.cv_batch_items`. El resultado de cada CV (niveles, evidencias, justificaciones) va en una columna JSON del CV del lote | Hasta la Fase 5 no existen candidatos ni postulaciones a los que enlazar una evaluación; ahí se decide si los niveles pasan a tabla propia |
 | Un estado por cada uno de los 15 pasos de la sección 12.1 | Cada CV guarda el último paso completado (`RECIBIDO`, `TEXTO_EXTRAIDO`, `ANALIZADO`, `CALIFICADO`), su estado y, si falló, el código del error | Recibir, validar, guardar y calcular el hash ya tienen sus estados en `files.file_assets`; los archivos generados son del lote, no del CV |
@@ -187,6 +191,7 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - El costo es una estimación con el precio capturado; no se concilia con la factura del proveedor.
 - El perfil y el prompt se abren dentro de la pantalla de Vacantes: no tienen dirección propia, así que al recargar la página se vuelve a la lista.
 - Una versión de perfil anterior se ve en la lista de versiones, pero no se puede abrir para leer su contenido.
+- La propuesta de la IA para el perfil sustituye lo que haya en el formulario; no hay vista de comparación campo por campo.
 - Las exportaciones de un lote que se reintenta se vuelven a generar; las anteriores se conservan en el servidor y en `files.file_assets`, pero la pantalla solo enlaza las más recientes.
 - En el Excel, el nombre del criterio no aparece si la versión del prompt se eliminara; hoy las versiones no se eliminan.
 - El resultado de un CV muestra el código del criterio (C1, C2…) y no su nombre; el nombre sí está en el Excel.
@@ -212,6 +217,7 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - 11 nov 2026: Fase 4, segunda parte: perfiles de puesto por versiones y prompts de evaluación con rúbrica y flujo de aprobación.
 - 11 nov 2026: Fase 4, tercera parte (inicio): llamadas a los proveedores con reintentos, registro de consumo, precios por modelo y límite mensual.
 - 11 nov 2026: Fase 4, tercera parte: evaluación de CV por lotes, puntuación en Python, clasificación, Excel y ZIP, tarea del worker y pestaña «Evaluación de CV». El modo demostración trae una vacante lista para evaluar.
+- 11 nov 2026: Fase 4, cierre: llenar el perfil con IA desde un documento o texto y proponer mejoras a los criterios con IA.
 - 11 nov 2026: el servidor de desarrollo de Next.js cortaba las cargas de más de 10 MB al reenviarlas a la API; se amplió el límite a 25 MB. Lo detectó el recorrido en navegador.
 
 ## Decisiones tomadas
@@ -235,6 +241,6 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 ## Próximos pasos
 
 1. Validar contra SQL Server en cuanto exista una instancia.
-2. Fase 4, cierre: extracción del perfil desde un archivo y propuesta de criterios con IA.
+2. Diseñar las pantallas de la Fase 5.
 3. Fase 5: expedientes y postulaciones a partir de los CV evaluados (con la extracción estructurada y la permanencia laboral), etapas, bancos de preguntas y llamadas.
 4. Acordar con Sistemas si el servidor tendrá OCR y conversión de DOC.

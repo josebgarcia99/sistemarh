@@ -12,6 +12,7 @@ from fastapi import Request
 from app.composition.ai import env_api_keys
 from app.composition.backend import Backend, Repositories
 from app.composition.cv_processing import AiEvaluator, ApprovedRubrics, StoredCvFiles
+from app.composition.evaluation_ai import AiAssistant, StoredProfileSources
 from app.composition.file_access import VacancyFileAccessPolicy
 from app.core.clock import Clock
 from app.core.config.settings import Environment, Settings
@@ -91,7 +92,12 @@ class AppContext:
 
     def evaluation_setup(self, repos: Repositories) -> EvaluationSetupService:
         return EvaluationSetupService(
-            repos.evaluation_setup, VacancyAccess(repos.vacancies), self.audit(repos), self.clock
+            repos.evaluation_setup,
+            VacancyAccess(repos.vacancies),
+            self.audit(repos),
+            self.clock,
+            assistant_port=AiAssistant(self.ai_settings(repos)),
+            sources=StoredProfileSources(repos.files, self.storage),
         )
 
     def cv_batches(self, repos: Repositories) -> CvBatchService:

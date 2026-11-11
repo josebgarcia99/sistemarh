@@ -161,3 +161,17 @@ Estado al 11 de noviembre de 2026.
 | Auditoría | Creación, fin, reanudación y cancelación de cada lote, y cada exportación generada con su tamaño y su SHA-256 |
 
 **Sin verificar:** nada de esto se ha ejecutado con un modelo real ni con CV reales.
+
+## Ayudas de IA para el perfil y la rúbrica (Fase 4, cierre)
+
+| Aspecto | Cómo quedó |
+| --- | --- |
+| Qué se envía | Para el perfil, el texto del documento de perfil o el texto pegado. Para la rúbrica, el perfil guardado y los nombres de los criterios. Ningún CV ni dato de candidatos |
+| Autorización | Leer un perfil desde un documento sigue la misma regla que los CV: fuera de producción exige `RECLU_AI_ALLOW_REAL_DOCUMENTS=true` |
+| Nada se guarda solo | Las dos ayudas devuelven una propuesta. La versión del perfil o el cambio en el borrador solo existen cuando una persona con acceso de colaboración los guarda |
+| La IA no añade requisitos | Del perfil solo se aceptan los once campos conocidos. De la rúbrica solo se aceptan mejoras de criterios que ya existen, con cinco niveles distintos; todo lo demás se descarta en el servidor |
+| Atributos personales | Las instrucciones piden no copiar a los requisitos condiciones de edad, sexo, estado civil, embarazo, religión, origen, apariencia, salud o discapacidad, y anotarlas como requisito que no debe usarse. Depende del modelo: la persona debe revisar la propuesta |
+| Documento como dato | El texto va delimitado y con la instrucción de no obedecer lo que diga |
+| Si la IA falla | Se informa el motivo, el consumo de la llamada queda registrado y la auditoría anota el intento como fallido |
+
+**Sin verificar:** con un modelo real.

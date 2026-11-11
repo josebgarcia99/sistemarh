@@ -25,6 +25,8 @@ Abre http://localhost:3000. La primera terminal muestra los tres usuarios de eje
 
 **Para probar la evaluación de CV.** Entra como `ana@demo.test`, abre Vacantes, elige «Analista de Nómina», pulsa «Perfil, prompt y evaluación de CV» y después la pestaña «Evaluación de CV». La vacante ya trae un prompt aprobado y cuatro CV ficticios (uno «escaneado», sin texto). Pulsa «Evaluar 4 CV» y descarga el Excel y los ZIP. Los niveles y las puntuaciones que verás son inventados por el proveedor simulado: sirven para ver la pantalla, no para juzgar la calidad de la evaluación.
 
+**Para probar las ayudas de IA.** En «Auxiliar Contable» abre «Perfil, prompt y evaluación de CV», pulsa «Llenar con IA desde un documento», elige «Perfil Auxiliar Contable.docx» y pulsa «Leer con IA». Guarda el perfil, ve a «Prompt de evaluación», genera el borrador y pulsa «Proponer mejoras con IA». El proveedor simulado no lee el documento: devuelve siempre el mismo perfil de ejemplo.
+
 Si ya lo habías instalado antes, repite `pip install -r apps/api/requirements.lock`: se añadieron bibliotecas para leer PDF y generar el Excel.
 
 **Qué es y qué no es.** Arranca la API real con los datos en memoria (el mismo motor de las pruebas automáticas), tres usuarios y tres vacantes ficticias, y proveedores de IA simulados. Todo se borra al cerrar. No es SQL Server, no valida nada de SQL Server y no sustituye a la base de datos real en ningún entorno. Se niega a arrancar si `RECLU_ENVIRONMENT` es `production` e ignora cualquier otra variable `RECLU_`.

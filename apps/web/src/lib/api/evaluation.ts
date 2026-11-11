@@ -51,7 +51,47 @@ const profileVersionSchema = z.object({
 });
 export type ProfileVersion = z.infer<typeof profileVersionSchema>;
 export type ProfileInput = Record<ProfileTextField, string> &
-  Record<ProfileListField, string[]> & { change_note: string | null; expected_version: number };
+  Record<ProfileListField, string[]> & {
+    change_note: string | null;
+    expected_version: number;
+    /** La persona partió de una propuesta de la IA y la revisó. */
+    from_ai?: boolean;
+    /** Documento de la vacante del que salió la propuesta. */
+    source_file_id?: string | null;
+  };
+
+const profileProposalSchema = z.object({
+  objective: z.string(),
+  experience: z.string(),
+  education: z.string(),
+  functions: items,
+  responsibilities: items,
+  knowledge: items,
+  skills: items,
+  certifications: items,
+  must_have: items,
+  nice_to_have: items,
+  ambiguities: items,
+  truncated: z.boolean(),
+  source_file_id: z.string().nullable(),
+});
+/** Perfil propuesto por la IA. No está guardado. */
+export type ProfileProposal = z.infer<typeof profileProposalSchema>;
+
+const criteriaProposalSchema = z.object({
+  suggestions: z.array(
+    z.object({
+      id: z.string(),
+      code: z.string(),
+      name: z.string(),
+      description: z.string(),
+      levels: z.array(z.string()).length(5),
+    }),
+  ),
+  observations: z.array(z.string()),
+});
+/** Mejoras de redacción propuestas por la IA. No están guardadas. */
+export type CriteriaProposal = z.infer<typeof criteriaProposalSchema>;
 
 export const promptStatusSchema = z.enum(["BORRADOR", "EN_REVISION", "APROBADO", "ARCHIVADO"]);
 export type PromptStatus = z.infer<typeof promptStatusSchema>;
@@ -156,4 +196,23 @@ export function promptAction(
 
 export function duplicatePrompt(id: string): Promise<PromptVersion> {
   return apiFetch(`/prompts/${id}/duplicate`, { method: "POST", schema: promptSchema });
+}
+
+/** La IA lee un perfil desde un documento de la vacante o desde un texto pegado. */
+export function extractProfile(
+  vacancyId: string,
+  source: { fileId: string } | { text: string },
+): Promise<ProfileProposal> {
+  return apiFetch(`/vacancies/${vacancyId}/profile-extractions`, {
+    method: "POST",
+    body: "fileId" in source ? { file_id: source.fileId } : { text: source.text },
+    schema: profileProposalSchema,
+  });
+}
+
+export function proposeCriteria(promptId: string): Promise<CriteriaProposal> {
+  return apiFetch(`/prompts/${promptId}/criteria-proposals`, {
+    method: "POST",
+    schema: criteriaProposalSchema,
+  });
 }

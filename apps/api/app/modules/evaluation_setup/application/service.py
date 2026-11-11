@@ -9,24 +9,59 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
 
-from app.core.exceptions.errors import ConflictError, NotFoundError, ValidationFailedError
+from app.core.exceptions.errors import (
+    ConflictError,
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationFailedError,
+)
 from app.core.ids import new_sequential_uuid
 from app.modules.audit.application.service import AuditLog
-from app.modules.audit.domain.models import AuditAction
-from app.modules.evaluation_setup.domain import generator
+from app.modules.audit.domain.models import AuditAction, AuditResult
+from app.modules.evaluation_setup.domain import assistant, generator
 from app.modules.evaluation_setup.domain.models import (
     EvaluationSetupRepository,
+    ProfileContent,
     ProfileOrigin,
     ProfileVersion,
     PromptStatus,
     PromptVersion,
 )
+from app.modules.evaluation_setup.domain.ports import (
+    PROFILE_ANALYSIS,
+    PROMPT_GENERATION,
+    Assistant,
+    AssistantAnswer,
+    ProfileSourceError,
+    ProfileSources,
+)
 from app.modules.vacancies.application.access import VacancyAccess
 from app.modules.vacancies.domain.models import AccessLevel, UserInfo
+
+
+@dataclass(frozen=True)
+class ProfileProposal:
+    """Perfil propuesto por la IA. No está guardado: la persona lo revisa.
+    Si la IA falló, ``error`` lo explica y ``content`` va vacío."""
+
+    content: ProfileContent | None
+    truncated: bool
+    source_file_id: uuid.UUID | None
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class CriteriaProposal:
+    suggestions: assistant.CriteriaSuggestions | None
+    error: str | None = None
+
+
+_NO_ASSISTANT = "La ayuda de IA no está disponible en esta instalación."
+_BAD_ANSWER = "La IA no devolvió una propuesta utilizable. Inténtalo de nuevo o captúralo a mano."
 
 
 class EvaluationSetupService:
@@ -36,11 +71,16 @@ class EvaluationSetupService:
         access: VacancyAccess,
         audit: AuditLog,
         clock: Callable[[], datetime],
+        *,
+        assistant_port: Assistant | None = None,
+        sources: ProfileSources | None = None,
     ) -> None:
         self._repo = repository
         self._access = access
         self._audit = audit
         self._clock = clock
+        self._assistant = assistant_port
+        self._sources = sources
 
     # --- Perfil --------------------------------------------------------------------------
 
@@ -56,10 +96,20 @@ class EvaluationSetupService:
         *,
         change_note: str | None,
         expected_version: int,
+        from_ai: bool = False,
+        source_file_id: uuid.UUID | None = None,
         ip: str | None = None,
     ) -> ProfileVersion:
-        """Guarda el perfil como una versión nueva. Las anteriores no cambian."""
+        """Guarda el perfil como una versión nueva. Las anteriores no cambian.
+
+        ``from_ai`` indica que la persona partió de una propuesta de la IA y la
+        revisó; ``source_file_id`` es el documento del que salió, si lo hubo."""
         self._access.require(actor, vacancy_id, AccessLevel.COLABORACION)
+        if source_file_id is not None and (
+            self._sources is None
+            or not self._sources.is_profile_document(vacancy_id, source_file_id)
+        ):
+            raise ValidationFailedError("El documento de origen no es un perfil de esta vacante.")
         try:
             content = generator.validate_profile(data)
         except generator.SetupValidationError as error:
@@ -76,10 +126,10 @@ class EvaluationSetupService:
             id=new_sequential_uuid(),
             vacancy_id=vacancy_id,
             version_number=latest + 1,
-            origin=ProfileOrigin.MANUAL,
+            origin=ProfileOrigin.IA if from_ai else ProfileOrigin.MANUAL,
             content=content,
             change_note=" ".join((change_note or "").split())[:300] or None,
-            source_file_id=None,
+            source_file_id=source_file_id,
             created_at=self._clock(),
             created_by=actor.id,
         )
@@ -90,9 +140,140 @@ class EvaluationSetupService:
             resource_type="vacante",
             resource_id=vacancy_id,
             ip=ip,
-            details={"version": version.version_number},
+            details={"version": version.version_number, "origen": version.origin.value},
         )
         return version
+
+    # --- Ayudas de IA --------------------------------------------------------------------
+
+    def _ask(
+        self,
+        operation: str,
+        actor: UserInfo,
+        vacancy_id: uuid.UUID,
+        *,
+        system: str,
+        user: str,
+        carries_document: bool,
+    ) -> AssistantAnswer:
+        if self._assistant is None:
+            raise ServiceUnavailableError(_NO_ASSISTANT)
+        return self._assistant.ask(
+            operation,
+            system=system,
+            user=user,
+            vacancy_id=vacancy_id,
+            actor_user_id=actor.id,
+            carries_document=carries_document,
+        )
+
+    def extract_profile(
+        self,
+        actor: UserInfo,
+        vacancy_id: uuid.UUID,
+        *,
+        file_id: uuid.UUID | None = None,
+        text: str | None = None,
+        ip: str | None = None,
+    ) -> ProfileProposal:
+        """Pide a la IA que lea un perfil (documento de la vacante o texto pegado)
+        y lo devuelve como propuesta. No guarda ninguna versión."""
+        self._access.require(actor, vacancy_id, AccessLevel.COLABORACION)
+        if (file_id is None) == (text is None):
+            raise ValidationFailedError("Elige un documento o pega el texto del perfil.")
+        truncated = False
+        if file_id is not None:
+            if self._sources is None:
+                raise ServiceUnavailableError(_NO_ASSISTANT)
+            try:
+                source, truncated = self._sources.read_text(vacancy_id, file_id)
+            except ProfileSourceError as error:
+                raise ValidationFailedError(str(error)) from error
+        else:
+            source = "\n".join(line.rstrip() for line in (text or "").strip().splitlines())
+            if len(source) < assistant.MIN_SOURCE_CHARS:
+                raise ValidationFailedError(
+                    f"El texto es muy corto: pega al menos {assistant.MIN_SOURCE_CHARS} letras."
+                )
+            truncated = len(source) > assistant.MAX_SOURCE_CHARS
+            source = source[: assistant.MAX_SOURCE_CHARS]
+        answer = self._ask(
+            PROFILE_ANALYSIS,
+            actor,
+            vacancy_id,
+            system=assistant.PROFILE_SYSTEM,
+            user=assistant.profile_request(source, truncated),
+            # Fuera de producción, enviar documentos requiere autorización expresa.
+            carries_document=True,
+        )
+        content, error = None, None
+        if not answer.ok:
+            error = answer.error or "El proveedor de IA no respondió."
+        else:
+            try:
+                if not answer.complete:
+                    raise assistant.InvalidAnswerError("Respuesta incompleta.")
+                content = assistant.profile_from_answer(answer.text)
+            except assistant.InvalidAnswerError:
+                error = _BAD_ANSWER
+        self._audit.record(
+            AuditAction.PERFIL_EXTRAIDO_CON_IA,
+            result=AuditResult.PERMITIDO if content else AuditResult.FALLIDO,
+            actor_user_id=actor.id,
+            resource_type="vacante",
+            resource_id=vacancy_id,
+            ip=ip,
+            details={
+                "origen": "documento" if file_id else "texto",
+                "documento": str(file_id or ""),
+            },
+        )
+        return ProfileProposal(content, truncated, file_id, error)
+
+    def propose_criteria(
+        self, actor: UserInfo, version_id: uuid.UUID, *, ip: str | None = None
+    ) -> CriteriaProposal:
+        """Pide a la IA una mejor redacción de los criterios de un borrador. No
+        guarda nada y no puede añadir criterios ni requisitos."""
+        version = self._load(actor, version_id, AccessLevel.COLABORACION)
+        if version.status is not PromptStatus.BORRADOR:
+            raise ConflictError("Solo se proponen mejoras sobre un borrador.")
+        if not version.criteria:
+            raise ValidationFailedError("La rúbrica no tiene criterios que mejorar.")
+        profile = self._repo.profile_version(version.profile_version_id)
+        if profile is None:
+            raise NotFoundError("El perfil del que salió este prompt ya no existe.")
+        answer = self._ask(
+            PROMPT_GENERATION,
+            actor,
+            version.vacancy_id,
+            system=assistant.CRITERIA_SYSTEM,
+            user=assistant.criteria_request(profile.content, version.criteria),
+            carries_document=False,
+        )
+        suggestions, error = None, None
+        if not answer.ok:
+            error = answer.error or "El proveedor de IA no respondió."
+        else:
+            try:
+                if not answer.complete:
+                    raise assistant.InvalidAnswerError("Respuesta incompleta.")
+                suggestions = assistant.criteria_from_answer(answer.text, version.criteria)
+            except assistant.InvalidAnswerError:
+                error = _BAD_ANSWER
+        self._audit.record(
+            AuditAction.PROMPT_CRITERIOS_PROPUESTOS,
+            result=AuditResult.PERMITIDO if suggestions else AuditResult.FALLIDO,
+            actor_user_id=actor.id,
+            resource_type="prompt",
+            resource_id=version.id,
+            ip=ip,
+            details={
+                "vacante": str(version.vacancy_id),
+                "criterios": len(suggestions.suggestions) if suggestions else 0,
+            },
+        )
+        return CriteriaProposal(suggestions, error)
 
     # --- Prompts: consulta ---------------------------------------------------------------
 

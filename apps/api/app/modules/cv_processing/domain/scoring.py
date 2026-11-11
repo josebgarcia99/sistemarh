@@ -8,11 +8,12 @@ sepa que no hubo evidencia (que no es lo mismo que no cumplir).
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
+
+from app.core.ai_json import parse_json_object
 
 QUALITY_ASPECTS = (
     "redaccion",
@@ -24,7 +25,6 @@ QUALITY_ASPECTS = (
 )
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"(?<![\w/.-])(?:\+?\d[\s().-]{0,2}){9,14}\d(?![\w/-])")
-_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 
 
 class Classification(StrEnum):
@@ -69,14 +69,10 @@ def mask_contacts(text: str) -> str:
 
 
 def parse_json(text: str) -> dict[str, object]:
-    cleaned = _FENCE.sub("", text.strip()).strip()
     try:
-        payload = json.loads(cleaned)
+        return parse_json_object(text)
     except ValueError as error:
-        raise InvalidResponseError("La respuesta no es JSON válido.") from error
-    if not isinstance(payload, dict):
-        raise InvalidResponseError("La respuesta no es un objeto JSON.")
-    return payload
+        raise InvalidResponseError("La respuesta no es un objeto JSON válido.") from error
 
 
 def _text(value: object, limit: int) -> str:
