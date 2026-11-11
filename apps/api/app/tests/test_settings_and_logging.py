@@ -56,8 +56,8 @@ def test_se_admite_sql_server_con_pyodbc():
 @pytest.mark.parametrize(
     ("texto", "secreto"),
     [
-        ("clave sk-ant-api03-CLAVE-FICTICIA-DE-PRUEBA-0000 usada", "sk-ant-api03-CLAVE-FICTICIA-DE-PRUEBA-0000"),
-        ("clave sk-proj-CLAVE-FICTICIA-DE-PRUEBA-0000 usada", "sk-proj-CLAVE-FICTICIA-DE-PRUEBA-0000"),
+        ("clave sk-ant-api03-CLAVE-FICTICIA-0000 usada", "sk-ant-api03-CLAVE-FICTICIA-0000"),
+        ("clave sk-proj-CLAVE-FICTICIA-0000 usada", "sk-proj-CLAVE-FICTICIA-0000"),
         ("Authorization: Bearer abcdef1234567890.token", "abcdef1234567890.token"),
         ("password=MiClave!2026 enviada", "MiClave!2026"),
         ('{"api_key": "valor-muy-secreto"}', "valor-muy-secreto"),
