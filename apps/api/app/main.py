@@ -27,6 +27,7 @@ from app.modules.ai_settings.domain.models import ProviderClient, ProviderCode
 from app.modules.audit.api.router import router as audit_router
 from app.modules.authentication.api.router import router as auth_router
 from app.modules.authentication.domain.models import AuthPolicy
+from app.modules.evaluation_setup.api.router import router as evaluation_setup_router
 from app.modules.file_management.api.router import router as files_router
 from app.modules.system.api.router import router as system_router
 from app.modules.system.application.health import HealthCheck
@@ -133,6 +134,7 @@ def create_app(
     api.include_router(transfers_router)
     api.include_router(files_router)
     api.include_router(ai_router)
+    api.include_router(evaluation_setup_router)
     api.include_router(audit_router)
     app.include_router(api)
     return app

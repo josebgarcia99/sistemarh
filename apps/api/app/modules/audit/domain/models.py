@@ -45,6 +45,14 @@ class AuditAction(StrEnum):
     IA_CONEXION_PROBADA = "ia.conexion_probada"
     IA_PROVEEDOR_ACTUALIZADO = "ia.proveedor_actualizado"
     IA_MODELO_ASIGNADO = "ia.modelo_asignado"
+    PERFIL_VERSION_CREADA = "perfil.version_creada"
+    PROMPT_GENERADO = "prompt.generado"
+    PROMPT_EDITADO = "prompt.editado"
+    PROMPT_ENVIADO_A_REVISION = "prompt.enviado_a_revision"
+    PROMPT_DEVUELTO = "prompt.devuelto_a_borrador"
+    PROMPT_APROBADO = "prompt.aprobado"
+    PROMPT_ARCHIVADO = "prompt.archivado"
+    PROMPT_DUPLICADO = "prompt.duplicado"
 
 
 @dataclass(frozen=True)

@@ -21,9 +21,11 @@ from app.modules.ai_settings.domain.models import ProviderClient, ProviderCode
 from app.modules.audit.application.service import AuditLog
 from app.modules.authentication.application.service import AuthService
 from app.modules.authentication.domain.models import AuthPolicy
+from app.modules.evaluation_setup.application.service import EvaluationSetupService
 from app.modules.file_management.application.reconciliation import StorageReconciler
 from app.modules.file_management.application.service import FileService, UploadPipeline
 from app.modules.users.application.service import UserService
+from app.modules.vacancies.application.access import VacancyAccess
 from app.modules.vacancies.application.service import VacancyService
 from app.modules.vacancy_transfers.application.service import TransferService
 
@@ -77,6 +79,11 @@ class AppContext:
 
     def reconciler(self, repos: Repositories) -> StorageReconciler:
         return StorageReconciler(repos.files, self.require_storage(), self.audit(repos), self.clock)
+
+    def evaluation_setup(self, repos: Repositories) -> EvaluationSetupService:
+        return EvaluationSetupService(
+            repos.evaluation_setup, VacancyAccess(repos.vacancies), self.audit(repos), self.clock
+        )
 
     def ai_settings(self, repos: Repositories) -> AiSettingsService:
         return AiSettingsService(

@@ -37,6 +37,7 @@ containers =
     app.modules.vacancy_transfers
     app.modules.file_management
     app.modules.ai_settings
+    app.modules.evaluation_setup
 
 [importlinter:contract:capas-system]
 name = capas del modulo system

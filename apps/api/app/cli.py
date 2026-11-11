@@ -63,7 +63,7 @@ def _build_context(backend: Backend | None = None) -> AppContext:
     )
 
 
-SCHEMA_VERSION = "0005"
+SCHEMA_VERSION = "0006"
 _SAMPLE_SIZE = 200
 
 
