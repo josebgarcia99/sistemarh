@@ -3,12 +3,13 @@ root_package = app
 
 # El núcleo y la infraestructura compartida no conocen los módulos de negocio.
 [importlinter:contract:core-sin-modulos]
-name = core no depende de modules
+name = core no depende de modules ni de composition
 type = forbidden
 source_modules =
     app.core
 forbidden_modules =
     app.modules
+    app.composition
 
 [importlinter:contract:infraestructura-sin-modulos]
 name = infrastructure compartida no depende de modules
@@ -17,8 +18,22 @@ source_modules =
     app.infrastructure
 forbidden_modules =
     app.modules
+    app.composition
 
 # Dentro de cada módulo las dependencias apuntan hacia el dominio.
+[importlinter:contract:capas-de-los-modulos]
+name = capas de cada modulo (api > infrastructure > application > domain)
+type = layers
+layers =
+    api
+    infrastructure
+    application
+    domain
+containers =
+    app.modules.users
+    app.modules.authentication
+    app.modules.audit
+
 [importlinter:contract:capas-system]
 name = capas del modulo system
 type = layers
@@ -27,4 +42,27 @@ layers =
     infrastructure
     application
 containers =
+    app.modules.system
+
+# Reglas de negocio independientes: auditoría no conoce a nadie y usuarios no
+# conoce las sesiones (usa su propio puerto SessionRevoker).
+[importlinter:contract:auditoria-independiente]
+name = el dominio de audit no depende de otros modulos
+type = forbidden
+source_modules =
+    app.modules.audit.domain
+    app.modules.audit.application
+forbidden_modules =
+    app.modules.users
+    app.modules.authentication
+    app.modules.system
+
+[importlinter:contract:usuarios-sin-sesiones]
+name = el dominio de users no depende de authentication
+type = forbidden
+source_modules =
+    app.modules.users.domain
+    app.modules.users.application
+forbidden_modules =
+    app.modules.authentication
     app.modules.system

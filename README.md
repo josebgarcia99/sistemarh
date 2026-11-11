@@ -2,7 +2,7 @@
 
 Plataforma web para gestionar el proceso completo de reclutamiento: vacantes, análisis de CV con IA, etapas, llamadas, pruebas, estudios, expedientes y contratación. La IA clasifica y resume; las decisiones las registra una persona.
 
-**Estado actual: Fase 1 (fundamentos).** Lo que existe y lo que falta está en [`docs/estado_proyecto.md`](docs/estado_proyecto.md).
+**Estado actual: Fase 2 en curso.** Funcionan el inicio de sesión y la administración de usuarios. Lo que existe y lo que falta está en [`docs/estado_proyecto.md`](docs/estado_proyecto.md).
 
 ## Arquitectura en una línea
 
@@ -23,7 +23,7 @@ docs/         Arquitectura, permisos, base de datos, seguridad, pruebas, desplie
 
 ## Puesta en marcha local
 
-Requisitos: Python 3.12 o posterior, Node.js 22 o posterior. SQL Server y Redis son opcionales en esta fase: sin ellos el sistema arranca y los reporta como "sin configurar".
+Requisitos: Python 3.12 o posterior, Node.js 22 o posterior y un SQL Server 2022 con Microsoft ODBC Driver 18. Redis solo hace falta para el worker.
 
 ```bash
 # 1. Configuración
@@ -40,7 +40,7 @@ cd apps/api && uvicorn app.main:app --reload --port 8000
 cd apps/web && npm ci && npm run dev
 ```
 
-Abre http://localhost:3000. La pantalla muestra si la API, SQL Server, Redis y el almacenamiento responden.
+Abre http://localhost:3000. Para iniciar sesión necesitas SQL Server y haber creado tu usuario maestro; los pasos están en la guía de instalación.
 
 Guía completa, incluido Docker Compose y el worker: [`docs/deployment/instalacion_local.md`](docs/deployment/instalacion_local.md).
 

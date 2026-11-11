@@ -42,14 +42,14 @@ Las 8 maquetas ya diseñadas cubren 11 de las 26 pantallas obligatorias; las 15 
 
 | Pantalla | Contenido principal | Diseño |
 | --- | --- | --- |
-| Inicio de sesión | Correo, contraseña y cambio obligatorio en el primer ingreso | Pendiente |
+| Inicio de sesión | Correo y contraseña | Hecho (construida) |
 | Dashboard | Indicadores, embudo por etapa, actividad y pendientes | Hecho |
 | Mis vacantes | Lista con estado, colaboradores, posiciones y candidatos | Hecho |
 | Vacantes compartidas | Lista con responsable y tipo de acceso | Hecho, en la misma pantalla |
 | Administración de vacantes | Alta y edición, estados, convocatorias | Pendiente |
 | Compartir vacante | Colaboradores, tipo de acceso, permisos de documentos sensibles | Hecho, como panel lateral |
 | Transferir vacante | Transferencia individual y asistente de transferencia masiva | Pendiente |
-| Usuarios | Alta, invitación, rol, activación y baja | Pendiente |
+| Usuarios | Alta con contraseña, rol, restablecer contraseña, baja y reactivación | Hecho (construida) |
 | Perfiles | Carga, extracción con IA, corrección humana y versiones | Pendiente |
 | Generador de prompts | Diez capas, avisos de calidad, versiones y aprobación | Hecho |
 | Evaluación de CV | Carga masiva, pasos del lote, incidencias | Hecho |

@@ -9,7 +9,7 @@ El modelo tiene 70 tablas en 10 dominios. Parte de tu lista, elimina una tabla r
 
 **Convenciones**
 
-- Clave primaria `UNIQUEIDENTIFIER` con `NEWSEQUENTIALID()` para limitar la fragmentación.
+- Clave primaria `UNIQUEIDENTIFIER` con un identificador secuencial generado por la aplicación (`app/core/ids.py`), para limitar la fragmentación y conocer el identificador antes de insertar.
 - Fechas en `DATETIME2(3)` y en UTC; la interfaz las muestra en America/Mexico\_City.
 - Texto en `NVARCHAR`; puntuaciones en `DECIMAL(5,2)`; costos en `DECIMAL(12,6)`.
 - `ROWVERSION` en las tablas editables, para control de concurrencia optimista.

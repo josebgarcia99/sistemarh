@@ -72,6 +72,31 @@ docker compose --env-file .env -f infrastructure/docker/docker-compose.dev.yml u
 
 Para añadir un SQL Server 2022 local de desarrollo define `MSSQL_SA_PASSWORD` en `.env` y agrega `--profile sqlserver-local`. Usar esa imagen implica aceptar la licencia de Microsoft.
 
+## Base de datos y usuario maestro
+
+El inicio de sesión y los usuarios necesitan SQL Server. Sin `RECLU_DATABASE_URL`, la API arranca pero responde "servicio no disponible" en esas rutas.
+
+1. **Ten un SQL Server 2022 a mano.** Puede ser la base de pruebas que habilite Sistemas o el contenedor local de la opción B (`--profile sqlserver-local`). Crea en él una base vacía, por ejemplo `reclutamiento`.
+2. **Instala Microsoft ODBC Driver 18 for SQL Server** en tu equipo (no hace falta si usas Docker para la API).
+3. **Define la conexión** en `.env`:
+   ```
+   RECLU_DATABASE_URL=mssql+pyodbc://<USUARIO>:<CONTRASENA>@<SERVIDOR>:1433/reclutamiento?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes
+   ```
+   `TrustServerCertificate=yes` solo es aceptable en desarrollo local.
+4. **Crea las tablas:**
+   ```bash
+   cd database
+   alembic upgrade head
+   ```
+5. **Crea tu usuario maestro** (una sola vez):
+   ```bash
+   cd apps/api
+   python -m app.cli create-admin
+   ```
+   El comando pregunta tu correo, tu nombre completo y la contraseña que tú elijas (mínimo 12 caracteres). La contraseña no se muestra, no se guarda en ningún archivo y nadie más la conoce. Si ya existe un administrador, el comando se niega: los demás usuarios se crean desde la pantalla **Usuarios**.
+
+> Estos cinco pasos están escritos pero **no se han ejecutado contra un SQL Server real**. Si alguno falla, el mensaje de error indica el motivo; repórtalo para corregirlo.
+
 ## Migraciones de base de datos
 
 ```bash
@@ -80,7 +105,9 @@ alembic upgrade head            # requiere RECLU_DATABASE_URL
 alembic upgrade head --sql      # genera el T-SQL sin conectarse, para revisión
 ```
 
-Todavía no hay migraciones: las tablas se crean a partir de la Fase 2.
+La migración `0001` crea los esquemas `auth` y `ops` con usuarios, roles, sesiones y auditoría.
+
+Para que la auditoría sea inalterable, Sistemas debe negar `UPDATE` y `DELETE` sobre `ops.audit_events` al usuario de base de datos de la aplicación.
 
 ## Depuración en Visual Studio Code
 

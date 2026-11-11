@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.core.config.settings import Environment, Settings
 from app.core.exceptions.errors import ConflictError, NotFoundError
 from app.main import create_app
+from app.tests.support.memory_backend import MemoryBackend
 
 HEADER = "X-Correlation-ID"
 
@@ -101,6 +102,7 @@ def test_la_documentacion_no_se_publica_en_produccion(tmp_path):
         redis_url="redis://redis:6379/0",
         storage_root=tmp_path,
     )
-    client = TestClient(create_app(settings=settings, health_checks={"x": lambda: True}))
+    app = create_app(settings=settings, health_checks={"x": lambda: True}, backend=MemoryBackend())
+    client = TestClient(app)
     assert client.get("/api/v1/docs").status_code == 404
     assert client.get("/api/v1/openapi.json").status_code == 404

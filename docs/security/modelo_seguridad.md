@@ -28,7 +28,7 @@ Las sesiones se guardan en SQL Server y viajan en una cookie `HttpOnly`. Así, d
 | --- | --- |
 | Roles | `ADMINISTRADOR` y `RECLUTADOR`, en tablas `roles` y `user_roles` para poder añadir después el rol de gerente sin migrar usuarios. |
 | Alta | Solo el administrador crea usuarios, con correo, nombre completo y contraseña inicial. No hay registro público ni envío de correos. |
-| Contraseña inicial | La contraseña inicial la define el administrador al crear la cuenta. El sistema pide cambiarla en el primer inicio de sesión, para que no quede una contraseña predeterminada permanente. |
+| Contraseña inicial | La contraseña inicial la define el administrador al crear la cuenta. El usuario la conserva hasta que el administrador la restablezca, por decisión del 10 nov 2026. |
 | Contraseñas | Hash Argon2id. Mínimo de 12 caracteres y rechazo de contraseñas comunes. |
 | Sesión | Identificador aleatorio guardado como hash en `sessions`. Cookie `HttpOnly`, `Secure` y `SameSite=Lax`. Caduca a los 30 minutos sin actividad y a las 12 horas en total. |
 | CSRF | Token por sesión exigido en toda operación que modifica datos. |

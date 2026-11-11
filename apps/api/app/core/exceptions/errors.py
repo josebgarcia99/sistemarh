@@ -48,6 +48,38 @@ class ConflictError(AppError):
     title = "El recurso cambió o ya existe"
 
 
+class ValidationFailedError(AppError):
+    status_code = 422
+    code = "validacion"
+    title = "Datos no válidos"
+
+
+class NotAuthenticatedError(AppError):
+    status_code = 401
+    code = "no_autenticado"
+    title = "Inicia sesión para continuar"
+
+
+class InvalidCredentialsError(AppError):
+    # Mismo mensaje para correo inexistente, contraseña errónea, cuenta inactiva
+    # o bloqueada: no se revela cuál fue el motivo.
+    status_code = 401
+    code = "credenciales_invalidas"
+    title = "Correo o contraseña incorrectos"
+
+
+class CsrfError(AppError):
+    status_code = 403
+    code = "csrf"
+    title = "Solicitud no verificada"
+
+
+class ServiceUnavailableError(AppError):
+    status_code = 503
+    code = "servicio_no_disponible"
+    title = "Servicio no disponible"
+
+
 def build_problem(
     status: int, code: str, title: str, detail: str, **extra: object
 ) -> dict[str, object]:

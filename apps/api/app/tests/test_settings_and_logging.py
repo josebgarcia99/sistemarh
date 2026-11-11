@@ -48,9 +48,7 @@ def test_solo_se_admite_sql_server_con_pyodbc(url):
 
 
 def test_se_admite_sql_server_con_pyodbc():
-    validate_database_url(
-        "mssql+pyodbc://u:p@servidor/base?driver=ODBC+Driver+18+for+SQL+Server"
-    )
+    validate_database_url("mssql+pyodbc://u:p@servidor/base?driver=ODBC+Driver+18+for+SQL+Server")
 
 
 @pytest.mark.parametrize(
