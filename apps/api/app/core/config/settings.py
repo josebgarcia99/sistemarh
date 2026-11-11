@@ -57,8 +57,12 @@ class Settings(BaseSettings):
     clamd_host: str = "clamav"
     clamd_port: int = Field(default=3310, gt=0, lt=65536)
 
-    # Hasta que exista el cifrado por archivo (decisión 8), los documentos de
-    # clase sensible no se aceptan. Solo para desarrollo con datos sintéticos.
+    # Archivo con la clave maestra (AES-256), fuera de SQL Server y del
+    # repositorio. Cifra las API keys de IA y los documentos de clase sensible.
+    master_key_file: Path | None = None
+
+    # Sin clave maestra, los documentos de clase sensible no se aceptan. Esta
+    # opción los admite sin cifrar; solo para desarrollo con datos sintéticos.
     allow_unencrypted_sensitive_files: bool = False
 
     @model_validator(mode="after")
@@ -71,6 +75,7 @@ class Settings(BaseSettings):
                     ("RECLU_REDIS_URL", self.redis_url),
                     ("RECLU_STORAGE_ROOT", self.storage_root),
                     ("RECLU_ANTIVIRUS_MODE", self.antivirus_mode),
+                    ("RECLU_MASTER_KEY_FILE", self.master_key_file),
                 )
                 if value is None
             ]

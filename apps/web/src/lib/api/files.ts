@@ -20,16 +20,8 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   ADJUNTO: "Adjunto",
 };
 
-/**
- * Tipos que se pueden cargar hoy. Psicometría y estudios socioeconómicos se
- * habilitan cuando exista su cifrado por archivo.
- */
-export const UPLOADABLE_TYPES: DocumentType[] = [
-  "CV",
-  "PERFIL_PUESTO",
-  "PRUEBA_TECNICA",
-  "ADJUNTO",
-];
+/** Tipos que exigen un permiso adicional y se guardan cifrados. */
+export const SENSITIVE_TYPES: DocumentType[] = ["PSICOMETRIA", "ESTUDIO_SOCIOECONOMICO"];
 
 export const ACCEPTED_EXTENSIONS = [
   ".pdf",
@@ -51,6 +43,7 @@ const storedFileSchema = z.object({
   size_bytes: z.number().nullable(),
   sha256: z.string().nullable(),
   malware_scan: z.string().nullable(),
+  encrypted: z.boolean(),
   uploaded_by: z.string(),
   uploaded_by_name: z.string().nullable(),
   created_at: z.string(),

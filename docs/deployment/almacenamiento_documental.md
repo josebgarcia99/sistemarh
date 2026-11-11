@@ -51,7 +51,8 @@ Estado al 11 de noviembre de 2026. Probado con archivos sintéticos sobre un dis
 | Espacio | Las cargas se rechazan cuando el espacio libre baja de `RECLU_STORAGE_MIN_FREE_BYTES` (1 GB por omisión) |
 | Antivirus | `RECLU_ANTIVIRUS_MODE=clamd` con un ClamAV en el propio servidor (`RECLU_CLAMD_HOST`, `RECLU_CLAMD_PORT`), o `disabled`. En producción hay que elegir de forma expresa. Si está en `clamd` y el antivirus no responde, la carga se rechaza: no se guarda nada sin analizar |
 | Proxy inverso | Debe permitir cuerpos de petición de al menos 20 MB hacia `/api/` (en Nginx, `client_max_body_size 25m`) |
-| Cifrado | Cifrado del volumen a cargo de Sistemas (decisión 8) |
+| Cifrado | Cifrado del volumen a cargo de Sistemas (decisión 8). Además, la aplicación cifra por archivo los documentos sensibles con la clave maestra |
+| Clave maestra | Un archivo creado con `python -m app.cli generate-master-key`, fuera del repositorio, montado como solo lectura en la API y respaldado por separado |
 
 ### Qué acepta
 
@@ -77,7 +78,7 @@ Devuelve código 0 si el disco y la base coinciden y 2 si no. Hace lo descrito a
 
 ### Pendiente en esta área
 
-- **Documentos sensibles.** Psicometría y estudios socioeconómicos no se aceptan todavía: la decisión 8 exige cifrarlos archivo por archivo y ese cifrado se construye en la Fase 4, junto con la custodia de la clave maestra. El permiso adicional ya funciona y está probado con datos sintéticos.
+- **Documentos sensibles.** Desde la primera parte de la Fase 4, psicometría y estudios socioeconómicos se aceptan y se guardan cifrados archivo por archivo, siempre que la clave maestra esté configurada (`RECLU_MASTER_KEY_FILE`; ver `docs/security/modelo_seguridad.md`). Sin clave maestra se rechazan. Falta el procedimiento de rotación de la clave.
 - **Versiones de un documento** (`file_versions`): se crean cuando exista el primer documento versionado (perfiles de puesto, Fase 4).
 - **Fecha de retención:** la columna existe, pero no se aplica ninguna política hasta que el área legal la defina.
 - **Vista previa de PDF:** hoy solo hay descarga.

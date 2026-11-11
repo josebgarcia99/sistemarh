@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable, Iterator
 from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO, Protocol
@@ -19,6 +19,12 @@ class FileStorage(Protocol):
     def temp_path(self, file_id: uuid.UUID) -> Path: ...
 
     def discard_temp(self, file_id: uuid.UUID) -> None: ...
+
+    def transform_temp(
+        self, file_id: uuid.UUID, transform: Callable[[BinaryIO, BinaryIO], None]
+    ) -> tuple[int, str]:
+        """Sustituye el temporal por su versión transformada. Devuelve tamaño y SHA-256."""
+        ...
 
     def commit(self, file_id: uuid.UUID, key: str) -> None: ...
 
@@ -43,6 +49,16 @@ class FileStorage(Protocol):
     def discard_temp_by_name(self, name: str) -> None: ...
 
     def free_bytes(self) -> int: ...
+
+
+class FileCipher(Protocol):
+    """Cifrado de archivos de clase sensible."""
+
+    key_id: str
+
+    def encrypt_stream(self, source: BinaryIO, target: BinaryIO) -> None: ...
+
+    def decrypt_chunks(self, chunks: Iterable[bytes]) -> Iterator[bytes]: ...
 
 
 class ScanOutcome(Protocol):

@@ -50,7 +50,7 @@ from app.modules.file_management.domain.models import (
     FileStatus,
     MalwareScan,
 )
-from app.modules.file_management.domain.ports import FileStorage, Scanner
+from app.modules.file_management.domain.ports import FileCipher, FileStorage, Scanner
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,9 @@ class StoreOutcome:
     sha256: str | None = None
     content_type: str | None = None
     malware_scan: MalwareScan | None = None
+    stored_size_bytes: int | None = None
+    stored_sha256: str | None = None
+    encryption_key_id: str | None = None
     failure_code: str | None = None
     message: str | None = None
 
@@ -110,10 +113,17 @@ class TempReceiver:
 class UploadPipeline:
     """Pasos que no tocan SQL Server: validar, analizar y confirmar en disco."""
 
-    def __init__(self, storage: FileStorage, scanner: Scanner, max_bytes: int) -> None:
+    def __init__(
+        self,
+        storage: FileStorage,
+        scanner: Scanner,
+        max_bytes: int,
+        cipher: FileCipher | None = None,
+    ) -> None:
         self._storage = storage
         self._scanner = scanner
         self._max_bytes = max_bytes
+        self._cipher = cipher
 
     def receiver(self, asset: FileAsset) -> TempReceiver:
         return TempReceiver(self._storage, asset.id, self._max_bytes)
@@ -159,7 +169,15 @@ class UploadPipeline:
                 message="El antivirus detectó una amenaza en el archivo y no se guardó.",
             )
 
+        # El contenido ya se validó y analizado en claro; los documentos de clase
+        # sensible se cifran antes de llegar a su ubicación definitiva.
+        expected_size, expected_hash, key_id = received.size, received.sha256, None
         try:
+            if asset.sensitive_class is not None and self._cipher is not None:
+                expected_size, expected_hash = storage.transform_temp(
+                    asset.id, self._cipher.encrypt_stream
+                )
+                key_id = self._cipher.key_id
             storage.commit(asset.id, asset.storage_key)
             stored_size = storage.size(asset.storage_key)
         except Exception:
@@ -167,7 +185,7 @@ class UploadPipeline:
             return self.abort(
                 asset, "escritura_fallida", "No se pudo guardar el documento. Inténtalo de nuevo."
             )
-        if stored_size != received.size:
+        if stored_size != expected_size:
             # No se declara guardado algo cuya persistencia no se confirmó.
             logger.error("El tamaño del archivo guardado no coincide con el recibido")
             return StoreOutcome(
@@ -181,6 +199,9 @@ class UploadPipeline:
             sha256=received.sha256,
             content_type=CONTENT_TYPES[kind],
             malware_scan=MalwareScan.LIMPIO if scan.analyzed else MalwareScan.NO_ANALIZADO,
+            stored_size_bytes=expected_size,
+            stored_sha256=expected_hash,
+            encryption_key_id=key_id,
         )
 
 
@@ -195,7 +216,8 @@ class FileService:
         *,
         max_bytes: int,
         min_free_bytes: int,
-        allow_sensitive: bool,
+        encryption_available: bool,
+        allow_unencrypted_sensitive: bool = False,
     ) -> None:
         self._files = files
         self._policy = policy
@@ -204,7 +226,7 @@ class FileService:
         self._storage = storage
         self._max_bytes = max_bytes
         self._min_free_bytes = min_free_bytes
-        self._allow_sensitive = allow_sensitive
+        self._sensitive_allowed = encryption_available or allow_unencrypted_sensitive
 
     # --- Carga ---------------------------------------------------------------------------
 
@@ -219,10 +241,10 @@ class FileService:
     ) -> FileAsset:
         sensitive_class = SENSITIVE_CLASSES.get(document_type)
         self._policy.require_write(actor, vacancy_id, sensitive_class)
-        if sensitive_class is not None and not self._allow_sensitive:
+        if sensitive_class is not None and not self._sensitive_allowed:
             raise ValidationFailedError(
-                "Los documentos de psicometría y estudios socioeconómicos aún no se "
-                "aceptan: falta activar su cifrado."
+                "Los documentos de psicometría y estudios socioeconómicos se guardan "
+                "cifrados y la clave maestra no está configurada. Avisa a Sistemas."
             )
         name = sanitize_filename(original_name)
         try:
@@ -270,6 +292,9 @@ class FileService:
             asset.sha256 = outcome.sha256
             asset.content_type = outcome.content_type
             asset.malware_scan = outcome.malware_scan
+            asset.stored_size_bytes = outcome.stored_size_bytes
+            asset.stored_sha256 = outcome.stored_sha256
+            asset.encryption_key_id = outcome.encryption_key_id
             asset.confirmed_at = self._clock()
             duplicates = self._files.find_by_hash(
                 asset.vacancy_id, outcome.sha256 or "", exclude_id=asset.id
@@ -290,6 +315,7 @@ class FileService:
                 "vacante": str(asset.vacancy_id),
                 "tipo": asset.document_type.value,
                 "tamano": outcome.size_bytes,
+                "cifrado": outcome.encryption_key_id is not None,
                 "motivo": outcome.failure_code,
                 "duplicados": len(duplicates),
             },
@@ -324,7 +350,7 @@ class FileService:
         self, actor: Actor, file_id: uuid.UUID, *, ip: str | None = None
     ) -> Download:
         asset = self._authorized(actor, file_id)
-        available = self._storage.size(asset.storage_key) == asset.size_bytes
+        available = self._storage.size(asset.storage_key) == asset.stored_size_bytes
         self._audit.record(
             AuditAction.DOCUMENTO_DESCARGADO if available else AuditAction.DOCUMENTO_NO_DISPONIBLE,
             result=AuditResult.PERMITIDO if available else AuditResult.FALLIDO,

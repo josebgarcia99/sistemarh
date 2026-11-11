@@ -20,7 +20,7 @@ import os
 import re
 import shutil
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import BinaryIO
@@ -112,6 +112,30 @@ class LocalFileStorage:
 
     def discard_temp(self, file_id: uuid.UUID) -> None:
         self._temp_path(file_id).unlink(missing_ok=True)
+
+    def transform_temp(
+        self, file_id: uuid.UUID, transform: Callable[[BinaryIO, BinaryIO], None]
+    ) -> tuple[int, str]:
+        """Sustituye el temporal por su versión transformada (por ejemplo, cifrada).
+
+        Devuelve el tamaño y el SHA-256 del resultado. Si algo falla, el temporal
+        original se conserva y el intermedio se elimina.
+        """
+        temp = self._temp_path(file_id)
+        intermediate = temp.with_suffix(".tmp")
+        try:
+            with open(temp, "rb") as source, open(intermediate, "xb") as target:
+                transform(source, target)
+            digest = hashlib.sha256()
+            with open(intermediate, "rb") as handle:
+                while chunk := handle.read(CHUNK_SIZE):
+                    digest.update(chunk)
+            size = intermediate.stat().st_size
+            os.replace(intermediate, temp)
+        except BaseException:
+            intermediate.unlink(missing_ok=True)
+            raise
+        return size, digest.hexdigest()
 
     def commit(self, file_id: uuid.UUID, key: str) -> None:
         """Mueve el temporal a su ubicación definitiva sin sobrescribir nada."""

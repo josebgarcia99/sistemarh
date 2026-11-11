@@ -15,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config.settings import Environment, Settings
+from app.core.security.master_key import MasterKey, generate_key_text
 from app.infrastructure.antivirus.scanner import ScannerUnavailableError, ScanResult
 from app.main import create_app
 from app.modules.file_management.domain.models import DocumentType, FileStatus
@@ -405,23 +406,95 @@ def test_seguridad_8_los_documentos_sensibles_exigen_el_permiso_adicional(
     assert admin_client.get(f"/api/v1/files/{sensitive['id']}/download").status_code == 200
 
 
-def test_los_documentos_sensibles_no_se_aceptan_sin_cifrado(
-    seeded, vacancy, storage, backend, hasher, clock
-):
-    """Configuración por omisión: hasta que exista el cifrado por archivo."""
-    default = Settings(environment=Environment.TEST, storage_min_free_bytes=0)
-    app = create_app(
-        settings=default,
+def _app_with_key(storage, backend, hasher, clock, master_key):
+    """Configuración real: sin la opción de pruebas que admite sensibles sin cifrar."""
+    return create_app(
+        settings=Settings(environment=Environment.TEST, storage_min_free_bytes=0),
         health_checks={"c": lambda: True},
         backend=backend,
         hasher=hasher,
         clock=clock,
         storage=storage,
+        master_key=master_key,
     )
-    client = login(app, ADMIN_EMAIL, ADMIN_PASSWORD)
+
+
+def test_sin_clave_maestra_los_documentos_sensibles_no_se_aceptan(
+    seeded, vacancy, storage, backend, hasher, clock
+):
+    client = login(
+        _app_with_key(storage, backend, hasher, clock, None), ADMIN_EMAIL, ADMIN_PASSWORD
+    )
     response = upload(client, vacancy["id"], document_type="ESTUDIO_SOCIOECONOMICO")
-    assert response.status_code == 422 and "cifrado" in response.json()["detail"]
+    assert response.status_code == 422 and "clave maestra" in response.json()["detail"]
     assert all_assets(seeded) == [] and stored_files(storage) == []
+    assert client.get("/api/v1/storage/status").json()["encryption_available"] is False
+    # Los documentos ordinarios no dependen de la clave.
+    assert upload(client, vacancy["id"]).status_code == 201
+
+
+def test_los_documentos_sensibles_se_guardan_cifrados_y_se_descargan_en_claro(
+    seeded, vacancy, storage, backend, hasher, clock, tmp_path
+):
+    key = MasterKey.from_text(generate_key_text())
+    app = _app_with_key(storage, backend, hasher, clock, key)
+    client = login(app, ADMIN_EMAIL, ADMIN_PASSWORD)
+    assert client.get("/api/v1/storage/status").json()["encryption_available"] is True
+
+    response = upload(client, vacancy["id"], name="resultado.pdf", document_type="PSICOMETRIA")
+    assert response.status_code == 201, response.text
+    file = response.json()["file"]
+    assert file["encrypted"] is True and file["sensitive"] is True
+    # Los metadatos describen el contenido original.
+    assert file["size_bytes"] == len(sample_files.PDF)
+    assert file["sha256"] == hashlib.sha256(sample_files.PDF).hexdigest()
+
+    # En el disco no está el contenido en claro.
+    on_disk = (tmp_path / "almacenamiento" / stored_files(storage)[0]).read_bytes()
+    assert on_disk.startswith(b"RCLU1")
+    assert b"%PDF" not in on_disk and b"ficticio" not in on_disk
+    (asset,) = all_assets(seeded)
+    assert asset.encryption_key_id == key.key_id
+    assert asset.stored_size_bytes == len(on_disk) != asset.size_bytes
+    assert asset.stored_sha256 == hashlib.sha256(on_disk).hexdigest()
+
+    download = client.get(f"/api/v1/files/{file['id']}/download")
+    assert download.status_code == 200 and download.content == sample_files.PDF
+    assert download.headers["content-length"] == str(len(sample_files.PDF))
+
+    # Un documento ordinario no se cifra.
+    plain = upload(client, vacancy["id"]).json()["file"]
+    assert plain["encrypted"] is False
+
+    # La conciliación verifica lo que hay en el disco, sin descifrar.
+    report = client.post("/api/v1/storage/reconciliation", json={"verify_hashes": "all"}).json()
+    assert report["consistent"] is True and report["hashes_verified"] == 2
+
+
+def test_sin_la_clave_correcta_un_documento_cifrado_no_se_entrega(
+    seeded, vacancy, storage, backend, hasher, clock, tmp_path
+):
+    key = MasterKey.from_text(generate_key_text())
+    client = login(_app_with_key(storage, backend, hasher, clock, key), ADMIN_EMAIL, ADMIN_PASSWORD)
+    file = upload(client, vacancy["id"], document_type="PSICOMETRIA").json()["file"]
+    url = f"/api/v1/files/{file['id']}/download"
+
+    # Sin clave, o con otra clave, se avisa y no se entrega nada.
+    for other_key in (None, MasterKey.from_text(generate_key_text())):
+        other = login(
+            _app_with_key(storage, backend, hasher, clock, other_key), ADMIN_EMAIL, ADMIN_PASSWORD
+        )
+        response = other.get(url)
+        assert response.status_code == 503 and "clave" in response.json()["detail"]
+        assert b"%PDF" not in response.content
+
+    # Un archivo cifrado alterado en el disco (mismo tamaño) tampoco se entrega.
+    path = tmp_path / "almacenamiento" / stored_files(storage)[0]
+    data = bytearray(path.read_bytes())
+    data[-1] ^= 1
+    path.write_bytes(bytes(data))
+    response = client.get(url)
+    assert response.status_code == 503 and "descifrar" in response.json()["detail"]
 
 
 def test_una_transferencia_no_pierde_los_documentos(
@@ -652,3 +725,16 @@ def test_el_comando_de_conciliacion_informa_y_devuelve_codigo(
     assert cli.storage_check(context, "none") == 2
     output = capsys.readouterr().out
     assert "FALTANTE" in output and "CON INCONSISTENCIAS" in output
+
+
+def test_el_comando_crea_la_clave_maestra_y_no_la_sobrescribe(tmp_path, capsys):
+    from app import cli
+
+    path = tmp_path / "clave"
+    assert cli.main(["generate-master-key", "--output", str(path)]) == 0
+    text = path.read_text().strip()
+    output = capsys.readouterr().out
+    assert MasterKey.from_text(text).key_id in output and text not in output
+    assert path.stat().st_mode & 0o077 == 0  # solo el propietario puede leerla
+    assert cli.main(["generate-master-key", "--output", str(path)]) == 1
+    assert path.read_text().strip() == text

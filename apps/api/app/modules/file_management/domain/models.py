@@ -71,6 +71,11 @@ class FileAsset:
     content_type: str | None = None
     size_bytes: int | None = None
     sha256: str | None = None
+    # Lo que hay en el disco. Coincide con el contenido salvo en archivos cifrados.
+    stored_size_bytes: int | None = None
+    stored_sha256: str | None = None
+    # Identificador de la clave maestra con que se cifró; vacío si no está cifrado.
+    encryption_key_id: str | None = None
     malware_scan: MalwareScan | None = None
     failure_code: str | None = None
     confirmed_at: datetime | None = None

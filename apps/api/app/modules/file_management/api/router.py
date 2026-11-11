@@ -6,6 +6,7 @@ descarga pasa por aquí y evalúa el permiso en ese momento.
 
 from __future__ import annotations
 
+import itertools
 import logging
 import uuid
 from urllib.parse import quote
@@ -18,6 +19,7 @@ from starlette.requests import ClientDisconnect
 from app.composition.backend import Repositories
 from app.composition.context import AppContext, client_ip, get_context
 from app.core.exceptions.errors import ServiceUnavailableError, ValidationFailedError
+from app.core.security.master_key import DecryptionError
 from app.modules.authentication.api.dependencies import Principal, require_admin, require_user
 from app.modules.file_management.api.schemas import (
     FileDeletionIn,
@@ -169,8 +171,28 @@ def download_file(
             "El documento no está disponible en el almacenamiento. "
             "El incidente quedó registrado; avisa a Sistemas."
         )
+    chunks = storage.read_chunks(asset.storage_key)
+    if asset.encryption_key_id is not None:
+        cipher = context.master_key
+        if cipher is None or cipher.key_id != asset.encryption_key_id:
+            logger.error("Falta la clave maestra con que se cifró un documento")
+            raise ServiceUnavailableError(
+                "El documento está cifrado con una clave que no está disponible. Avisa a Sistemas."
+            )
+        chunks = cipher.decrypt_chunks(chunks)
+        try:
+            # Se descifra el primer bloque antes de responder: un archivo dañado
+            # se detecta aquí y no a media descarga.
+            first = next(chunks, b"")
+        except DecryptionError as error:
+            logger.error("Un documento cifrado no se pudo descifrar")
+            raise ServiceUnavailableError(
+                "El documento no se pudo descifrar. El incidente quedó registrado; "
+                "avisa a Sistemas."
+            ) from error
+        chunks = itertools.chain([first], chunks)
     return StreamingResponse(
-        storage.read_chunks(asset.storage_key),
+        chunks,
         media_type=asset.content_type or "application/octet-stream",
         headers={
             "Content-Disposition": _content_disposition(asset.original_name),
@@ -220,6 +242,7 @@ def storage_status(
         free_bytes=storage.free_bytes(),
         max_upload_bytes=context.settings.max_upload_bytes,
         antivirus=mode.value if mode else "disabled",
+        encryption_available=context.master_key is not None,
         files_by_status={state.value: counts.get(state, 0) for state in FileStatus},
     )
 

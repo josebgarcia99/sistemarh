@@ -6,7 +6,9 @@
 
 **Fases 2 (Seguridad y usuarios) y 3 (Almacenamiento documental): construidas y probadas sin SQL Server; pendientes de validar contra SQL Server 2022, Docker y ClamAV reales.**
 
-Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas en un entorno real (ver "No verificado todavía"). La Fase 1 (fundamentos) está terminada. Sigue la Fase 4 (inteligencia documental).
+Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas en un entorno real (ver "No verificado todavía"). La Fase 1 (fundamentos) está terminada.
+
+**Fase 4 (Inteligencia documental): en curso.** Se construye en tres partes: (1) clave maestra, cifrado de documentos sensibles y configuración de IA; (2) perfiles de puesto y prompts; (3) procesamiento de CV con Excel y ZIP. De la primera parte ya están la clave maestra y el cifrado de documentos sensibles.
 
 ## Funcionalidades terminadas
 
@@ -32,13 +34,14 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 | Antivirus local | Cliente de ClamAV (`clamd`). Si está activado y no responde, la carga se rechaza. Los documentos nunca se envían a servicios externos |
 | Escritura recuperable | Estados `RECIBIENDO`, `CONFIRMADO`, `RECHAZADO`, `FALLIDO` y `ELIMINADO`. Solo se responde "guardado" después de sincronizar a disco, mover el archivo y confirmar el registro |
 | Descarga autorizada | Solo por la API; el permiso se evalúa en cada descarga, así que revocar un acceso o transferir la vacante bloquea lo ya cargado. Cada descarga queda auditada |
-| Documentos sensibles | El permiso adicional por persona se aplica al listar y al descargar. La carga de psicometría y estudios socioeconómicos está desactivada hasta que exista su cifrado por archivo |
+| Clave maestra | Clave AES-256 en un archivo del servidor, fuera de SQL Server y del repositorio; comando para crearla. Obligatoria en producción |
+| Documentos sensibles | Psicometría y estudios socioeconómicos se guardan cifrados archivo por archivo y se descifran al descargarlos. El permiso adicional por persona se aplica al cargar, listar y descargar. Sin clave maestra no se aceptan |
 | Duplicados | Se detectan por SHA-256 dentro de la vacante y se avisa; cada documento conserva su propio archivo |
 | Eliminación controlada | Solo el administrador y con motivo. Borra el archivo, conserva los metadatos y queda auditada |
 | Conciliación | Comando y ruta de administrador que cierran cargas interrumpidas, mandan a cuarentena archivos sin registro, reportan registros sin archivo y verifican hashes |
 | Respaldos | Comandos para generar el manifiesto de documentos y para verificar una copia o una restauración contra él |
-| Base de datos | Migraciones `0001` (identidad y auditoría), `0002` (vacantes y transferencias) y `0003` (documentos): 11 tablas en los esquemas `auth`, `vacancy`, `files` y `ops` |
-| Scripts para Sistemas | `database/sqlserver/`: instalación completa, actualizaciones `0001` a `0002` y `0002` a `0003`, reversión y plantilla de permisos del usuario de la aplicación |
+| Base de datos | Migraciones `0001` (identidad y auditoría), `0002` (vacantes y transferencias), `0003` (documentos) y `0004` (cifrado de documentos): 11 tablas en los esquemas `auth`, `vacancy`, `files` y `ops` |
+| Scripts para Sistemas | `database/sqlserver/`: instalación completa, actualizaciones entre versiones consecutivas (de `0001` a `0004`), reversión y plantilla de permisos del usuario de la aplicación |
 | Pantallas | Inicio de sesión, Inicio, Vacantes (lista, alta, detalle, compartir, documentos, historial, transferir), Usuarios, Bajas (baja con transferencia) y Auditoría. El menú cambia según el rol |
 | Worker Celery | Configuración segura y tarea `system.ping` |
 | Reglas entre módulos | 7 contratos de `import-linter`: capas por módulo y dominios independientes |
@@ -49,7 +52,7 @@ Ejecutadas el 11 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 171 pruebas, todas pasan |
+| API: `pytest` | 185 pruebas, todas pasan |
 | Worker: `pytest` | 4 pruebas, todas pasan |
 | `ruff check` y `lint-imports` | Sin errores; 8 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |
@@ -57,6 +60,7 @@ Ejecutadas el 11 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 | Frontend: `next build` | Compila |
 | Recorrido en navegador real, identidad | 10 pasos: redirección sin sesión, credenciales erróneas, inicio de sesión, alta de usuario, restablecer contraseña, recarga, cierre de sesión, contraseña anterior rechazada, reclutador sin acceso a Usuarios y respuesta 403 de la API |
 | Recorrido en navegador real, vacantes | 11 pasos: alta de dos reclutadores, alta de dos vacantes, cambio de estado, compartir en lectura, la otra persona solo ve la compartida y no puede editarla, la API le niega cambiar el estado, transferencia individual, baja con transferencia, auditoría con el acceso denegado, la persona dada de baja ya no entra y el receptor queda como responsable |
+| Recorrido en navegador real, documento sensible | 3 pasos: carga de un archivo de psicometría sintético de 12 MB, comprobación de que en el disco está cifrado y descarga idéntica al original |
 | Recorrido en navegador real, documentos | 11 pasos: carga de un PDF, aviso de duplicado, rechazo de un ejecutable disfrazado y de un Word con macros, carga de 12 MB a través del frontend, descarga idéntica al original (SHA-256), descarga negada a otra persona (404) y sin sesión (401), eliminación con motivo y auditoría de todo lo anterior |
 | Migraciones | Generan T-SQL sin conectarse; una prueba comprueba que definen las mismas columnas que el modelo, que no usan `IDENTITY_INSERT` y que ninguna columna usa tipos obsoletos |
 
@@ -112,7 +116,7 @@ No hay todavía una instancia de SQL Server de pruebas. Por eso:
 | Convocatorias (`recruitment_campaigns`) en la Fase 2 | Se construyen en la Fase 5, junto con las postulaciones | No tienen uso hasta que existan candidatos |
 | Pruebas con repositorios de prueba | Pruebas con los repositorios reales sobre un motor en memoria | Ver "Cómo se probó sin SQL Server" |
 | Tipos de texto largo | `NVARCHAR(MAX)` en todas las columnas largas | `NTEXT` está obsoleto en SQL Server |
-| Cifrado por archivo de documentos sensibles en la Fase 3 (decisión 8) | Pasa a la Fase 4. Mientras tanto, psicometría y estudios socioeconómicos **no se pueden cargar** | Necesita la clave maestra, que se construye en la Fase 4 junto con el resguardo de las API keys |
+| Cifrado por archivo de documentos sensibles en la Fase 3 (decisión 8) | Se construyó al inicio de la Fase 4. Con clave maestra, psicometría y estudios socioeconómicos ya se pueden cargar | Necesitaba la clave maestra |
 | Tabla `file_versions` | No se crea todavía | No hay documentos versionados hasta los perfiles de puesto (Fase 4) |
 | Conciliación nocturna automática | Existe como comando y como ruta de administrador; no se ejecuta sola | Falta decidir con Sistemas si se programa con `cron` o con el worker |
 | Carga de archivos como formulario | El archivo viaja como cuerpo de la petición | Permite escribirlo directo a la zona temporal y cortar al superar el límite, sin copias intermedias |
@@ -128,7 +132,7 @@ De la Fase 2, para después de tener SQL Server:
 De la Fase 3:
 
 - Validación con SQL Server, Docker y ClamAV reales.
-- Cifrado por archivo y carga de documentos sensibles (se hace en la Fase 4).
+- Rotación de la clave maestra (cambiarla y volver a cifrar lo existente).
 - Programar la conciliación nocturna.
 - Pantalla de administración del almacenamiento y vista previa de PDF.
 
@@ -163,6 +167,7 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - 11 nov 2026: las pruebas pasan a usar los repositorios reales sobre un motor en memoria.
 - 11 nov 2026: guía y configuraciones para ejecutar en Visual Studio Code; `uvloop` solo fuera de Windows.
 - 11 nov 2026: Fase 3 construida: almacenamiento, validación, antivirus, descarga autorizada, eliminación controlada, conciliación, manifiesto de respaldos y pantalla de documentos.
+- 11 nov 2026: Fase 4, primera parte: clave maestra y cifrado por archivo de los documentos sensibles; su carga queda habilitada.
 - 11 nov 2026: el servidor de desarrollo de Next.js cortaba las cargas de más de 10 MB al reenviarlas a la API; se amplió el límite a 25 MB. Lo detectó el recorrido en navegador.
 
 ## Decisiones tomadas
@@ -180,7 +185,7 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - Edición e intercalación de SQL Server.
 - Política de retención de documentos y aviso de privacidad (área legal).
 - Antivirus en producción: ClamAV en el servidor u otra solución local (Sistemas).
-- Custodia de la clave maestra para cifrar documentos sensibles y API keys (decisión 5, Sistemas).
+- Dónde guardará y cómo respaldará Sistemas el archivo de la clave maestra (decisión 5).
 - Cómo se programa la conciliación nocturna.
 
 ## Próximos pasos

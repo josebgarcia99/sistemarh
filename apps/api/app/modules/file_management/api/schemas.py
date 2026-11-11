@@ -22,6 +22,7 @@ class FileOut(BaseModel):
     size_bytes: int | None
     sha256: str | None
     malware_scan: str | None
+    encrypted: bool
     uploaded_by: uuid.UUID
     uploaded_by_name: str | None
     created_at: datetime
@@ -38,6 +39,7 @@ class FileOut(BaseModel):
             size_bytes=asset.size_bytes,
             sha256=asset.sha256,
             malware_scan=asset.malware_scan.value if asset.malware_scan else None,
+            encrypted=asset.encryption_key_id is not None,
             uploaded_by=asset.uploaded_by,
             uploaded_by_name=names.get(asset.uploaded_by),
             created_at=asset.created_at,
@@ -58,6 +60,8 @@ class StorageStatusOut(BaseModel):
     free_bytes: int
     max_upload_bytes: int
     antivirus: str
+    # Si hay clave maestra: sin ella no se aceptan documentos sensibles.
+    encryption_available: bool
     files_by_status: dict[str, int]
 
 

@@ -29,6 +29,10 @@ services:
       # "clamd" exige levantar el antivirus:  --profile antivirus
       RECLU_ANTIVIRUS_MODE: ${RECLU_ANTIVIRUS_MODE:-disabled}
       RECLU_CLAMD_HOST: clamav
+      # Clave maestra: monta el archivo del anfitrión como solo lectura y apunta
+      # RECLU_MASTER_KEY_FILE a la ruta dentro del contenedor. Sin verificar.
+      #   volumes:  - /ruta/segura/clave_maestra:/run/secrets/clave_maestra:ro
+      RECLU_MASTER_KEY_FILE: ${RECLU_MASTER_KEY_FILE:-}
     volumes:
       # Los documentos viven en el equipo anfitrión, nunca dentro del contenedor.
       - type: bind

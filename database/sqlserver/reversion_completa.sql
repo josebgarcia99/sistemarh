@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Reversión completa (DESTRUCTIVO)
-   Versión del esquema: 0003 -> (vacía)
-   Generado: 2026-11-11 14:54 (UTC) con scripts/generate_sql.py
+   Versión del esquema: 0004 -> (vacía)
+   Generado: 2026-11-11 15:04 (UTC) con scripts/generate_sql.py
 
    ELIMINA todas las tablas y esquemas del sistema, con todos sus datos.
    Solo para entornos de prueba. Nunca ejecutar en producción sin respaldo.
@@ -24,14 +24,36 @@ SET XACT_ABORT ON;
 GO
 
 -- Protección: si la base no está en la versión esperada, no se ejecuta nada.
-IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0003')
+IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0004')
 BEGIN
-    RAISERROR(N'La base no esta en la version 0003. No se aplico ningun cambio.', 16, 1);
+    RAISERROR(N'La base no esta en la version 0004. No se aplico ningun cambio.', 16, 1);
     SET NOEXEC ON;
 END
 GO
 
 BEGIN TRANSACTION;
+
+-- Running downgrade 0004 -> 0003
+
+ALTER TABLE files.file_assets DROP CONSTRAINT ck_file_assets_stored_complete;
+
+GO
+
+ALTER TABLE files.file_assets DROP COLUMN encryption_key_id;
+
+GO
+
+ALTER TABLE files.file_assets DROP COLUMN stored_sha256;
+
+GO
+
+ALTER TABLE files.file_assets DROP COLUMN stored_size_bytes;
+
+GO
+
+UPDATE alembic_version SET version_num='0003' WHERE alembic_version.version_num = '0004';
+
+GO
 
 -- Running downgrade 0003 -> 0002
 

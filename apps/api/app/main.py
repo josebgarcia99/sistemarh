@@ -17,6 +17,7 @@ from app.core.config.settings import AntivirusMode, Environment, Settings, get_s
 from app.core.exceptions.errors import register_exception_handlers
 from app.core.logging.setup import configure_logging
 from app.core.middleware.correlation import RequestContextMiddleware
+from app.core.security.master_key import MasterKey
 from app.core.security.passwords import Argon2Hasher, PasswordHasher
 from app.infrastructure.antivirus.scanner import ClamdScanner, DisabledScanner, MalwareScanner
 from app.infrastructure.storage.local import LocalFileStorage
@@ -62,6 +63,14 @@ def build_storage(settings: Settings) -> LocalFileStorage | None:
     return storage
 
 
+def build_master_key(settings: Settings) -> MasterKey | None:
+    """Clave maestra, o ``None`` si no está configurada. Si el archivo indicado
+    falta o no es válido, el arranque falla."""
+    if settings.master_key_file is None:
+        return None
+    return MasterKey.load(settings.master_key_file)
+
+
 def build_scanner(settings: Settings) -> MalwareScanner:
     if settings.antivirus_mode is AntivirusMode.CLAMD:
         return ClamdScanner(settings.clamd_host, settings.clamd_port)
@@ -78,6 +87,7 @@ def create_app(
     auth_policy: AuthPolicy | None = None,
     storage: LocalFileStorage | None = None,
     scanner: MalwareScanner | None = None,
+    master_key: MasterKey | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
@@ -103,6 +113,7 @@ def create_app(
         auth_policy=auth_policy or AuthPolicy(),
         storage=storage if storage is not None else build_storage(settings),
         scanner=scanner or build_scanner(settings),
+        master_key=master_key if master_key is not None else build_master_key(settings),
     )
 
     app.add_middleware(RequestContextMiddleware)

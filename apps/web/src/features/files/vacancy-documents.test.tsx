@@ -19,6 +19,7 @@ function makeFile(overrides: Partial<StoredFile> = {}): StoredFile {
     size_bytes: 2 * 1024 * 1024,
     sha256: "a".repeat(64),
     malware_scan: "LIMPIO",
+    encrypted: false,
     uploaded_by: "00000000-0000-0000-0000-000000000002",
     uploaded_by_name: "Reclutadora de Prueba",
     created_at: "2026-11-11T18:00:00Z",
@@ -105,18 +106,18 @@ describe("VacancyDocuments", () => {
     );
   });
 
-  it("no ofrece cargar psicometría ni estudios socioeconómicos todavía", async () => {
-    mockApi({ [`GET ${FILES_URL}`]: { body: [] } });
+  it("avisa que los documentos sensibles se guardan cifrados", async () => {
+    mockApi({
+      [`GET ${FILES_URL}`]: {
+        body: [makeFile({ document_type: "PSICOMETRIA", sensitive: true, encrypted: true })],
+      },
+    });
+    const user = userEvent.setup();
     renderDocuments();
-    const options = within(
-      await screen.findByLabelText("Tipo de documento"),
-    ).getAllByRole("option");
-    expect(options.map((option) => option.textContent)).toEqual([
-      "Currículum",
-      "Perfil de puesto",
-      "Prueba técnica",
-      "Adjunto",
-    ]);
+    expect(await screen.findByText(/Psicometría · .* · Sensible, cifrado/)).toBeTruthy();
+    expect(screen.queryByText(/se guarda cifrado/)).toBeNull();
+    await user.selectOptions(screen.getByLabelText("Tipo de documento"), "ESTUDIO_SOCIOECONOMICO");
+    expect(screen.getByText(/se guarda cifrado y solo lo ven/)).toBeTruthy();
   });
 
   it("rechaza en pantalla un formato no permitido sin llamar a la API", async () => {

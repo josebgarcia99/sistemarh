@@ -18,6 +18,10 @@ Almacenamiento documental:
         Lista de documentos confirmados (clave, tamaño y SHA-256) para un respaldo.
     python -m app.cli storage-verify --manifest manifiesto.jsonl --root /ruta/copia [--full]
         Verifica una copia o una restauración contra un manifiesto. No usa la base.
+
+Clave maestra (cifra las API keys de IA y los documentos sensibles):
+
+    python -m app.cli generate-master-key --output /ruta/fuera/del/repositorio/clave
 """
 
 from __future__ import annotations
@@ -45,7 +49,7 @@ def create_admin(context: AppContext, *, email: str, full_name: str, password: s
 
 
 def _build_context(backend: Backend | None = None) -> AppContext:
-    from app.main import build_sql_backend, build_storage
+    from app.main import build_master_key, build_sql_backend, build_storage
 
     settings = get_settings()
     return AppContext(
@@ -55,10 +59,11 @@ def _build_context(backend: Backend | None = None) -> AppContext:
         clock=utc_now,
         auth_policy=AuthPolicy(),
         storage=build_storage(settings),
+        master_key=build_master_key(settings),
     )
 
 
-SCHEMA_VERSION = "0003"
+SCHEMA_VERSION = "0004"
 _SAMPLE_SIZE = 200
 
 
@@ -95,11 +100,35 @@ def storage_manifest(context: AppContext, output: Path) -> int:
         assets = repos.files.list_by_status(FileStatus.CONFIRMADO)
     count = write_manifest(
         output,
-        (ManifestEntry(a.storage_key, a.size_bytes or 0, a.sha256 or "") for a in assets),
+        # Lo que hay en el disco: la copia se verifica sin necesitar la clave maestra.
+        (
+            ManifestEntry(a.storage_key, a.stored_size_bytes or 0, a.stored_sha256 or "")
+            for a in assets
+        ),
         generated_at=context.clock().isoformat(),
         schema_version=SCHEMA_VERSION,
     )
     print(f"Manifiesto escrito con {count} documentos: {output}")
+    return 0
+
+
+def generate_master_key(output: Path) -> int:
+    """Crea el archivo de la clave maestra. Nunca sobrescribe uno existente:
+    perder la clave anterior dejaría ilegible todo lo cifrado con ella."""
+    import os
+
+    from app.core.security.master_key import MasterKey, generate_key_text
+
+    try:
+        descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        print("Ya existe un archivo en esa ruta. No se sobrescribe.", file=sys.stderr)
+        return 1
+    text = generate_key_text()
+    with os.fdopen(descriptor, "w", encoding="ascii") as handle:
+        handle.write(text + "\n")
+    print(f"Clave maestra creada. Identificador: {MasterKey.from_text(text).key_id}")
+    print("Respáldala por separado de la base de datos: sin ella no se puede leer lo cifrado.")
     return 0
 
 
@@ -139,8 +168,12 @@ def main(argv: list[str] | None = None) -> int:
     verify.add_argument("--manifest", type=Path, required=True)
     verify.add_argument("--root", type=Path, required=True)
     verify.add_argument("--full", action="store_true", help="Recalcula el SHA-256 de cada archivo")
+    keygen = commands.add_parser("generate-master-key", help="Crea el archivo de la clave maestra")
+    keygen.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
 
+    if args.command == "generate-master-key":
+        return generate_master_key(args.output)
     if args.command == "storage-verify":
         return storage_verify(args.manifest, args.root, full=args.full)
     if args.command in {"storage-check", "storage-manifest"}:

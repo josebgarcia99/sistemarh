@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Instalación completa
-   Versión del esquema: (vacía) -> 0003
-   Generado: 2026-11-11 14:54 (UTC) con scripts/generate_sql.py
+   Versión del esquema: (vacía) -> 0004
+   Generado: 2026-11-11 15:04 (UTC) con scripts/generate_sql.py
 
    Crea todos los esquemas y tablas en una base de datos VACÍA.
 
@@ -354,6 +354,32 @@ CREATE INDEX ix_file_assets_status ON files.file_assets (status, created_at);
 GO
 
 UPDATE alembic_version SET version_num='0003' WHERE alembic_version.version_num = '0002';
+
+GO
+
+-- Running upgrade 0003 -> 0004
+
+ALTER TABLE files.file_assets ADD stored_size_bytes BIGINT NULL;
+
+GO
+
+ALTER TABLE files.file_assets ADD stored_sha256 VARCHAR(64) NULL;
+
+GO
+
+ALTER TABLE files.file_assets ADD encryption_key_id VARCHAR(32) NULL;
+
+GO
+
+UPDATE files.file_assets SET stored_size_bytes = size_bytes, stored_sha256 = sha256 WHERE status IN ('CONFIRMADO', 'ELIMINADO');
+
+GO
+
+ALTER TABLE files.file_assets ADD CONSTRAINT ck_file_assets_stored_complete CHECK (status NOT IN ('CONFIRMADO', 'ELIMINADO') OR (stored_size_bytes IS NOT NULL AND stored_sha256 IS NOT NULL));
+
+GO
+
+UPDATE alembic_version SET version_num='0004' WHERE alembic_version.version_num = '0003';
 
 GO
 

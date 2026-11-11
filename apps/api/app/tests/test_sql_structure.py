@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -186,6 +187,10 @@ def test_el_modelo_y_la_migracion_definen_las_mismas_columnas(monkeypatch):
             for line in body.splitlines()[1:]
             if line.strip() and not line.strip().startswith(("CONSTRAINT", "PRIMARY", "FOREIGN"))
         }
+        # Columnas añadidas por migraciones posteriores.
+        migrated |= set(
+            re.findall(rf"ALTER TABLE {re.escape(qualified)} ADD (?!CONSTRAINT)(\w+) ", sql)
+        )
         expected = {column.name for column in table.columns} | only_in_database.get(
             qualified, set()
         )

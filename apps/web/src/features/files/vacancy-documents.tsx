@@ -20,8 +20,8 @@ import {
   formatBytes,
   listFiles,
   MAX_UPLOAD_BYTES,
+  SENSITIVE_TYPES,
   type StoredFile,
-  UPLOADABLE_TYPES,
   uploadFile,
 } from "@/lib/api/files";
 
@@ -100,7 +100,8 @@ export function VacancyDocuments({ vacancyId, canUpload, canDelete }: Props) {
                   {formatBytes(file.size_bytes)} ·{" "}
                   {file.uploaded_by_name ?? "Sin datos"} ·{" "}
                   {dateFormat.format(new Date(file.created_at))}
-                  {file.sensitive && " · Sensible"}
+                  {file.sensitive &&
+                    (file.encrypted ? " · Sensible, cifrado" : " · Sensible")}
                 </p>
               </div>
               {canDelete && (
@@ -202,7 +203,7 @@ function UploadForm({
             }
             className={fieldClass}
           >
-            {UPLOADABLE_TYPES.map((type) => (
+            {documentTypeSchema.options.map((type) => (
               <option key={type} value={type}>
                 {DOCUMENT_TYPE_LABELS[type]}
               </option>
@@ -225,6 +226,12 @@ function UploadForm({
       {error && (
         <p role="alert" className="text-accent-red-ink">
           {error}
+        </p>
+      )}
+      {SENSITIVE_TYPES.includes(documentType) && (
+        <p className="text-sm text-ink-muted">
+          Este tipo de documento se guarda cifrado y solo lo ven el responsable, el
+          administrador y quien tenga el permiso adicional.
         </p>
       )}
       <button

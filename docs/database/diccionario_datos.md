@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0003`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0004`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -166,8 +166,11 @@ Metadatos de cada documento guardado en el disco privado del servidor. El archiv
 | `original_name` | `NVARCHAR(200)` | Sí | Nombre original, saneado. Solo se usa para mostrarlo y al descargar; nunca para ubicar el archivo. |
 | `extension` | `VARCHAR(10)` | Sí | Extensión en minúsculas. |
 | `content_type` | `VARCHAR(100)` | No | Tipo real detectado por contenido. |
-| `size_bytes` | `BIGINT` | No | Tamaño en bytes. Obligatorio si el estado es `CONFIRMADO` o `ELIMINADO`. |
-| `sha256` | `VARCHAR(64)` | No | Huella SHA-256 del contenido. Obligatoria si el estado es `CONFIRMADO` o `ELIMINADO`. |
+| `size_bytes` | `BIGINT` | No | Tamaño del contenido original, en bytes. Obligatorio si el estado es `CONFIRMADO` o `ELIMINADO`. |
+| `sha256` | `VARCHAR(64)` | No | Huella SHA-256 del contenido original (sirve para detectar duplicados). Obligatoria si el estado es `CONFIRMADO` o `ELIMINADO`. |
+| `stored_size_bytes` | `BIGINT` | No | Tamaño de lo que hay en el disco. Igual a `size_bytes` salvo en archivos cifrados. Obligatorio si el estado es `CONFIRMADO` o `ELIMINADO`. |
+| `stored_sha256` | `VARCHAR(64)` | No | SHA-256 de lo que hay en el disco. Es el que usan la conciliación y los respaldos, que así no necesitan la clave maestra. |
+| `encryption_key_id` | `VARCHAR(32)` | No | Identificador de la clave maestra con que se cifró el archivo. Vacío si no está cifrado. No es la clave. |
 | `storage_backend` | `VARCHAR(20)` | Sí | Dónde está guardado. Hoy siempre `local` (disco del servidor). |
 | `storage_key` | `VARCHAR(200)` | Sí | Referencia lógica relativa, por ejemplo `private/cv/3f/a9/<uuid>`. Única. Nunca una ruta absoluta. |
 | `status` | `VARCHAR(20)` | Sí | `RECIBIENDO`, `CONFIRMADO`, `RECHAZADO`, `FALLIDO` o `ELIMINADO`. |

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config.settings import Environment, Settings
 from app.core.exceptions.errors import ConflictError, NotFoundError
+from app.core.security.master_key import generate_key_text
 from app.main import create_app
 from app.tests.support.sql_memory import build_test_backend
 
@@ -102,7 +103,9 @@ def test_la_documentacion_no_se_publica_en_produccion(tmp_path):
         redis_url="redis://redis:6379/0",
         storage_root=tmp_path,
         antivirus_mode="disabled",
+        master_key_file=tmp_path / "clave",
     )
+    (tmp_path / "clave").write_text(generate_key_text())
     app = create_app(
         settings=settings, health_checks={"x": lambda: True}, backend=build_test_backend()
     )

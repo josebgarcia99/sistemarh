@@ -18,6 +18,7 @@ cp .env.example .env
 | `RECLU_DATABASE_URL` | Conexión a SQL Server con `mssql+pyodbc` | Sí para iniciar sesión y usar la aplicación |
 | `RECLU_REDIS_URL` | Cola de tareas | Solo para ejecutar el worker |
 | `RECLU_STORAGE_ROOT` | Carpeta, ya existente, donde se guardan los documentos. Ruta absoluta, fuera del repositorio | Sí para cargar y descargar documentos |
+| `RECLU_MASTER_KEY_FILE` | Ruta del archivo de la clave maestra (no la clave). Se crea con `python -m app.cli generate-master-key --output <ruta>` | Sí para cargar psicometría y estudios socioeconómicos y para guardar API keys; obligatoria en producción |
 | `RECLU_ANTIVIRUS_MODE` | `clamd` o `disabled` | No (por omisión `disabled`); obligatoria en producción |
 | `RECLU_AI_ALLOW_REAL_DOCUMENTS` | Permite enviar documentos reales a la IA | Mantener en `false` |
 | `API_INTERNAL_URL` | Dirección de la API para el frontend | No (por omisión `http://localhost:8000`) |
@@ -108,7 +109,7 @@ alembic upgrade head            # requiere RECLU_DATABASE_URL
 alembic upgrade head --sql      # genera el T-SQL sin conectarse, para revisión
 ```
 
-La migración `0001` crea los esquemas `auth` y `ops` con usuarios, roles, sesiones y auditoría. La `0002` crea el esquema `vacancy` con vacantes, accesos, permisos de documentos sensibles, transferencias e historial de responsables. La `0003` crea el esquema `files` con los metadatos de los documentos.
+La migración `0001` crea los esquemas `auth` y `ops` con usuarios, roles, sesiones y auditoría. La `0002` crea el esquema `vacancy` con vacantes, accesos, permisos de documentos sensibles, transferencias e historial de responsables. La `0003` crea el esquema `files` con los metadatos de los documentos. La `0004` añade las columnas del cifrado de documentos.
 
 ### Scripts para Sistemas
 
@@ -119,6 +120,7 @@ Si Sistemas prefiere ejecutar T-SQL en lugar de Alembic, los scripts equivalente
 | `instalacion_completa.sql` | Base vacía: crea todo hasta la versión actual |
 | `actualizacion_0001_a_0002.sql` | Base que ya tiene la versión `0001` |
 | `actualizacion_0002_a_0003.sql` | Base que ya tiene la versión `0002` |
+| `actualizacion_0003_a_0004.sql` | Base que ya tiene la versión `0003` |
 | `permisos_usuario_aplicacion.sql` | Plantilla de permisos mínimos para el usuario de la aplicación |
 | `reversion_completa.sql` | Elimina todo. Solo para bases de prueba |
 

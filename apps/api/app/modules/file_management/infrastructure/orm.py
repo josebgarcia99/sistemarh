@@ -40,6 +40,9 @@ class FileAssetRow(Base):
     content_type: Mapped[str | None] = mapped_column(sa.String(100), nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(sa.BigInteger, nullable=True)
     sha256: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
+    stored_size_bytes: Mapped[int | None] = mapped_column(sa.BigInteger, nullable=True)
+    stored_sha256: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
+    encryption_key_id: Mapped[str | None] = mapped_column(sa.String(32), nullable=True)
     storage_backend: Mapped[str] = mapped_column(sa.String(20))
     # Referencia lógica relativa; la ruta absoluta solo existe en la configuración.
     storage_key: Mapped[str] = mapped_column(sa.String(200), unique=True)

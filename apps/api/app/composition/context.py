@@ -11,6 +11,7 @@ from app.composition.file_access import VacancyFileAccessPolicy
 from app.core.clock import Clock
 from app.core.config.settings import Settings
 from app.core.exceptions.errors import ServiceUnavailableError
+from app.core.security.master_key import MasterKey
 from app.core.security.passwords import PasswordHasher
 from app.infrastructure.antivirus.scanner import DisabledScanner, MalwareScanner
 from app.infrastructure.storage.local import LocalFileStorage
@@ -33,6 +34,7 @@ class AppContext:
     auth_policy: AuthPolicy
     storage: LocalFileStorage | None = None
     scanner: MalwareScanner = field(default_factory=DisabledScanner)
+    master_key: MasterKey | None = None
 
     def require_backend(self) -> Backend:
         if self.backend is None:
@@ -49,7 +51,12 @@ class AppContext:
         return self.storage
 
     def upload_pipeline(self) -> UploadPipeline:
-        return UploadPipeline(self.require_storage(), self.scanner, self.settings.max_upload_bytes)
+        return UploadPipeline(
+            self.require_storage(),
+            self.scanner,
+            self.settings.max_upload_bytes,
+            cipher=self.master_key,
+        )
 
     def file_service(self, repos: Repositories) -> FileService:
         return FileService(
@@ -60,7 +67,8 @@ class AppContext:
             self.require_storage(),
             max_bytes=self.settings.max_upload_bytes,
             min_free_bytes=self.settings.storage_min_free_bytes,
-            allow_sensitive=self.settings.allow_unencrypted_sensitive_files,
+            encryption_available=self.master_key is not None,
+            allow_unencrypted_sensitive=self.settings.allow_unencrypted_sensitive_files,
         )
 
     def reconciler(self, repos: Repositories) -> StorageReconciler:

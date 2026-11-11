@@ -97,3 +97,21 @@ La clave se escribe una vez en la pantalla de administración, se cifra en el ba
 | Rotación | Procedimiento para cambiar la clave maestra y volver a cifrar. |
 
 También se admite inyectar la clave por variable de entorno del servidor; en ese caso la pantalla la muestra como "definida por entorno". Si Sistemas ya opera un gestor de secretos, se conecta mediante la misma interfaz (decisión 5).
+
+## Clave maestra: lo construido (Fase 4, primera parte)
+
+Estado al 11 de noviembre de 2026.
+
+| Aspecto | Cómo quedó |
+| --- | --- |
+| Qué es | Una clave AES-256 guardada en un archivo del servidor. Cifra los documentos de clase sensible y cifrará las API keys de los proveedores de IA |
+| Dónde vive | En la ruta que indique `RECLU_MASTER_KEY_FILE`. Nunca en SQL Server, en el repositorio ni en `.env` (ahí solo va la ruta) |
+| Cómo se crea | `python -m app.cli generate-master-key --output <ruta>`. El archivo nace legible solo por su propietario y el comando se niega a sobrescribir uno existente. Solo muestra el identificador de la clave |
+| Custodia | Sistemas (decisión 5). Debe respaldarse **por separado** de la base de datos y de los documentos |
+| Si se pierde | Los documentos sensibles y las API keys guardadas quedan ilegibles. No hay forma de recuperarlos sin la clave |
+| En producción | La API no arranca si `RECLU_MASTER_KEY_FILE` no está definida, o si el archivo falta o no es válido |
+| Qué se registra | Solo el identificador de la clave (una huella que no permite deducirla). La clave no aparece en logs, errores ni auditoría |
+| Documentos sensibles | Se validan y analizan con el antivirus en claro, dentro del servidor, y se cifran antes de llegar a su ubicación definitiva (AES-256-GCM por bloques; detecta archivos alterados, recortados o cifrados con otra clave). Se descifran al descargarlos, después de comprobar el permiso |
+| Sin clave | Los documentos ordinarios funcionan igual; los sensibles no se aceptan |
+
+**Pendiente:** el procedimiento de rotación (cambiar la clave maestra y volver a cifrar lo existente) no está construido. Mientras no exista, la clave no debe cambiarse una vez que haya documentos cifrados.

@@ -103,11 +103,12 @@ class StorageReconciler:
             size = self._storage.size(asset.storage_key)
             if size is None:
                 report.missing_files.append(asset.id)
-            elif size != asset.size_bytes:
+            elif size != asset.stored_size_bytes:
                 report.size_mismatches.append(asset.id)
             elif report.hashes_verified < to_hash:
                 report.hashes_verified += 1
-                if self._storage.sha256(asset.storage_key) != asset.sha256:
+                # Se compara lo que hay en el disco: no hace falta la clave maestra.
+                if self._storage.sha256(asset.storage_key) != asset.stored_sha256:
                     report.hash_mismatches.append(asset.id)
 
         for key in list(self._storage.iter_keys()):
