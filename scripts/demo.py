@@ -82,7 +82,9 @@ class SimulatedProvider:
 
     def generate(self, api_key, model, *, system, user, max_output_tokens) -> Generation:
         # Respuesta fija con un consumo inventado, para ver la pantalla de costos.
-        return Generation("OK", input_tokens=len(system + user) // 4 + 50, output_tokens=40, complete=True)
+        return Generation(
+            "OK", input_tokens=len(system + user) // 4 + 50, output_tokens=40, complete=True
+        )
 
 
 def seed(app, password: str) -> None:
