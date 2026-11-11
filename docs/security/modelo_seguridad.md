@@ -175,3 +175,19 @@ Estado al 11 de noviembre de 2026.
 | Si la IA falla | Se informa el motivo, el consumo de la llamada queda registrado y la auditoría anota el intento como fallido |
 
 **Sin verificar:** con un modelo real.
+
+## Reclutamiento operativo (Fase 5)
+
+| Aspecto | Cómo quedó |
+| --- | --- |
+| Acceso a candidatos | Un candidato solo se ve a través de una postulación, y la postulación sigue el permiso de su vacante: lectura para consultar, colaboración para dar de alta y mover, responsable o administrador para abrir y cerrar convocatorias. Sin acceso a la vacante, la postulación responde «no encontrado» |
+| Decisión humana | Ningún movimiento es automático salvo el alta desde un lote, que deja a la persona en revisión de RH. Avanzar a quien la IA clasificó como rechazado o no evaluable exige escribir el motivo; queda en el historial con quién y cuándo, y en la auditoría. La clasificación inicial nunca se sobrescribe |
+| Historial | `recruitment.application_movements` solo recibe altas; la plantilla de permisos niega `UPDATE` y `DELETE` al usuario de la aplicación |
+| Bancos de preguntas | Un banco privado ajeno responde «no encontrado». Solo el propietario o un administrador lo modifica. Las preguntas propuestas por la IA no entran a ningún banco sin que una persona las añada |
+| Preguntas indebidas | A la IA se le pide no proponer preguntas sobre edad, estado civil, hijos, embarazo, religión, origen, salud, discapacidad, apariencia, afiliación política ni domicilio. Depende del modelo: la persona revisa cada propuesta |
+| Análisis de llamadas | Se envían las notas escritas de la llamada, los requisitos del puesto y los datos ordenados del CV (puestos, empresas y periodos). No se envían el nombre, el correo ni el teléfono. Las instrucciones prohíben inferir emociones, honestidad o personalidad, afirmar que alguien mintió y recomendar una decisión; el servidor solo conserva los campos conocidos de la respuesta |
+| OCR | Tesseract corre dentro del servidor, con límite de páginas, de tamaño de imagen y de tiempo. Ninguna imagen se envía a servicios externos |
+| Datos del CV | El correo y el teléfono se extraen con reglas locales; a la IA se le envía el texto con esos datos ocultos |
+| Auditoría | Postulaciones creadas, movimientos (con cuántas personas no aceptadas por la IA se avanzaron), cambios de estado, anotaciones, convocatorias, versiones de etapas, bancos, y apertura, guardado, cierre y análisis de llamadas |
+
+**Sin verificar:** con SQL Server, con un modelo real y con escaneos reales.

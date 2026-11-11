@@ -1,0 +1,231 @@
+import { cleanup, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Application, ApplicationDetail, Board } from "@/lib/api/recruitment";
+import { makeUser, mockApi, problem, renderApp } from "@/test/helpers";
+import { CandidatesWorkspace } from "./candidates-workspace";
+
+const VACANCY_ID = "10000000-0000-0000-0000-000000000001";
+const BOARD_URL = `/api/v1/vacancies/${VACANCY_ID}/applications`;
+const MOVES_URL = `/api/v1/vacancies/${VACANCY_ID}/application-moves`;
+const STAGES = ["Evaluación de CV", "Revisión local RH", "Llamada telefónica", "Prueba técnica"].map(
+  (name, index) => ({
+    id: `s${index + 1}`,
+    position: index + 1,
+    name,
+    kind: "OTRA",
+    is_optional: index === 3,
+  }),
+);
+const CAMPAIGN = {
+  id: "c1",
+  number: 1,
+  name: "Convocatoria 1",
+  status: "ABIERTA" as const,
+  opened_at: "2026-11-11T18:00:00Z",
+  closed_at: null,
+};
+const PIPELINE = { id: "p1", version_number: 1, created_at: "2026-11-11T18:00:00Z", stages: STAGES };
+
+function makeApplication(overrides: Partial<Application> = {}): Application {
+  return {
+    id: "a1",
+    candidate_id: "k1",
+    full_name: "Ana Pérez",
+    email: "ana@ejemplo.test",
+    phone: null,
+    stage_id: "s2",
+    status: "ACTIVA",
+    ai_classification: "ACEPTADO_IA",
+    ai_score: "87.50",
+    cv_file_id: "f1",
+    due_at: null,
+    created_at: "2026-11-11T18:00:00Z",
+    updated_at: "2026-11-11T18:00:00Z",
+    ...overrides,
+  };
+}
+const BETO = makeApplication({
+  id: "a2",
+  candidate_id: "k2",
+  full_name: "Beto López",
+  ai_classification: "RECHAZADO_IA",
+  ai_score: "25.00",
+});
+
+function makeBoard(overrides: Partial<Board> = {}): Board {
+  return {
+    campaigns: [CAMPAIGN],
+    campaign: CAMPAIGN,
+    pipeline: PIPELINE,
+    applications: [makeApplication(), BETO],
+    ...overrides,
+  };
+}
+
+function makeDetail(overrides: Partial<ApplicationDetail> = {}): ApplicationDetail {
+  return {
+    application: makeApplication(),
+    campaign: CAMPAIGN,
+    pipeline: PIPELINE,
+    movements: [
+      { id: "m1", kind: "ALTA", occurred_at: "2026-11-11T18:00:00Z", actor_name: null, from_stage: null, to_stage: "Evaluación de CV", note: "Clasificación inicial de la IA: aceptado.", due_at: null, mass: false },
+      { id: "m2", kind: "AVANCE", occurred_at: "2026-11-11T18:00:01Z", actor_name: "Reclutadora de Prueba", from_stage: "Evaluación de CV", to_stage: "Revisión local RH", note: null, due_at: null, mass: false },
+    ],
+    evaluation: {
+      classification: "ACEPTADO_IA",
+      score: "87.50",
+      file_name: "cv ana.pdf",
+      result: { criterios: [{ id: "C1", nivel: 4, sin_evidencia: false, evidencia: "5 años en nómina", justificacion: "Cumple" }] },
+      extraction: { habilidades: ["Excel"], estudios: [{ titulo: "Contaduría", institucion: "UNAM", periodo: "2015" }] },
+    },
+    tenure: {
+      jobs: [{ title: "Analista de nómina", company: "Uno SA", start: "2020-01", end: "2022-06", current: false, months: 30, approximate: false }],
+      average_months: 30,
+      median_months: 30,
+      total_months: 30,
+      overlaps: 0,
+      incomplete: 0,
+    },
+    ...overrides,
+  };
+}
+
+function renderWorkspace(props: { canEdit?: boolean; canManage?: boolean } = {}) {
+  return renderApp(
+    <CandidatesWorkspace
+      vacancyId={VACANCY_ID}
+      vacancyName="Analista de Nómina"
+      canEdit={props.canEdit ?? true}
+      canManage={props.canManage ?? true}
+      onBack={() => {}}
+    />,
+    { session: makeUser() },
+  );
+}
+const body = (fetchMock: ReturnType<typeof mockApi>, ending: string) => {
+  const call = fetchMock.mock.calls.find(
+    ([url, init]) => String(url).endsWith(ending) && init?.method && init.method !== "GET",
+  );
+  return JSON.parse(String(call?.[1]?.body ?? "null"));
+};
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+describe("CandidatesWorkspace", () => {
+  it("muestra a los candidatos por etapa con la clasificación inicial de la IA", async () => {
+    mockApi({ [`GET ${BOARD_URL}`]: { body: makeBoard() } });
+    const user = userEvent.setup();
+    renderWorkspace();
+    const rows = within(await screen.findByRole("list", { name: "Candidatos" })).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain("Aceptado por IA · 87.5");
+    expect(rows[1].textContent).toContain("Rechazado por IA · 25");
+    expect(screen.getByRole("button", { name: "Revisión local RH (2)" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Llamada telefónica (0)" }));
+    expect(screen.getByText("No hay candidatos en esta etapa.")).toBeTruthy();
+  });
+
+  it("mueve a los seleccionados y muestra el motivo cuando el servidor lo exige", async () => {
+    let attempts = 0;
+    const fetchMock = mockApi({
+      [`GET ${BOARD_URL}`]: { body: makeBoard() },
+      [`POST ${MOVES_URL}`]: () => {
+        attempts += 1;
+        return attempts === 1
+          ? problem(422, "validacion", "Escribe el motivo de tu decisión de avanzarla.")
+          : { body: [] };
+      },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(await screen.findByRole("checkbox", { name: "Seleccionar a Beto López" }));
+    await user.click(screen.getByRole("button", { name: "Mover de etapa" }));
+    const dialog = screen.getByRole("dialog");
+    await user.selectOptions(within(dialog).getByLabelText("Etapa de destino"), "s3");
+    await user.click(within(dialog).getByRole("button", { name: "Mover" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("motivo de tu decisión");
+
+    await user.type(within(dialog).getByLabelText("Motivo"), "Tiene experiencia que la IA no vio");
+    await user.click(within(dialog).getByRole("button", { name: "Mover" }));
+    expect((await screen.findByRole("status")).textContent).toContain("Candidatos movidos");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    const last = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST").at(-1);
+    expect(JSON.parse(String(last?.[1]?.body))).toEqual({
+      application_ids: ["a2"],
+      to_stage_id: "s3",
+      note: "Tiene experiencia que la IA no vio",
+    });
+  });
+
+  it("agrega un candidato a mano y cierra la convocatoria", async () => {
+    const fetchMock = mockApi({
+      [`GET ${BOARD_URL}`]: { body: makeBoard() },
+      [`POST ${BOARD_URL}`]: { status: 201, body: makeDetail() },
+      ["POST /api/v1/campaigns/c1/close"]: { body: { ...CAMPAIGN, status: "CERRADA" } },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(await screen.findByRole("button", { name: "Agregar candidato" }));
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Nombre completo"), "Carla Ruiz");
+    await user.type(within(dialog).getByLabelText("Correo (opcional)"), "carla@ejemplo.test");
+    await user.click(within(dialog).getByRole("button", { name: "Agregar" }));
+    expect((await screen.findByRole("status")).textContent).toContain("Candidato agregado");
+    expect(body(fetchMock, "/applications")).toEqual({
+      full_name: "Carla Ruiz",
+      email: "carla@ejemplo.test",
+      phone: null,
+    });
+    await user.click(screen.getByRole("button", { name: "Cerrar convocatoria" }));
+    expect((await screen.findByRole("status")).textContent).toContain("Convocatoria cerrada");
+  });
+
+  it("una convocatoria cerrada o un acceso de lectura no permiten operar", async () => {
+    const closed = { ...CAMPAIGN, status: "CERRADA" as const };
+    mockApi({ [`GET ${BOARD_URL}`]: { body: makeBoard({ campaign: closed, campaigns: [closed] }) } });
+    renderWorkspace({ canEdit: false, canManage: false });
+    expect(await screen.findByText(/ya no admite movimientos/)).toBeTruthy();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Agregar|Cerrar convocatoria|Abrir convocatoria/ })).toBeNull();
+  });
+
+  it("abre el expediente con historial, evaluación y permanencia, y registra un desistimiento", async () => {
+    const fetchMock = mockApi({
+      [`GET ${BOARD_URL}`]: { body: makeBoard() },
+      ["GET /api/v1/applications/a1"]: { body: makeDetail() },
+      ["GET /api/v1/applications/a1/calls"]: { body: [] },
+      ["POST /api/v1/applications/a1/status"]: {
+        body: makeDetail({ application: makeApplication({ status: "DESISTIO" }) }),
+      },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(await screen.findByRole("button", { name: "Ana Pérez" }));
+
+    expect(await screen.findByRole("heading", { name: "Ana Pérez" })).toBeTruthy();
+    const history = within(screen.getByRole("list", { name: "Historial de movimientos" })).getAllByRole("listitem");
+    // Lo más reciente primero; lo que hizo el sistema se indica como tal.
+    expect(history[0].textContent).toContain("Avance: Revisión local RH");
+    expect(history[0].textContent).toContain("Reclutadora de Prueba");
+    expect(history[1].textContent).toContain("Sistema");
+    expect(screen.getByText(/Aceptado por IA · 87.5 de 100/)).toBeTruthy();
+    const jobs = within(screen.getByRole("list", { name: "Experiencia" })).getAllByRole("listitem");
+    expect(jobs[0].textContent).toContain("2 años 6 meses");
+    expect(screen.getByText(/una permanencia breve no es motivo de rechazo/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Descargar CV" }).getAttribute("href")).toBe(
+      "/api/v1/files/f1/download",
+    );
+    expect(await screen.findByText("Todavía no hay llamadas registradas.")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Desistió" }));
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Motivo"), "Aceptó otra oferta");
+    await user.click(within(dialog).getByRole("button", { name: "Confirmar" }));
+    expect((await screen.findByRole("status")).textContent).toContain("Desistimiento registrado");
+    expect(body(fetchMock, "/status")).toEqual({ action: "DESISTIMIENTO", note: "Aceptó otra oferta" });
+  });
+});

@@ -76,6 +76,8 @@ class BatchItem:
     score: Decimal | None = None
     # Niveles, evidencias y justificaciones. No se sobrescribe con decisiones posteriores.
     result: dict[str, Any] | None = None
+    # Datos ordenados del CV (contacto, experiencia, estudios) para el expediente.
+    extraction: dict[str, Any] | None = None
     error_code: str | None = None
     error_message: str | None = None
     # Otro CV del mismo lote con el mismo contenido; no se evalúa dos veces.
@@ -118,6 +120,10 @@ class CvBatchRepository(Protocol):
 
     def reopen_failed(self, batch_id: uuid.UUID, now: datetime) -> int:
         """Devuelve a PENDIENTE los CV fallidos. Devuelve cuántos eran."""
+        ...
+
+    def evaluated_items(self, vacancy_id: uuid.UUID) -> list[BatchItem]:
+        """CV evaluados de la vacante, del lote más antiguo al más reciente."""
         ...
 
     def evaluated_file_ids(

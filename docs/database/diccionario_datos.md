@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0008`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0009`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -352,11 +352,118 @@ Un CV dentro de un lote, con su resultado. La clasificación es la sugerencia in
 | `score` | `NUMERIC(5,2)` | No | Puntuación de 0 a 100 calculada por el sistema. Vacía si no es evaluable. |
 | `result` | `NVARCHAR(MAX)` | No | JSON con el nivel, la evidencia y la justificación de cada criterio, la calidad documental, las observaciones y el motivo si no es evaluable. Contiene fragmentos del CV. |
 | `error_code`, `error_message` | `VARCHAR(40)`, `NVARCHAR(500)` | No | Por qué falló: `proveedor`, `respuesta_invalida`, `archivo_no_disponible` u `original_sin_evaluar`. |
+| `extraction` | `NVARCHAR(MAX)` | No | JSON con los datos ordenados del CV: correo y teléfono (tomados del texto sin IA), nombre, experiencia con periodos, estudios, habilidades, certificaciones y proyectos, y el estado de la extracción (`SOLO_CONTACTO`, `COMPLETA` o `FALLIDA`). |
 | `duplicate_of` | `UNIQUEIDENTIFIER` | No | Otro CV del mismo lote con el mismo contenido, del que se toma el resultado. |
 | `execution_id` | `UNIQUEIDENTIFIER` | No | Llamada al proveedor (`ai.executions`). Sin clave foránea. |
 | `updated_at` | `DATETIME2(3)` | Sí | Último cambio. |
 
 Índices: `ix_cv_batch_items_status (batch_id, status)` e `ix_cv_batch_items_file (file_id)`.
+
+## Esquema `recruitment`: reclutamiento operativo
+
+La aplicación nunca borra filas de este esquema.
+
+### `recruitment.pipeline_versions` y `recruitment.pipeline_stages`
+
+Las etapas del proceso, por versiones. Una versión no cambia; modificar las etapas crea otra.
+
+| Tabla | Columna | Tipo | Descripción |
+| --- | --- | --- | --- |
+| `pipeline_versions` | `id`, `version_number` | `UNIQUEIDENTIFIER`, `INT` | Versión; el número es único. |
+| `pipeline_versions` | `created_at`, `created_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | Cuándo y quién. `created_by` vacío en la versión inicial, que crea el sistema. |
+| `pipeline_stages` | `id`, `pipeline_version_id`, `position` | | Etapa y su orden dentro de la versión (único). |
+| `pipeline_stages` | `name` | `NVARCHAR(100)` | Nombre visible. |
+| `pipeline_stages` | `kind` | `VARCHAR(30)` | `EVALUACION_CV`, `REVISION_RH`, `LLAMADA`, `PSICOMETRIA`, `ENTREVISTA`, `PRUEBA_TECNICA`, `ESTUDIO_SOCIOECONOMICO`, `RESULTADO` u `OTRA`. |
+| `pipeline_stages` | `is_optional` | `BIT` | Si puede omitirse sin motivo. |
+
+### `recruitment.campaigns`
+
+Convocatoria: un periodo de reclutamiento de una vacante.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `vacancy_id`, `number` | `UNIQUEIDENTIFIER`, `INT` | Sí | Vacante y número consecutivo dentro de ella (único). |
+| `name` | `NVARCHAR(100)` | Sí | Nombre visible. |
+| `status` | `VARCHAR(20)` | Sí | `ABIERTA` o `CERRADA`. La aplicación mantiene una sola abierta por vacante. |
+| `pipeline_version_id` | `UNIQUEIDENTIFIER` | Sí | Versión de etapas con la que trabaja. No cambia. |
+| `opened_at`, `opened_by` | | | Apertura. `opened_by` vacío si la abrió el sistema al registrar el primer candidato. |
+| `closed_at`, `closed_by` | | No | Cierre. |
+
+### `recruitment.candidates`
+
+Una persona, con identificador global. Sus datos se comparten entre todas sus postulaciones.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `full_name` | `NVARCHAR(200)` | Sí | Nombre completo. |
+| `email` | `NVARCHAR(254)` | No | En minúsculas. Único cuando existe (`uq_candidates_email`, índice filtrado). |
+| `phone` | `NVARCHAR(40)` | No | Teléfono. |
+| `created_at`, `created_by`, `updated_at` | | | `created_by` vacío si la creó el sistema desde un lote de CV. |
+
+### `recruitment.applications`
+
+Postulación: la participación de una persona en una convocatoria.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `candidate_id`, `campaign_id` | `UNIQUEIDENTIFIER` | Sí | Persona y convocatoria. Una postulación por persona y convocatoria. |
+| `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Vacante de la convocatoria, repetida aquí para autorizar y consultar. |
+| `stage_id` | `UNIQUEIDENTIFIER` | Sí | Etapa actual (`pipeline_stages`). |
+| `status` | `VARCHAR(20)` | Sí | `ACTIVA`, `DESISTIO`, `DESCARTADA` o `CANCELADA`. |
+| `cv_file_id` | `UNIQUEIDENTIFIER` | No | Su CV (`files.file_assets`). |
+| `evaluation_item_id` | `UNIQUEIDENTIFIER` | No | Evaluación inicial de la IA (`ai.cv_batch_items`). |
+| `ai_classification`, `ai_score` | `VARCHAR(20)`, `NUMERIC(5,2)` | No | Copia de la clasificación y puntuación iniciales. No cambian aunque el CV se vuelva a evaluar ni cuando RH mueve a la persona. |
+| `due_at` | `DATETIME2(3)` | No | Fecha acordada para la etapa actual. |
+| `created_at`, `created_by`, `updated_at` | | | `created_by` vacío si la creó el sistema. |
+
+Índices: `ix_applications_campaign (campaign_id, stage_id, status)`, `ix_applications_vacancy` e `ix_applications_file`.
+
+### `recruitment.application_movements`
+
+Historial de una postulación. Solo recibe altas; la plantilla de permisos niega `UPDATE` y `DELETE`.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `application_id`, `sequence` | `UNIQUEIDENTIFIER`, `INT` | Sí | Postulación y número de orden dentro de su historial (único). |
+| `kind` | `VARCHAR(20)` | Sí | `ALTA`, `AVANCE`, `RETROCESO`, `OMISION`, `DESISTIMIENTO`, `DESCARTE`, `CANCELACION`, `REACTIVACION`, `REPROGRAMACION` o `INCIDENCIA`. |
+| `from_stage_id`, `to_stage_id` | `UNIQUEIDENTIFIER` | No | Etapa de origen y de destino. En una omisión, `from_stage_id` es la etapa omitida. |
+| `note` | `NVARCHAR(500)` | No | Motivo o descripción. |
+| `due_at` | `DATETIME2(3)` | No | Nueva fecha, en una reprogramación. |
+| `group_id` | `UNIQUEIDENTIFIER` | No | Agrupa los movimientos de una misma operación masiva. |
+| `occurred_at`, `actor_user_id` | | | Cuándo y quién. `actor_user_id` vacío si lo hizo el sistema. |
+
+### `recruitment.question_banks` y `recruitment.question_bank_versions`
+
+| Tabla | Columna | Tipo | Descripción |
+| --- | --- | --- | --- |
+| `question_banks` | `name`, `description` | `NVARCHAR(150)`, `NVARCHAR(500)` | Nombre y descripción. |
+| `question_banks` | `owner_user_id` | `UNIQUEIDENTIFIER` | Propietario. |
+| `question_banks` | `scope` | `VARCHAR(20)` | `PRIVADO` o `COMPARTIDO`. |
+| `question_banks` | `status` | `VARCHAR(20)` | `ACTIVO` o `ARCHIVADO`. |
+| `question_banks` | `duplicated_from` | `UNIQUEIDENTIFIER` | Banco del que se copió, si es una copia. |
+| `question_bank_versions` | `bank_id`, `version_number` | | Versión del banco (única por banco). No cambia. |
+| `question_bank_versions` | `questions` | `NVARCHAR(MAX)` | Preguntas en orden, en JSON (`ISJSON`): identificador, texto, competencia, guía y origen (`MANUAL` o `IA`). |
+| `question_bank_versions` | `change_note`, `created_at`, `created_by` | | Qué cambió, cuándo y quién. |
+
+### `recruitment.call_sessions`
+
+Una llamada telefónica de una postulación.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `application_id`, `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Postulación y su vacante. |
+| `bank_version_id` | `UNIQUEIDENTIFIER` | Sí | Versión exacta del banco con la que se hizo la llamada. |
+| `status` | `VARCHAR(20)` | Sí | `BORRADOR` o `CERRADA`. Cerrada ya no se modifica. |
+| `called_at` | `DATETIME2(3)` | Sí | Fecha de la llamada. |
+| `notes` | `NVARCHAR(MAX)` | Sí | Observaciones generales. |
+| `answers` | `NVARCHAR(MAX)` | Sí | Respuestas en JSON (`ISJSON`): pregunta, respuesta, observación y si no se realizó. |
+| `analysis`, `analysis_at`, `analysis_by` | | No | Último análisis de IA, en JSON, con su fecha y quién lo pidió. |
+| `created_at`, `created_by`, `updated_at`, `closed_at` | | | Registro y cierre. |
 
 ## Esquema `ops`: operación
 

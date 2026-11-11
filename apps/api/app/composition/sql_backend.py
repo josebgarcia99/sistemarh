@@ -16,6 +16,8 @@ from app.modules.evaluation_setup.infrastructure.sql_repository import (
     SqlEvaluationSetupRepository,
 )
 from app.modules.file_management.infrastructure.sql_repository import SqlFileRepository
+from app.modules.phone_calls.infrastructure.sql_repository import SqlPhoneCallRepository
+from app.modules.recruitment.infrastructure.sql_repository import SqlRecruitmentRepository
 from app.modules.users.infrastructure.sql_repository import SqlUserRepository
 from app.modules.vacancies.infrastructure.sql_repository import SqlVacancyRepository
 from app.modules.vacancy_transfers.infrastructure.sql_repository import SqlTransferRepository
@@ -39,6 +41,8 @@ class SqlBackend:
                 ai=SqlAiRepository(session),
                 evaluation_setup=SqlEvaluationSetupRepository(session),
                 cv_batches=SqlCvBatchRepository(session),
+                recruitment=SqlRecruitmentRepository(session),
+                phone_calls=SqlPhoneCallRepository(session),
             )
             session.commit()
         except BaseException:

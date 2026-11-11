@@ -42,9 +42,9 @@ def _item_values(item: BatchItem) -> dict[str, object]:
     values["status"] = item.status.value
     values["step"] = item.step.value
     values["classification"] = item.classification.value if item.classification else None
-    values["result"] = (
-        json.dumps(item.result, ensure_ascii=False) if item.result is not None else None
-    )
+    for name in ("result", "extraction"):
+        value = getattr(item, name)
+        values[name] = json.dumps(value, ensure_ascii=False) if value is not None else None
     return values
 
 
@@ -54,6 +54,7 @@ def _to_item(row: CvBatchItemRow) -> BatchItem:
     values["step"] = ItemStep(row.step)
     values["classification"] = Classification(row.classification) if row.classification else None
     values["result"] = json.loads(row.result) if row.result else None
+    values["extraction"] = json.loads(row.extraction) if row.extraction else None
     return BatchItem(id=row.id, **values)
 
 
@@ -190,6 +191,18 @@ class SqlCvBatchRepository:
         )
         self._session.expire_all()
         return result.rowcount
+
+    def evaluated_items(self, vacancy_id: uuid.UUID) -> list[BatchItem]:
+        rows = self._session.execute(
+            sa.select(CvBatchItemRow)
+            .join(CvBatchRow, CvBatchRow.id == CvBatchItemRow.batch_id)
+            .where(
+                CvBatchRow.vacancy_id == vacancy_id,
+                CvBatchItemRow.status == ItemStatus.EVALUADO.value,
+            )
+            .order_by(CvBatchRow.created_at, CvBatchRow.id, CvBatchItemRow.position)
+        ).scalars()
+        return [_to_item(row) for row in rows]
 
     def evaluated_file_ids(
         self, vacancy_id: uuid.UUID, prompt_version_id: uuid.UUID

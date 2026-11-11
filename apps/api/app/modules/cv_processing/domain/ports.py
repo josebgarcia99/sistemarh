@@ -20,11 +20,19 @@ class CvFile:
 
 class UnreadableCvError(Exception):
     """No se obtuvo texto del CV. ``code``: sin_texto, formato_sin_texto, protegido,
-    ilegible o archivo_no_disponible."""
+    ilegible, ocr_fallido o archivo_no_disponible."""
 
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+@dataclass(frozen=True)
+class CvText:
+    text: str
+    truncated: bool
+    # Salió de un documento escaneado (OCR).
+    ocr: bool
 
 
 class CvFiles(Protocol):
@@ -34,8 +42,8 @@ class CvFiles(Protocol):
         """``None`` si el CV se eliminó o ya no está disponible."""
         ...
 
-    def read_text(self, file_id: uuid.UUID) -> tuple[str, bool]:
-        """Texto del CV y si hubo que recortarlo. Lanza ``UnreadableCvError``."""
+    def read_text(self, file_id: uuid.UUID) -> CvText:
+        """Texto del CV. Lanza ``UnreadableCvError``."""
         ...
 
     def read_chunks(self, file_id: uuid.UUID) -> Iterator[bytes]: ...
@@ -84,6 +92,15 @@ class AiAnswer:
     complete: bool
     error: str | None
     execution_id: uuid.UUID
+
+
+class Extractor(Protocol):
+    def extract(
+        self, *, system: str, user: str, vacancy_id: uuid.UUID, actor_user_id: uuid.UUID
+    ) -> AiAnswer | None:
+        """Ordena los datos del CV. ``None`` si esa operación no tiene un modelo
+        utilizable en este momento: la extracción es opcional."""
+        ...
 
 
 class Evaluator(Protocol):

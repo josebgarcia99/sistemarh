@@ -25,9 +25,13 @@ Abre http://localhost:3000. La primera terminal muestra los tres usuarios de eje
 
 **Para probar la evaluación de CV.** Entra como `ana@demo.test`, abre Vacantes, elige «Analista de Nómina», pulsa «Perfil, prompt y evaluación de CV» y después la pestaña «Evaluación de CV». La vacante ya trae un prompt aprobado y cuatro CV ficticios (uno «escaneado», sin texto). Pulsa «Evaluar 4 CV» y descarga el Excel y los ZIP. Los niveles y las puntuaciones que verás son inventados por el proveedor simulado: sirven para ver la pantalla, no para juzgar la calidad de la evaluación.
 
+**Para probar candidatos, etapas y llamadas.** Después de evaluar los CV de «Analista de Nómina», vuelve a la vacante y pulsa «Candidatos y etapas»: las cuatro personas están en «Revisión local RH». Selecciona a una rechazada por la IA, pulsa «Mover de etapa» y elige «Llamada telefónica»: te pedirá el motivo. Abre su expediente, pulsa «Nueva llamada», captura respuestas, guarda y pulsa «Analizar con IA». En el menú, «Bancos» tiene los bancos de preguntas y, como administradora, «Etapas» permite cambiar las etapas del proceso.
+
 **Para probar las ayudas de IA.** En «Auxiliar Contable» abre «Perfil, prompt y evaluación de CV», pulsa «Llenar con IA desde un documento», elige «Perfil Auxiliar Contable.docx» y pulsa «Leer con IA». Guarda el perfil, ve a «Prompt de evaluación», genera el borrador y pulsa «Proponer mejoras con IA». El proveedor simulado no lee el documento: devuelve siempre el mismo perfil de ejemplo.
 
-Si ya lo habías instalado antes, repite `pip install -r apps/api/requirements.lock`: se añadieron bibliotecas para leer PDF y generar el Excel.
+Si ya lo habías instalado antes, repite `pip install -r apps/api/requirements.lock`: se añadieron bibliotecas.
+
+**CV escaneados (OCR).** Para que el sistema lea PDF escaneados e imágenes hace falta Tesseract, un programa aparte de Python. En Mac: `brew install tesseract tesseract-lang`. En Windows: el instalador de Tesseract con el idioma español. En el servidor ya va incluido en la imagen del contenedor. Sin Tesseract todo funciona igual, salvo que esos CV quedan como «no evaluable».
 
 **Qué es y qué no es.** Arranca la API real con los datos en memoria (el mismo motor de las pruebas automáticas), tres usuarios y tres vacantes ficticias, y proveedores de IA simulados. Todo se borra al cerrar. No es SQL Server, no valida nada de SQL Server y no sustituye a la base de datos real en ningún entorno. Se niega a arrancar si `RECLU_ENVIRONMENT` es `production` e ignora cualquier otra variable `RECLU_`.
 
@@ -154,6 +158,7 @@ Si Sistemas prefiere ejecutar T-SQL en lugar de Alembic, los scripts equivalente
 | `actualizacion_0005_a_0006.sql` | Base que ya tiene la versión `0005` |
 | `actualizacion_0006_a_0007.sql` | Base que ya tiene la versión `0006` |
 | `actualizacion_0007_a_0008.sql` | Base que ya tiene la versión `0007` |
+| `actualizacion_0008_a_0009.sql` | Base que ya tiene la versión `0008` |
 | `permisos_usuario_aplicacion.sql` | Plantilla de permisos mínimos para el usuario de la aplicación |
 | `reversion_completa.sql` | Elimina todo. Solo para bases de prueba |
 

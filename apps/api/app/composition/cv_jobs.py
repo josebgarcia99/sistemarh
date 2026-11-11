@@ -59,9 +59,18 @@ def run_batch(context: AppContext, batch_id: uuid.UUID) -> None:
     try:
         with backend.transaction() as repos:
             context.cv_batches(repos).finalize(batch_id, token)
+            vacancy_id = repos.cv_batches.get_batch(batch_id).vacancy_id
     except Exception:
         logger.exception("Error inesperado al cerrar un lote de CV")
         stop("No se pudo cerrar el lote. Lo ya evaluado está guardado; usa «Reintentar».")
+        return
+    try:
+        # Cada CV evaluado entra al proceso como postulación, en revisión de RH.
+        with backend.transaction() as repos:
+            context.recruitment(repos).sync_evaluated(vacancy_id)
+    except Exception:
+        # No se pierde nada: se vuelve a intentar al abrir los candidatos de la vacante.
+        logger.exception("No se pudieron registrar las postulaciones de un lote de CV")
 
 
 @lru_cache(maxsize=1)

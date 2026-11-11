@@ -23,10 +23,16 @@ GRANT SELECT, INSERT ON SCHEMA::ops TO [<USUARIO_APP>];
 GRANT SELECT, INSERT, UPDATE ON SCHEMA::files TO [<USUARIO_APP>];
 -- Configuración de IA: las API keys se guardan cifradas; la clave maestra no está en la base.
 GRANT SELECT, INSERT, UPDATE ON SCHEMA::ai TO [<USUARIO_APP>];
+-- Reclutamiento: candidatos, postulaciones, historial, bancos y llamadas. Nunca borra filas.
+GRANT SELECT, INSERT, UPDATE ON SCHEMA::recruitment TO [<USUARIO_APP>];
 GRANT SELECT ON dbo.alembic_version TO [<USUARIO_APP>];
 GO
 
 -- Auditoría inalterable: la aplicación puede insertar y leer eventos, pero no
 -- modificarlos ni borrarlos.
 DENY UPDATE, DELETE ON ops.audit_events TO [<USUARIO_APP>];
+GO
+
+-- Historial de movimientos de las postulaciones: solo altas y lectura.
+DENY UPDATE, DELETE ON recruitment.application_movements TO [<USUARIO_APP>];
 GO

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from app.infrastructure.documents.text import TextExtractionError, extract_text
+from app.infrastructure.documents.text import Ocr, TextExtractionError, extract_text
 from app.infrastructure.storage.local import LocalFileStorage, StorageError
 from app.modules.ai_settings.application.service import AiSettingsService
 from app.modules.ai_settings.domain.models import Operation
@@ -17,10 +17,11 @@ from app.modules.file_management.domain.models import (
 )
 
 _UNREADABLE = {
-    "sin_texto": "El documento no contiene texto legible; parece escaneado. Pega el texto "
-    "del perfil en su lugar.",
-    "formato_sin_texto": "Este formato todavía no se puede leer (DOC antiguo o imagen). Usa "
-    "un PDF con texto o un DOCX, o pega el texto del perfil.",
+    "sin_texto": "No se encontró texto legible en el documento. Pega el texto del perfil "
+    "en su lugar.",
+    "formato_sin_texto": "Este formato todavía no se puede leer (DOC antiguo, o imagen sin "
+    "el lector de documentos escaneados instalado). Usa un PDF o un DOCX, o pega el texto.",
+    "ocr_fallido": "El lector de documentos escaneados no pudo procesar el archivo.",
     "protegido": "El PDF está protegido con contraseña.",
     "ilegible": "El documento está dañado o no se pudo leer.",
 }
@@ -54,9 +55,12 @@ class AiAssistant:
 
 
 class StoredProfileSources:
-    def __init__(self, files: FileRepository, storage: LocalFileStorage | None) -> None:
+    def __init__(
+        self, files: FileRepository, storage: LocalFileStorage | None, ocr: Ocr | None = None
+    ) -> None:
         self._files = files
         self._storage = storage
+        self._ocr = ocr
 
     def _asset(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> FileAsset | None:
         asset = self._files.get(file_id)
@@ -80,7 +84,8 @@ class StoredProfileSources:
             )
         try:
             with self._storage.open(asset.storage_key) as handle:
-                return extract_text(handle, asset.extension)
+                found = extract_text(handle, asset.extension, self._ocr)
+            return found.text, found.truncated
         except TextExtractionError as error:
             raise ProfileSourceError(_UNREADABLE[error.code]) from error
         except (StorageError, OSError) as error:

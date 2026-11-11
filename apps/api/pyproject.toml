@@ -19,6 +19,10 @@ dependencies = [
     # Lectura de CV en PDF y generación del Excel de evaluación.
     "pypdf>=5.0",
     "openpyxl>=3.1",
+    # Lectura de documentos escaneados: convierte páginas de PDF en imagen
+    # para Tesseract, que se instala en el servidor (no es un paquete de Python).
+    "pypdfium2>=4.30",
+    "pillow>=10.1",
 ]
 
 [project.optional-dependencies]

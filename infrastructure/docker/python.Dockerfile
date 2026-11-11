@@ -21,6 +21,8 @@ RUN apt-get update \
         > /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc \
+    # Lectura de CV escaneados (OCR) dentro del servidor, en español e inglés.
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-spa \
     && apt-get purge -y gnupg \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*

@@ -8,7 +8,9 @@
 
 Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas en un entorno real (ver "No verificado todavía"). La Fase 1 (fundamentos) está terminada.
 
-**Fase 4 (Inteligencia documental): construida y probada con proveedores de IA simulados; pendiente de validar con SQL Server, con el worker y Redis, y con un modelo real.** Incluye la clave maestra y el cifrado de documentos sensibles, la configuración de IA, los perfiles de puesto y prompts, la evaluación de CV por lotes con su Excel y sus ZIP, y las dos ayudas de IA: llenar el perfil desde un documento o texto y proponer una mejor redacción de los criterios. Quedó fuera de esta fase, y se indica más abajo: leer CV escaneados (OCR) y DOC antiguos, y la extracción estructurada del CV con el cálculo de permanencia laboral (secciones 12.2 y 12.3), que se construye con los expedientes de la Fase 5.
+**Fase 4 (Inteligencia documental): construida y probada con proveedores de IA simulados; pendiente de validar con SQL Server, con el worker y Redis, y con un modelo real.** Incluye la clave maestra y el cifrado de documentos sensibles, la configuración de IA, los perfiles de puesto y prompts, la evaluación de CV por lotes con su Excel y sus ZIP, la lectura de CV escaneados con OCR y las ayudas de IA para el perfil y la rúbrica.
+
+**Fase 5 (Reclutamiento operativo): construida completa y probada con datos sintéticos y proveedores simulados; pendiente de la misma validación.** Incluye expedientes y postulaciones, convocatorias, etapas configurables por versiones, movimientos con historial, bancos de preguntas, llamadas telefónicas y su análisis con IA, y la extracción estructurada del CV con la permanencia laboral. Su criterio de cierre ("un candidato rechazado por la IA avanza a llamada por decisión humana y queda registrado") pasa en las pruebas y en el recorrido en navegador.
 
 ## Funcionalidades terminadas
 
@@ -48,16 +50,26 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 | Prompt de evaluación | Diez capas y una rúbrica con escala 0 a 4, pesos y umbral. El borrador se genera del perfil con un criterio por requisito, sin inventar ninguno. Flujo borrador, en revisión, aprobado y archivado; una versión aprobada es inmutable y se duplica para cambiarla. Quien colabora edita y envía a revisión; solo el responsable o un administrador aprueba |
 | Perfil desde un documento | En el perfil, «Llenar con IA desde un documento»: la IA lee un PDF o Word de tipo «Perfil de puesto» cargado en la vacante, o un texto pegado, y llena el formulario con lo que el documento dice, marcando los requisitos ambiguos. Es una propuesta: no se guarda hasta que la persona la revisa y pulsa guardar. La versión queda marcada como originada con IA y enlazada a su documento |
 | Mejoras a la rúbrica con IA | En un borrador, «Proponer mejoras con IA» sugiere una redacción más clara de la descripción y los niveles 0 a 4 de cada criterio. El sistema descarta cualquier criterio que no exista ya en la rúbrica, así que la IA no puede añadir requisitos. Nada cambia hasta que la persona aplica la sugerencia y guarda |
-| Lectura de CV | Se extrae el texto de PDF y de DOCX dentro del servidor. Un PDF escaneado, una imagen, un DOC antiguo, un PDF con contraseña o un archivo dañado quedan como «no evaluable» con su motivo; nunca como rechazo |
+| Lectura de CV | Se extrae el texto de PDF y de DOCX dentro del servidor; los escaneados y las imágenes, con OCR. Un DOC antiguo, un PDF con contraseña o un archivo dañado quedan como «no evaluable» con su motivo; nunca como rechazo |
 | Evaluación de CV por lotes | Desde la vacante, con el prompt aprobado vigente. Cada CV se guarda en cuanto se evalúa; si el proveedor falla, lo evaluado se conserva y el lote se reanuda. Antes de enviar el texto se ocultan correos y teléfonos. Un CV repetido dentro del lote no se evalúa dos veces |
 | Puntuación y clasificación | La IA solo asigna un nivel de 0 a 4 por criterio; Python valida la respuesta contra la rúbrica y calcula el promedio ponderado (0 a 100). Con el umbral aprobado clasifica en `ACEPTADO_IA`, `RECHAZADO_IA` o `NO_EVALUABLE`. La calidad documental se informa aparte y no cambia la puntuación. Es una sugerencia inicial: no decide nada y no se sobrescribe |
 | Excel y ZIP | Al terminar un lote se generan `Reporte_Evaluacion.xlsx`, `Aceptados.zip`, `Rechazados.zip` y, si los hay, `No_Evaluables.zip`, con los originales intactos, nombres numerados para que no choquen y un manifiesto con el SHA-256. Se guardan en el servidor, se descargan con el mismo permiso que los documentos y quedan auditados. El Excel neutraliza los textos que parecen fórmulas |
 | Segundo plano | Estados `EN_COLA`, `PROCESANDO`, `COMPLETADO`, `COMPLETADO_CON_INCIDENCIAS`, `FALLIDO` y `CANCELADO`. El lote se detiene solo si se alcanza el límite de gasto, si falta el modelo o si el proveedor falla tres veces seguidas; se puede cancelar, reintentar y reanudar. Dos procesos no atienden el mismo lote |
-| Base de datos | Migraciones `0001` (identidad y auditoría), `0002` (vacantes y transferencias), `0003` (documentos), `0004` (cifrado de documentos), `0005` (configuración de IA), `0006` (perfiles y prompts), `0007` (consumo de IA) y `0008` (lotes de CV): 21 tablas en los esquemas `auth`, `vacancy`, `files`, `ai` y `ops` |
-| Scripts para Sistemas | `database/sqlserver/`: instalación completa, actualizaciones entre versiones consecutivas (de `0001` a `0008`), reversión y plantilla de permisos del usuario de la aplicación |
-| Pantallas | Inicio de sesión, Inicio, Vacantes (lista, alta, detalle, compartir, documentos, perfil, prompt y evaluación de CV, historial, transferir), Usuarios, Bajas (baja con transferencia), Configuración de IA y Auditoría. El menú cambia según el rol |
+| Lectura de CV escaneados (OCR) | Un PDF sin texto o una imagen (JPG, PNG) se lee con Tesseract, instalado en el propio servidor: nada sale hacia servicios externos. A la IA se le avisa de que el texto viene de un escaneo, para que no cuente los errores de lectura como faltas de la persona. Si Tesseract no está instalado, esos CV quedan como «no evaluable» |
+| Datos ordenados del CV | Al evaluar un lote, y si el administrador asignó un modelo a «Extracción de CV», la IA ordena nombre, experiencia, estudios, habilidades, certificaciones y proyectos, sin completar fechas ni inferir atributos personales. El correo y el teléfono se toman del texto con reglas locales, sin IA. Si esta parte falla, el CV queda evaluado igualmente |
+| Permanencia laboral | Calculada en Python: duración por empleo, promedio, mediana, tiempo total documentado sin contar dos veces los periodos simultáneos, traslapes y empleos sin fechas completas. Es información de apoyo, nunca un criterio de rechazo |
+| Candidatos y postulaciones | Cada persona tiene un identificador global; cada participación en una convocatoria es una postulación independiente, con su CV, su evaluación inicial, su etapa, su historial y sus llamadas. Al terminar un lote, cada CV evaluado entra como postulación en «Revisión local RH» con la clasificación inicial de la IA; también se dan de alta a mano |
+| Convocatorias | Periodos de reclutamiento de una vacante. Cerrar una la deja solo para consulta; abrir otra permite reutilizar la vacante sin alterar el pasado, y la misma persona puede volver a participar |
+| Etapas configurables | Ocho etapas iniciales. El administrador las cambia desde «Etapas»; cada cambio es una versión nueva que usan las convocatorias que se abran después. Las abiertas conservan las suyas |
+| Movimientos | Avanzar, regresar, omitir etapas, mover en grupo, desistimiento, descarte, cancelación, reactivación, incidencia y reprogramación. Todo queda en un historial que solo crece. Exigen motivo: regresar, omitir una etapa no opcional, cualquier baja o reactivación, y **avanzar a quien la IA no clasificó como aceptado** |
+| Bancos de preguntas | Privados o compartidos, por versiones, con competencia y guía por pregunta. Se crean, editan, duplican, comparten y archivan. La IA propone preguntas a partir del perfil de una vacante y la persona elige cuáles añade |
+| Llamadas telefónicas | Sobre una postulación y con un banco: respuestas, observaciones y preguntas no realizadas. Varias por postulación. Al cerrarla queda fija, y conserva la versión del banco con la que se hizo |
+| Análisis de llamadas con IA | Resume evidencias, competencias exploradas, información que faltó, coincidencias y diferencias por aclarar con el CV, y preguntas de seguimiento. No evalúa tono ni sinceridad, no afirma que alguien mintió y no recomienda avanzar o descartar |
+| Base de datos | Migraciones `0001` (identidad y auditoría), `0002` (vacantes y transferencias), `0003` (documentos), `0004` (cifrado de documentos), `0005` (configuración de IA), `0006` (perfiles y prompts), `0007` (consumo de IA), `0008` (lotes de CV) y `0009` (reclutamiento operativo): 30 tablas en los esquemas `auth`, `vacancy`, `files`, `ai`, `recruitment` y `ops` |
+| Scripts para Sistemas | `database/sqlserver/`: instalación completa, actualizaciones entre versiones consecutivas (de `0001` a `0009`), reversión y plantilla de permisos del usuario de la aplicación |
+| Pantallas | Inicio de sesión, Inicio, Vacantes (lista, alta, detalle, compartir, documentos, perfil, prompt y evaluación de CV, candidatos con expediente y llamadas, historial, transferir), Bancos de preguntas, Etapas, Usuarios, Bajas (baja con transferencia), Configuración de IA y Auditoría. El menú cambia según el rol |
 | Worker Celery | Configuración segura, tarea `system.ping` y tarea `cv.process_batch`, que procesa un lote de CV y, al arrancar, vuelve a encolar los lotes que quedaron a medias |
-| Reglas entre módulos | 10 contratos de `import-linter`: capas por módulo y dominios independientes |
+| Reglas entre módulos | 11 contratos de `import-linter`: capas por módulo y dominios independientes |
 
 ## Pruebas ejecutadas
 
@@ -65,15 +77,17 @@ Ejecutadas el 11 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 269 pruebas, todas pasan |
+| API: `pytest` | 283 pruebas, todas pasan |
 | Worker: `pytest` | 5 pruebas, todas pasan |
-| `ruff check` y `lint-imports` | Sin errores; 10 contratos cumplidos |
+| `ruff check` y `lint-imports` | Sin errores; 11 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |
-| Frontend: `vitest` | 68 pruebas, todas pasan |
+| Frontend: `vitest` | 80 pruebas, todas pasan |
 | Frontend: `next build` | Compila |
 | Recorrido en navegador real, identidad | 10 pasos: redirección sin sesión, credenciales erróneas, inicio de sesión, alta de usuario, restablecer contraseña, recarga, cierre de sesión, contraseña anterior rechazada, reclutador sin acceso a Usuarios y respuesta 403 de la API |
 | Recorrido en navegador real, vacantes | 11 pasos: alta de dos reclutadores, alta de dos vacantes, cambio de estado, compartir en lectura, la otra persona solo ve la compartida y no puede editarla, la API le niega cambiar el estado, transferencia individual, baja con transferencia, auditoría con el acceso denegado, la persona dada de baja ya no entra y el receptor queda como responsable |
 | Recorrido en navegador real, evaluación de CV | 9 pasos sobre el modo demostración, con CV ficticios y un proveedor simulado: la pestaña muestra el prompt aprobado y los CV sin evaluar; el lote evalúa 4 CV y deja uno como no evaluable; el detalle muestra niveles, evidencia y motivo; se descargan el Excel y los ZIP, que suman los 4 originales con su manifiesto; se repite la evaluación y el lote anterior se conserva; los archivos generados no se mezclan con los documentos; con acceso de lectura se consulta y se descarga sin poder operar; auditoría y consumo lo registran; en móvil no hay desbordamiento |
+| Recorrido en navegador real, Fase 5 | 9 pasos sobre el modo demostración: los 4 CV evaluados entran como candidatos en revisión de RH con su nombre; un rechazado por la IA avanza a llamada solo con motivo; el expediente muestra historial, clasificación inicial intacta y experiencia con permanencia; llamada con banco, análisis de IA y cierre; reprogramación y desistimiento en el historial; banco nuevo con una pregunta propuesta por la IA; con lectura se consulta sin operar y no se ve un banco privado ajeno; el administrador guarda una versión nueva de etapas y la auditoría registra los movimientos; la convocatoria abierta conserva sus 8 etapas y en móvil no hay desbordamiento |
+| OCR real | Tesseract 5.3 leyó un PDF escaneado y una imagen PNG sintéticos, y el lote los evaluó. Es la única integración externa de esta fase que se ejecutó de verdad |
 | Recorrido en navegador real, ayudas de IA | 5 pasos sobre el modo demostración, con un proveedor simulado: la IA llena el formulario del perfil desde un Word y no guarda nada; la persona lo guarda como versión 1; la IA propone redacción para los tres criterios con sus avisos; al aplicar y guardar siguen siendo tres criterios; un texto demasiado corto se rechaza con su motivo |
 | Recorrido en navegador real, consumo de IA | 4 pasos sobre el modo demostración: con límite y sin precio la llamada se rechaza; con precio el modelo responde y se estima el costo; el consumo aparece en la tabla del mes; al alcanzar el límite mensual las llamadas se detienen |
 | Recorrido en navegador real, perfil y prompt | 7 pasos sobre el modo demostración: el perfil exige objetivo, se guarda como versión 1, el borrador sale con un criterio por requisito, editar actualiza la rúbrica, revisión y aprobación, duplicar crea la versión 2, y con acceso de lectura solo se consulta |
@@ -114,6 +128,9 @@ No hay todavía una instancia de SQL Server de pruebas. Por eso:
 - **Todo lo que toca SQL Server de verdad:** ejecutar `instalacion_completa.sql` y `actualizacion_0001_a_0002.sql`, la plantilla de permisos, crear el usuario maestro con el comando, iniciar sesión contra la base, la paginación `OFFSET/FETCH`, la intercalación en las búsquedas, los índices únicos filtrados, la restricción `ISJSON` y dos ediciones simultáneas reales de una vacante.
 - **La atomicidad de la baja con transferencia en SQL Server.** La prueba de "si falla a la mitad no cambia nada" pasa sobre el motor en memoria; falta repetirla en SQL Server.
 - **Anthropic y OpenAI reales.** La aplicación nunca se ha conectado a ningún proveedor de IA: todas las pruebas usan proveedores simulados y claves ficticias. La forma de la llamada se tomó de la documentación pública de cada proveedor.
+- **OCR con documentos reales.** Tesseract se probó con imágenes sintéticas de letra impresa y nítida. Con escaneos reales (torcidos, con sellos, en baja resolución o manuscritos) la lectura será peor; hay que medirla. Tampoco se ha construido la imagen Docker con Tesseract.
+- **Extracción del CV y análisis de llamadas con un modelo real.** Probados con respuestas programadas.
+- **Concurrencia en SQL Server.** Dos personas moviendo a la misma candidata a la vez, y el índice único de correo de candidatos, solo se probaron sobre el motor en memoria.
 - **Las ayudas de IA con un modelo real.** La lectura del perfil y la propuesta de criterios se probaron con respuestas programadas. Falta ver qué tan fiel es un modelo real al documento y si respeta el formato.
 - **La evaluación de CV con un modelo real.** Todo se probó con un proveedor simulado que devuelve respuestas programadas. No se sabe todavía qué tan bien sigue un modelo real el formato pedido ni qué calidad tienen sus niveles y evidencias; eso se mide cuando haya claves, con CV sintéticos primero.
 - **El worker y la cola.** La tarea `cv.process_batch` está registrada y su lógica se probó ejecutándola en el momento; nunca ha corrido dentro de un worker de Celery con Redis. Tampoco se probó la reanudación automática al arrancar el worker.
@@ -148,10 +165,12 @@ No hay todavía una instancia de SQL Server de pruebas. Por eso:
 | Tablas `prompt_version_layers` y `rubric_versions` | Las capas van en una columna JSON de `ai.prompt_versions` y la rúbrica forma parte de la versión del prompt (`ai.rubric_criteria`) | Son diez capas fijas y siempre se leen juntas; un prompt y su rúbrica se aprueban como una sola cosa |
 | Tablas `cv_processing_batches`, `cv_documents`, `cv_evaluations` y `cv_evaluation_scores` | Dos tablas: `ai.cv_batches` y `ai.cv_batch_items`. El resultado de cada CV (niveles, evidencias, justificaciones) va en una columna JSON del CV del lote | Hasta la Fase 5 no existen candidatos ni postulaciones a los que enlazar una evaluación; ahí se decide si los niveles pasan a tabla propia |
 | Un estado por cada uno de los 15 pasos de la sección 12.1 | Cada CV guarda el último paso completado (`RECIBIDO`, `TEXTO_EXTRAIDO`, `ANALIZADO`, `CALIFICADO`), su estado y, si falló, el código del error | Recibir, validar, guardar y calcular el hash ya tienen sus estados en `files.file_assets`; los archivos generados son del lote, no del CV |
-| OCR y conversión de DOC | No construidos: esos CV quedan como «no evaluable» con el motivo | Requieren programas adicionales en el servidor (Tesseract, LibreOffice) que hay que acordar con Sistemas |
 | Ocultar los datos de contacto antes de enviar el CV (decisión 13) | Se ocultan correos y teléfonos. El nombre y la dirección no | No se pueden reconocer de forma fiable sin otro modelo; se reevalúa con la extracción estructurada |
-| Extracción estructurada del CV y permanencia laboral (12.2 y 12.3) en la Fase 4 | Pasan a la Fase 5 | Su resultado alimenta el expediente del candidato, que aún no existe; hacerlo ahora duplicaría el costo por CV sin tener dónde mostrarlo |
 | Procesamiento en el worker | En producción y en contenedores lo hace el worker (Celery). Sin Redis configurado, lo hace un hilo de la propia API; en las pruebas y en el modo demostración se ejecuta en el momento | Permite trabajar en un equipo sin Redis. El estado vive siempre en SQL Server |
+| Tablas de etapas (`stage_definitions`, `stage_versions`, `application_stage_history`), de bancos (`questions`, `question_bank_versions`) y de llamadas (`call_sessions`, `call_answers`, `call_analyses`) | Nueve tablas en el esquema `recruitment`. Las preguntas de una versión de banco y las respuestas de una llamada van en columnas JSON; el análisis de una llamada va en la propia llamada y solo se conserva el más reciente | Se leen y se guardan siempre juntas. Una llamada apunta a la versión exacta del banco con la que se hizo |
+| Resultado final de la postulación en la Fase 5 | La postulación tiene estado (activa, desistió, descartada, cancelada) y etapa. El resultado de contratación se construye en la Fase 7 | Así lo marca el plan por fases |
+| Conversión de DOC antiguos | No construida: esos CV quedan como «no evaluable» | Requiere LibreOffice en el servidor; no se ha pedido |
+| Pantallas diseñadas antes de construirlas | Las de la Fase 5 se construyeron directamente con el sistema visual aprobado, sin maqueta previa | Se pidió la fase completa de una vez |
 | Carga de archivos como formulario | El archivo viaja como cuerpo de la petición | Permite escribirlo directo a la zona temporal y cortar al superar el límite, sin copias intermedias |
 
 ## Funcionalidades pendientes
@@ -191,6 +210,14 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - El costo es una estimación con el precio capturado; no se concilia con la factura del proveedor.
 - El perfil y el prompt se abren dentro de la pantalla de Vacantes: no tienen dirección propia, así que al recargar la página se vuelve a la lista.
 - Una versión de perfil anterior se ve en la lista de versiones, pero no se puede abrir para leer su contenido.
+- La extracción de datos del CV duplica las llamadas a la IA por cada CV de un lote. Es opcional: sin un modelo asignado a «Extracción de CV» no se hace, y el nombre de la persona se toma del nombre del archivo.
+- Dos CV distintos de la misma persona (mismo correo) en una convocatoria generan una sola postulación, con el primero.
+- Los datos de una persona se comparten entre sus postulaciones: corregir su nombre o correo desde una vacante lo cambia en todas.
+- De una llamada solo se conserva el análisis de IA más reciente.
+- El expediente y los candidatos se abren dentro de la pantalla de Vacantes y no tienen dirección propia; al recargar la página se vuelve a la lista.
+- En el expediente, los niveles de la evaluación muestran el código del criterio (C1, C2…) y no su nombre.
+- La lista de candidatos no tiene búsqueda ni paginación; está pensada para convocatorias de hasta unos cientos de personas.
+- Con el menú «Bancos» y «Etapas», el encabezado del administrador ocupa dos líneas en pantallas medianas.
 - La propuesta de la IA para el perfil sustituye lo que haya en el formulario; no hay vista de comparación campo por campo.
 - Las exportaciones de un lote que se reintenta se vuelven a generar; las anteriores se conservan en el servidor y en `files.file_assets`, pero la pantalla solo enlaza las más recientes.
 - En el Excel, el nombre del criterio no aparece si la versión del prompt se eliminara; hoy las versiones no se eliminan.
@@ -218,6 +245,8 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - 11 nov 2026: Fase 4, tercera parte (inicio): llamadas a los proveedores con reintentos, registro de consumo, precios por modelo y límite mensual.
 - 11 nov 2026: Fase 4, tercera parte: evaluación de CV por lotes, puntuación en Python, clasificación, Excel y ZIP, tarea del worker y pestaña «Evaluación de CV». El modo demostración trae una vacante lista para evaluar.
 - 11 nov 2026: Fase 4, cierre: llenar el perfil con IA desde un documento o texto y proponer mejoras a los criterios con IA.
+- 11 nov 2026: lectura de CV escaneados con OCR (Tesseract en el servidor).
+- 11 nov 2026: Fase 5 completa: candidatos, postulaciones, convocatorias, etapas por versiones, movimientos, bancos de preguntas, llamadas y análisis con IA, extracción del CV y permanencia laboral.
 - 11 nov 2026: el servidor de desarrollo de Next.js cortaba las cargas de más de 10 MB al reenviarlas a la API; se amplió el límite a 25 MB. Lo detectó el recorrido en navegador.
 
 ## Decisiones tomadas
@@ -241,6 +270,6 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 ## Próximos pasos
 
 1. Validar contra SQL Server en cuanto exista una instancia.
-2. Diseñar las pantallas de la Fase 5.
-3. Fase 5: expedientes y postulaciones a partir de los CV evaluados (con la extracción estructurada y la permanencia laboral), etapas, bancos de preguntas y llamadas.
-4. Acordar con Sistemas si el servidor tendrá OCR y conversión de DOC.
+2. Fase 6: psicometría, entrevistas con gerente, pruebas técnicas, estudios socioeconómicos, digitalización y síntesis acumulativa del expediente.
+3. Con las claves de IA: medir con CV sintéticos la calidad de la evaluación, de la extracción y del análisis de llamadas.
+4. Medir el OCR con escaneos reales de prueba.

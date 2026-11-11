@@ -2,7 +2,7 @@
 
 Plataforma web para gestionar el proceso completo de reclutamiento: vacantes, análisis de CV con IA, etapas, llamadas, pruebas, estudios, expedientes y contratación. La IA clasifica y resume; las decisiones las registra una persona.
 
-**Estado actual: Fases 2 y 3 construidas y Fase 4 avanzada, todo pendiente de validar contra SQL Server.** Funcionan el inicio de sesión, los usuarios, las vacantes, la compartición, las transferencias, la auditoría, el almacenamiento de documentos en el disco del servidor, la configuración de IA, los perfiles y prompts, y la evaluación de CV por lotes con su Excel y sus ZIP. Nada se ha ejecutado todavía contra un SQL Server real ni contra un proveedor de IA real. Lo que existe y lo que falta está en [`docs/estado_proyecto.md`](docs/estado_proyecto.md).
+**Estado actual: Fases 2 a 5 construidas, pendientes de validar contra SQL Server y con proveedores de IA reales.** Funcionan el inicio de sesión, los usuarios, las vacantes, la compartición, las transferencias, la auditoría, el almacenamiento de documentos, la configuración de IA, los perfiles y prompts, la evaluación de CV por lotes (con lectura de escaneados por OCR), los candidatos con sus etapas e historial, los bancos de preguntas y las llamadas telefónicas con su análisis. Nada se ha ejecutado todavía contra un SQL Server real ni contra un proveedor de IA real. Lo que existe y lo que falta está en [`docs/estado_proyecto.md`](docs/estado_proyecto.md).
 
 ## Arquitectura en una línea
 

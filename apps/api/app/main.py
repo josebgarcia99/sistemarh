@@ -14,6 +14,7 @@ from app.composition.ai import build_provider_clients
 from app.composition.backend import Backend
 from app.composition.bootstrap import (
     build_master_key,
+    build_ocr,
     build_scanner,
     build_sql_backend,
     build_storage,
@@ -38,6 +39,8 @@ from app.modules.authentication.domain.models import AuthPolicy
 from app.modules.cv_processing.api.router import router as cv_processing_router
 from app.modules.evaluation_setup.api.router import router as evaluation_setup_router
 from app.modules.file_management.api.router import router as files_router
+from app.modules.phone_calls.api.router import router as phone_calls_router
+from app.modules.recruitment.api.router import router as recruitment_router
 from app.modules.system.api.router import router as system_router
 from app.modules.system.application.health import HealthCheck
 from app.modules.system.infrastructure.checks import build_default_checks
@@ -68,7 +71,7 @@ def create_app(
     docs_enabled = settings.environment is not Environment.PRODUCTION
     app = FastAPI(
         title=settings.app_name,
-        version="0.5.0",
+        version="0.6.0",
         openapi_url=f"{settings.api_prefix}/openapi.json" if docs_enabled else None,
         docs_url=f"{settings.api_prefix}/docs" if docs_enabled else None,
         redoc_url=None,
@@ -89,6 +92,7 @@ def create_app(
         ai_clients=ai_clients if ai_clients is not None else build_provider_clients(settings),
         ai_sleep=ai_sleep,
         job_mode=job_mode or default_job_mode(settings),
+        ocr=build_ocr(settings),
     )
 
     app.add_middleware(RequestContextMiddleware)
@@ -105,6 +109,8 @@ def create_app(
     api.include_router(ai_router)
     api.include_router(evaluation_setup_router)
     api.include_router(cv_processing_router)
+    api.include_router(recruitment_router)
+    api.include_router(phone_calls_router)
     api.include_router(audit_router)
     app.include_router(api)
     return app

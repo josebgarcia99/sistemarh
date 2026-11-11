@@ -51,10 +51,18 @@ type Props = {
   initialNotice?: string;
   /** Abre el perfil de puesto y el prompt de evaluación de la vacante. */
   onOpenEvaluation?: (vacancy: Vacancy) => void;
+  /** Abre los candidatos de la vacante: etapas, movimientos y llamadas. */
+  onOpenCandidates?: (vacancy: Vacancy) => void;
 };
 
 /** Panel de una vacante: datos, estado, con quién se comparte e historial. */
-export function VacancyPanel({ vacancyId, onClose, initialNotice, onOpenEvaluation }: Props) {
+export function VacancyPanel({
+  vacancyId,
+  onClose,
+  initialNotice,
+  onOpenEvaluation,
+  onOpenCandidates,
+}: Props) {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -284,6 +292,24 @@ export function VacancyPanel({ vacancyId, onClose, initialNotice, onOpenEvaluati
             onClick={() => onOpenEvaluation(vacancy)}
           >
             Perfil, prompt y evaluación de CV
+          </button>
+        </section>
+      )}
+
+      {onOpenCandidates && (
+        <section aria-labelledby="candidates-title" className="flex flex-col gap-3">
+          <h3 id="candidates-title" className="text-lg font-medium">
+            Candidatos
+          </h3>
+          <p className="text-sm text-ink-muted">
+            Las personas de esta vacante, su etapa, su historial y sus llamadas.
+          </p>
+          <button
+            type="button"
+            className={`${secondaryButtonClass} self-start`}
+            onClick={() => onOpenCandidates(vacancy)}
+          >
+            Candidatos y etapas
           </button>
         </section>
       )}

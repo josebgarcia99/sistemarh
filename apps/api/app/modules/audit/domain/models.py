@@ -61,6 +61,21 @@ class AuditAction(StrEnum):
     LOTE_CV_TERMINADO = "lote_cv.terminado"
     LOTE_CV_REANUDADO = "lote_cv.reanudado"
     LOTE_CV_CANCELADO = "lote_cv.cancelado"
+    ETAPAS_VERSION_CREADA = "etapas.version_creada"
+    CONVOCATORIA_ABIERTA = "convocatoria.abierta"
+    CONVOCATORIA_CERRADA = "convocatoria.cerrada"
+    POSTULACIONES_CREADAS = "postulacion.creada"
+    POSTULACION_MOVIDA = "postulacion.movida"
+    POSTULACION_ESTADO_CAMBIADO = "postulacion.estado_cambiado"
+    POSTULACION_ANOTADA = "postulacion.anotada"
+    CANDIDATO_ACTUALIZADO = "candidato.actualizado"
+    BANCO_CREADO = "banco_preguntas.creado"
+    BANCO_ACTUALIZADO = "banco_preguntas.actualizado"
+    BANCO_PREGUNTAS_PROPUESTAS = "banco_preguntas.preguntas_propuestas"
+    LLAMADA_ABIERTA = "llamada.abierta"
+    LLAMADA_GUARDADA = "llamada.guardada"
+    LLAMADA_CERRADA = "llamada.cerrada"
+    LLAMADA_ANALIZADA = "llamada.analizada"
 
 
 @dataclass(frozen=True)

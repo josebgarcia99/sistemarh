@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     clamd_host: str = "clamav"
     clamd_port: int = Field(default=3310, gt=0, lt=65536)
 
+    # Lectura de documentos escaneados con Tesseract, instalado en el servidor.
+    ocr_enabled: bool = True
+    ocr_languages: str = "spa+eng"
+
     # Archivo con la clave maestra (AES-256), fuera de SQL Server y del
     # repositorio. Cifra las API keys de IA y los documentos de clase sensible.
     master_key_file: Path | None = None

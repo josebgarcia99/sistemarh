@@ -24,6 +24,7 @@ from app.infrastructure.database.base import (
     SCHEMA_AUTH,
     SCHEMA_FILES,
     SCHEMA_OPS,
+    SCHEMA_RECRUITMENT,
     SCHEMA_VACANCY,
     Base,
 )
@@ -46,6 +47,7 @@ def build_test_backend() -> SqlBackend:
             SCHEMA_VACANCY: None,
             SCHEMA_FILES: None,
             SCHEMA_AI: None,
+            SCHEMA_RECRUITMENT: None,
         }
     )
     Base.metadata.create_all(scoped)

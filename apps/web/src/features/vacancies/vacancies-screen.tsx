@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/styles";
 import { useSession } from "@/features/auth/use-session";
 import { EvaluationWorkspace } from "@/features/evaluation/evaluation-workspace";
+import { CandidatesWorkspace } from "@/features/recruitment/candidates-workspace";
 import { describeError } from "@/lib/api/client";
 import {
   listVacancies,
@@ -59,6 +60,8 @@ export function VacanciesScreen() {
   const [created, setCreated] = useState<{ id: string; message: string } | null>(null);
   // Vacante cuyo perfil y prompt se están editando; ocupa toda la pantalla.
   const [evaluating, setEvaluating] = useState<Vacancy | null>(null);
+  // Vacante cuyos candidatos se están gestionando; también ocupa toda la pantalla.
+  const [recruiting, setRecruiting] = useState<Vacancy | null>(null);
 
   const { data, error, isPending } = useQuery({
     queryKey: ["vacancies", { scope, status, search, page }],
@@ -69,6 +72,19 @@ export function VacanciesScreen() {
   const total = data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  if (recruiting) {
+    return (
+      <CandidatesWorkspace
+        vacancyId={recruiting.id}
+        vacancyName={recruiting.name}
+        canEdit={recruiting.my_access !== "LECTURA"}
+        canManage={
+          recruiting.my_access === "RESPONSABLE" || recruiting.my_access === "ADMINISTRADOR"
+        }
+        onBack={() => setRecruiting(null)}
+      />
+    );
+  }
   if (evaluating) {
     return (
       <EvaluationWorkspace
@@ -266,6 +282,7 @@ export function VacanciesScreen() {
               vacancyId={selectedId}
               initialNotice={created?.id === selectedId ? created.message : undefined}
               onOpenEvaluation={setEvaluating}
+              onOpenCandidates={setRecruiting}
               onClose={() => setSelectedId(null)}
             />
           </div>

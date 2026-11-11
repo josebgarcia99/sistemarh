@@ -14,6 +14,7 @@ from app.core.config.settings import AntivirusMode, Settings
 from app.core.security.master_key import MasterKey
 from app.core.security.passwords import Argon2Hasher
 from app.infrastructure.antivirus.scanner import ClamdScanner, DisabledScanner, MalwareScanner
+from app.infrastructure.documents.ocr import TesseractOcr
 from app.infrastructure.storage.local import LocalFileStorage
 from app.modules.authentication.domain.models import AuthPolicy
 
@@ -62,6 +63,12 @@ def build_scanner(settings: Settings) -> MalwareScanner:
     return DisabledScanner()
 
 
+def build_ocr(settings: Settings) -> TesseractOcr | None:
+    """Lector de documentos escaneados, o ``None`` si está desactivado. Si
+    Tesseract no está instalado, los escaneados quedan como «no evaluable»."""
+    return TesseractOcr(settings.ocr_languages) if settings.ocr_enabled else None
+
+
 def default_job_mode(settings: Settings) -> str:
     """Con Redis configurado los trabajos van al worker; sin él, a un hilo de la API."""
     return "celery" if settings.redis_url is not None else "thread"
@@ -79,4 +86,5 @@ def build_context(settings: Settings, *, job_mode: str | None = None) -> AppCont
         master_key=build_master_key(settings),
         ai_clients=build_provider_clients(settings),
         job_mode=job_mode or default_job_mode(settings),
+        ocr=build_ocr(settings),
     )

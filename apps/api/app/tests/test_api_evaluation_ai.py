@@ -140,7 +140,7 @@ def test_solo_sirve_un_documento_de_perfil_legible_de_la_misma_vacante(
     for file_id, fragment in (
         (cv["id"], "Perfil de puesto"),
         (foreign["id"], "Perfil de puesto"),
-        (scanned["id"], "parece escaneado"),
+        (scanned["id"], "No se encontró texto legible"),
     ):
         response = extract(recruiter, vacancy_id, file_id=file_id)
         assert response.status_code == 422 and fragment in response.json()["detail"]

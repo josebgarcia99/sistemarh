@@ -129,6 +129,67 @@ class SimulatedProvider:
     def generate(self, api_key, model, *, system, user, max_output_tokens) -> Generation:
         # Consumo inventado, para ver la pantalla de costos.
         tokens = len(system + user) // 4 + 50
+        simulated = None
+        if user.startswith("CV a ordenar"):
+            # "Extracción" inventada: solo el nombre sale de la primera línea del CV.
+            first = user.split("<<<CV\n", 1)[-1].splitlines()[0]
+            simulated = {
+                "nombre": first.split(" - ")[0].strip()[:80],
+                "experiencia": [
+                    {
+                        "puesto": "Analista de nómina",
+                        "empresa": "Empresa Ficticia Uno",
+                        "inicio": "2021-03",
+                        "fin": "",
+                        "actual": True,
+                        "funciones": ["Cálculo de nómina"],
+                    },
+                    {
+                        "puesto": "Auxiliar administrativo",
+                        "empresa": "Empresa Ficticia Dos",
+                        "inicio": "2018",
+                        "fin": "2021-02",
+                        "actual": False,
+                        "funciones": [],
+                    },
+                ],
+                "habilidades": ["Excel", "IMSS", "ISR"],
+                "estudios": [
+                    {
+                        "titulo": "Contaduría",
+                        "institucion": "Universidad Ficticia",
+                        "periodo": "2014-2018",
+                    }
+                ],
+                "certificaciones": [],
+                "proyectos": [],
+            }
+        elif user.startswith("Propón"):
+            simulated = {
+                "preguntas": [
+                    {
+                        "texto": f"Pregunta simulada {number}: cuéntame de tu experiencia.",
+                        "competencia": "Experiencia",
+                        "guia": "Ejemplos concretos con fechas (simulado).",
+                    }
+                    for number in (1, 2, 3)
+                ]
+            }
+        elif "<<<LLAMADA" in user:
+            simulated = {
+                "resumen": "Resumen simulado de la llamada: no lo produjo ningún modelo real.",
+                "evidencias": ["Evidencia simulada tomada de las respuestas."],
+                "competencias_exploradas": ["Experiencia"],
+                "informacion_faltante": ["Dato simulado que no se preguntó."],
+                "coincidencias_con_cv": [],
+                "discrepancias_verificables": [],
+                "preguntas_de_seguimiento": ["Pregunta de seguimiento simulada."],
+            }
+        if simulated is not None:
+            text = json.dumps(simulated, ensure_ascii=False)
+            return Generation(
+                text, input_tokens=tokens, output_tokens=len(text) // 4, complete=True
+            )
         if "<<<DOCUMENTO" in user:
             # "Lectura" inventada de un perfil: el documento no se analiza de verdad.
             text = json.dumps(SIMULATED_PROFILE, ensure_ascii=False)
@@ -293,8 +354,23 @@ def seed(app, password: str) -> None:
             Operation.EVALUACION_DOCUMENTAL,
             Operation.ANALISIS_PERFILES,
             Operation.GENERACION_PROMPTS,
+            Operation.EXTRACCION_CV,
+            Operation.ANALISIS_LLAMADAS,
         ):
             ai.assign(admin, operation, model.id)
+
+        # Un banco de preguntas compartido, para probar las llamadas.
+        context.phone_calls(repos).create_bank(
+            ana,
+            name="Filtro telefónico de nómina",
+            description="Banco ficticio del modo demostración.",
+            shared=True,
+            questions=[
+                {"text": "¿Qué nóminas has calculado y de qué tamaño?", "competency": "Nómina"},
+                {"text": "¿Cómo validas el cálculo de IMSS e ISR?", "competency": "Cumplimiento"},
+                {"text": "¿Qué disponibilidad tienes para iniciar?"},
+            ],
+        )
 
     pipeline = context.upload_pipeline()
     uploads = [(payroll.id, DocumentType.CV, name, content) for name, content in SAMPLE_CVS]

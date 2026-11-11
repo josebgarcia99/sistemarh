@@ -1,8 +1,8 @@
 """Extracción de texto de documentos, dentro del servidor.
 
-Hoy lee PDF con texto y DOCX. Los PDF escaneados y las imágenes necesitan OCR,
-y los DOC antiguos una conversión: ambos están pendientes, así que se informan
-como "sin texto" en lugar de inventar contenido.
+Lee PDF con texto y DOCX. Los PDF escaneados y las imágenes se leen con OCR
+(Tesseract) si está instalado. Los DOC antiguos requieren una conversión que
+no está construida: se informan como formato no legible, sin inventar contenido.
 """
 
 from __future__ import annotations
@@ -10,11 +10,14 @@ from __future__ import annotations
 import logging
 import re
 import zipfile
-from typing import BinaryIO
+from dataclasses import dataclass
+from typing import BinaryIO, Protocol
 from xml.etree import ElementTree
 
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
+
+from app.infrastructure.documents.ocr import OcrError
 
 # pypdf avisa de cada PDF defectuoso; aquí ya se informa como "ilegible".
 logging.getLogger("pypdf").setLevel(logging.ERROR)
@@ -27,7 +30,8 @@ _WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 class TextExtractionError(Exception):
-    """No se obtuvo texto. ``code``: sin_texto, formato_sin_texto, protegido o ilegible."""
+    """No se obtuvo texto. ``code``: sin_texto, formato_sin_texto, protegido,
+    ilegible u ocr_fallido."""
 
     def __init__(self, code: str) -> None:
         super().__init__(code)
@@ -70,16 +74,53 @@ def _docx(handle: BinaryIO) -> str:
     return "\n".join(paragraphs)
 
 
-def extract_text(handle: BinaryIO, extension: str) -> tuple[str, bool]:
-    """Devuelve el texto y si hubo que recortarlo por su longitud."""
-    if extension == "pdf":
-        text = _pdf(handle)
-    elif extension == "docx":
-        text = _docx(handle)
-    else:
-        raise TextExtractionError("formato_sin_texto")
-    lines = [re.sub(r"[ \t ]+", " ", line).strip() for line in text.splitlines()]
-    text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+@dataclass(frozen=True)
+class ExtractedText:
+    text: str
+    # Hubo que recortarlo por su longitud.
+    truncated: bool
+    # Salió de reconocer imágenes: puede traer errores que no son de quien lo escribió.
+    ocr: bool
+
+
+class Ocr(Protocol):
+    @property
+    def available(self) -> bool: ...
+
+    def image_to_text(self, image: bytes) -> str: ...
+
+    def pdf_to_text(self, handle: BinaryIO) -> str: ...
+
+
+IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png"})
+
+
+def _normalize(text: str) -> str:
+    lines = [re.sub(r"[ \t\u00a0]+", " ", line).strip() for line in text.splitlines()]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
+def extract_text(handle: BinaryIO, extension: str, ocr: Ocr | None = None) -> ExtractedText:
+    """Texto de un PDF, un DOCX o una imagen.
+
+    Un PDF sin capa de texto (escaneado) y las imágenes se leen con OCR si está
+    disponible. Los DOC antiguos requieren conversión, que no está construida."""
+    used_ocr = False
+    can_ocr = ocr is not None and ocr.available
+    try:
+        if extension == "pdf":
+            text = _normalize(_pdf(handle))
+            if len(text) < MIN_CHARS and can_ocr:
+                handle.seek(0)
+                text, used_ocr = _normalize(ocr.pdf_to_text(handle)), True
+        elif extension == "docx":
+            text = _normalize(_docx(handle))
+        elif extension in IMAGE_EXTENSIONS and can_ocr:
+            text, used_ocr = _normalize(ocr.image_to_text(handle.read())), True
+        else:
+            raise TextExtractionError("formato_sin_texto")
+    except OcrError as error:
+        raise TextExtractionError("ocr_fallido") from error
     if len(text) < MIN_CHARS:
         raise TextExtractionError("sin_texto")
-    return text[:MAX_CHARS], len(text) > MAX_CHARS
+    return ExtractedText(text[:MAX_CHARS], len(text) > MAX_CHARS, used_ocr)

@@ -11,15 +11,27 @@ from fastapi import Request
 
 from app.composition.ai import env_api_keys
 from app.composition.backend import Backend, Repositories
-from app.composition.cv_processing import AiEvaluator, ApprovedRubrics, StoredCvFiles
+from app.composition.cv_processing import (
+    AiEvaluator,
+    AiExtractor,
+    ApprovedRubrics,
+    StoredCvFiles,
+)
 from app.composition.evaluation_ai import AiAssistant, StoredProfileSources
 from app.composition.file_access import VacancyFileAccessPolicy
+from app.composition.recruitment import (
+    BatchEvaluatedCvs,
+    CallApplications,
+    CallAssistant,
+    VacancyProfiles,
+)
 from app.core.clock import Clock
 from app.core.config.settings import Environment, Settings
 from app.core.exceptions.errors import ServiceUnavailableError
 from app.core.security.master_key import MasterKey
 from app.core.security.passwords import PasswordHasher
 from app.infrastructure.antivirus.scanner import DisabledScanner, MalwareScanner
+from app.infrastructure.documents.text import Ocr
 from app.infrastructure.storage.local import LocalFileStorage
 from app.modules.ai_settings.application.service import AiSettingsService
 from app.modules.ai_settings.domain.models import ProviderClient, ProviderCode
@@ -30,6 +42,8 @@ from app.modules.cv_processing.application.service import CvBatchService
 from app.modules.evaluation_setup.application.service import EvaluationSetupService
 from app.modules.file_management.application.reconciliation import StorageReconciler
 from app.modules.file_management.application.service import FileService, UploadPipeline
+from app.modules.phone_calls.application.service import PhoneCallService
+from app.modules.recruitment.application.service import RecruitmentService
 from app.modules.users.application.service import UserService
 from app.modules.vacancies.application.access import VacancyAccess
 from app.modules.vacancies.application.service import VacancyService
@@ -51,6 +65,8 @@ class AppContext:
     ai_sleep: Callable[[float], None] = time.sleep
     # Cómo se ejecutan los trabajos en segundo plano: celery, thread o inline.
     job_mode: str = "thread"
+    # Lector de documentos escaneados; ``None`` si está desactivado.
+    ocr: Ocr | None = None
 
     def require_backend(self) -> Backend:
         if self.backend is None:
@@ -97,16 +113,37 @@ class AppContext:
             self.audit(repos),
             self.clock,
             assistant_port=AiAssistant(self.ai_settings(repos)),
-            sources=StoredProfileSources(repos.files, self.storage),
+            sources=StoredProfileSources(repos.files, self.storage, self.ocr),
         )
 
     def cv_batches(self, repos: Repositories) -> CvBatchService:
         return CvBatchService(
             repos.cv_batches,
             VacancyAccess(repos.vacancies),
-            StoredCvFiles(repos.files, self.require_storage(), self.file_service(repos)),
+            StoredCvFiles(repos.files, self.require_storage(), self.file_service(repos), self.ocr),
             ApprovedRubrics(repos.evaluation_setup),
             AiEvaluator(self.ai_settings(repos)),
+            self.audit(repos),
+            self.clock,
+            extractor=AiExtractor(self.ai_settings(repos)),
+        )
+
+    def recruitment(self, repos: Repositories) -> RecruitmentService:
+        return RecruitmentService(
+            repos.recruitment,
+            VacancyAccess(repos.vacancies),
+            BatchEvaluatedCvs(repos.cv_batches, repos.files),
+            self.audit(repos),
+            self.clock,
+        )
+
+    def phone_calls(self, repos: Repositories) -> PhoneCallService:
+        return PhoneCallService(
+            repos.phone_calls,
+            VacancyAccess(repos.vacancies),
+            CallApplications(repos.recruitment, repos.cv_batches, repos.evaluation_setup),
+            VacancyProfiles(repos.evaluation_setup),
+            CallAssistant(self.ai_settings(repos)),
             self.audit(repos),
             self.clock,
         )

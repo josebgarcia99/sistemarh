@@ -6,13 +6,15 @@ import uuid
 from collections.abc import Callable, Iterator
 from typing import BinaryIO
 
-from app.infrastructure.documents.text import TextExtractionError, extract_text
+from app.core.exceptions.errors import AppError
+from app.infrastructure.documents.text import Ocr, TextExtractionError, extract_text
 from app.infrastructure.storage.local import LocalFileStorage, StorageError
 from app.modules.ai_settings.application.service import AiSettingsService
 from app.modules.ai_settings.domain.models import Operation
 from app.modules.cv_processing.domain.ports import (
     AiAnswer,
     CvFile,
+    CvText,
     Rubric,
     RubricCriterion,
     UnreadableCvError,
@@ -51,11 +53,16 @@ def _cv(asset: FileAsset) -> CvFile:
 
 class StoredCvFiles:
     def __init__(
-        self, files: FileRepository, storage: LocalFileStorage, service: FileService
+        self,
+        files: FileRepository,
+        storage: LocalFileStorage,
+        service: FileService,
+        ocr: Ocr | None = None,
     ) -> None:
         self._files = files
         self._storage = storage
         self._service = service
+        self._ocr = ocr
 
     def confirmed_cvs(self, vacancy_id: uuid.UUID) -> list[CvFile]:
         return [
@@ -78,13 +85,14 @@ class StoredCvFiles:
         asset = self._asset(file_id)
         return _cv(asset) if asset is not None else None
 
-    def read_text(self, file_id: uuid.UUID) -> tuple[str, bool]:
+    def read_text(self, file_id: uuid.UUID) -> CvText:
         asset = self._asset(file_id)
         if asset is None:
             raise UnreadableCvError("archivo_no_disponible")
         try:
             with self._storage.open(asset.storage_key) as handle:
-                return extract_text(handle, asset.extension)
+                found = extract_text(handle, asset.extension, self._ocr)
+            return CvText(found.text, found.truncated, found.ocr)
         except TextExtractionError as error:
             raise UnreadableCvError(error.code) from error
         except (StorageError, OSError) as error:
@@ -138,6 +146,38 @@ class ApprovedRubrics:
         # Un lote ya creado se termina con su versión aunque luego se archive.
         version = self._repo.prompt_version(prompt_version_id)
         return _rubric(version) if version is not None else None
+
+
+class AiExtractor:
+    """Extracción estructurada del CV. Solo actúa si el administrador asignó un
+    modelo a esa operación."""
+
+    def __init__(self, ai: AiSettingsService) -> None:
+        self._ai = ai
+
+    def extract(
+        self, *, system: str, user: str, vacancy_id: uuid.UUID, actor_user_id: uuid.UUID
+    ) -> AiAnswer | None:
+        try:
+            self._ai.ensure_ready(Operation.EXTRACCION_CV, carries_document=True)
+        except AppError:
+            return None
+        result = self._ai.execute(
+            Operation.EXTRACCION_CV,
+            system=system,
+            user=user,
+            actor_user_id=actor_user_id,
+            vacancy_id=vacancy_id,
+            max_output_tokens=_MAX_OUTPUT_TOKENS,
+            carries_document=True,
+        )
+        return AiAnswer(
+            ok=result.ok,
+            text=result.text,
+            complete=result.complete,
+            error=result.error,
+            execution_id=result.execution_id,
+        )
 
 
 class AiEvaluator:
