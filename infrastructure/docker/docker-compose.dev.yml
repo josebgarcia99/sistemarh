@@ -4,6 +4,7 @@
 #
 # SQL Server: por omisión se usa la instancia indicada en RECLU_DATABASE_URL.
 # Para levantar un SQL Server 2022 local de desarrollo, añade:  --profile sqlserver-local
+# Para el antivirus local (ClamAV), añade:  --profile antivirus  y RECLU_ANTIVIRUS_MODE=clamd
 
 name: reclutamiento-dev
 
@@ -25,6 +26,9 @@ services:
       RECLU_REDIS_URL: redis://redis:6379/0
       RECLU_STORAGE_ROOT: /srv/reclutamiento/storage
       RECLU_AI_ALLOW_REAL_DOCUMENTS: "false"
+      # "clamd" exige levantar el antivirus:  --profile antivirus
+      RECLU_ANTIVIRUS_MODE: ${RECLU_ANTIVIRUS_MODE:-disabled}
+      RECLU_CLAMD_HOST: clamav
     volumes:
       # Los documentos viven en el equipo anfitrión, nunca dentro del contenedor.
       - type: bind
@@ -66,6 +70,14 @@ services:
     depends_on:
       - api
 
+  # Antivirus local (ClamAV). Los documentos no salen del servidor.
+  # Imagen sin verificar en este proyecto: no se ha construido ni ejecutado.
+  clamav:
+    profiles: ["antivirus"]
+    image: clamav/clamav:stable
+    volumes:
+      - clamav-signatures:/var/lib/clamav
+
   sqlserver:
     profiles: ["sqlserver-local"]
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -81,3 +93,4 @@ services:
 
 volumes:
   sqlserver-dev-data:
+  clamav-signatures:

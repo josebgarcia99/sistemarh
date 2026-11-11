@@ -35,6 +35,7 @@ containers =
     app.modules.audit
     app.modules.vacancies
     app.modules.vacancy_transfers
+    app.modules.file_management
 
 [importlinter:contract:capas-system]
 name = capas del modulo system
@@ -81,4 +82,20 @@ forbidden_modules =
     app.modules.users
     app.modules.authentication
     app.modules.vacancy_transfers
+    app.modules.system
+
+# El almacenamiento documental es independiente del reclutamiento: quién puede
+# leer o escribir lo decide un puerto (FileAccessPolicy) que se conecta en
+# composition.
+[importlinter:contract:documentos-independiente]
+name = file_management no depende de los modulos de reclutamiento
+type = forbidden
+source_modules =
+    app.modules.file_management.domain
+    app.modules.file_management.application
+    app.modules.file_management.infrastructure
+forbidden_modules =
+    app.modules.vacancies
+    app.modules.vacancy_transfers
+    app.modules.users
     app.modules.system

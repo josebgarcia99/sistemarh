@@ -44,6 +44,12 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "vacante.permiso_sensible_cambiado": "Permiso de documentos sensibles",
   "vacante.transferida": "Vacante transferida",
   "transferencia_masiva.completada": "Baja con transferencia",
+  "documento.cargado": "Documento cargado",
+  "documento.rechazado": "Documento rechazado",
+  "documento.descargado": "Documento descargado",
+  "documento.no_disponible": "Documento no disponible",
+  "documento.eliminado": "Documento eliminado",
+  "almacenamiento.conciliado": "Conciliación del almacenamiento",
 };
 
 export function listAuditEvents(

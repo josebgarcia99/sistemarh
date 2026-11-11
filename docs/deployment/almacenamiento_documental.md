@@ -36,3 +36,50 @@ Un proceso nocturno de conciliación detecta tres casos: registros atascados en 
 **Duplicados.** Se detectan por SHA-256 dentro de la misma convocatoria y se reportan. No se comparte un mismo archivo físico entre postulaciones, para que retención y eliminación sean independientes.
 
 **Conservación.** Ningún documento se borra al terminar su análisis. Cada uno lleva su fecha de retención según la política aprobada. El borrado seguro elimina archivo, extracciones derivadas y referencias, y queda registrado en `privacy_requests`.
+
+## Lo construido en la Fase 3
+
+Estado al 11 de noviembre de 2026. Probado con archivos sintéticos sobre un disco local y el motor de pruebas; **falta probarlo con SQL Server, Docker y ClamAV reales**.
+
+### Qué necesita Sistemas
+
+| Elemento | Detalle |
+| --- | --- |
+| Carpeta de documentos | Una carpeta del servidor, fuera del código y de cualquier directorio público, montada en los contenedores de la API y del worker. Se indica en `RECLU_STORAGE_ROOT` |
+| La carpeta debe existir | Si no existe al arrancar, la API se detiene con un error. Es intencional: evita guardar documentos dentro de un contenedor que se pierde al recrearlo |
+| Permisos | Solo el usuario del sistema que ejecuta la API y el worker debe poder leer y escribir en ella |
+| Espacio | Las cargas se rechazan cuando el espacio libre baja de `RECLU_STORAGE_MIN_FREE_BYTES` (1 GB por omisión) |
+| Antivirus | `RECLU_ANTIVIRUS_MODE=clamd` con un ClamAV en el propio servidor (`RECLU_CLAMD_HOST`, `RECLU_CLAMD_PORT`), o `disabled`. En producción hay que elegir de forma expresa. Si está en `clamd` y el antivirus no responde, la carga se rechaza: no se guarda nada sin analizar |
+| Proxy inverso | Debe permitir cuerpos de petición de al menos 20 MB hacia `/api/` (en Nginx, `client_max_body_size 25m`) |
+| Cifrado | Cifrado del volumen a cargo de Sistemas (decisión 8) |
+
+### Qué acepta
+
+PDF, DOCX, DOC, JPG y PNG, hasta 20 MB (`RECLU_MAX_UPLOAD_BYTES`). Se comprueba el contenido real, no solo la extensión: un ejecutable renombrado a `.pdf` se rechaza. Los documentos de Word con macros se rechazan. El nombre original se sanea y solo se usa para mostrarlo; en el disco el archivo se llama como su identificador.
+
+### Rutas de la API
+
+| Ruta | Quién |
+| --- | --- |
+| `GET /api/v1/vacancies/{id}/files` | Acceso de lectura a la vacante |
+| `POST /api/v1/vacancies/{id}/files?document_type=…&filename=…` (el cuerpo es el archivo) | Acceso de colaboración |
+| `GET /api/v1/files/{id}` y `GET /api/v1/files/{id}/download` | Acceso de lectura; permiso adicional si es sensible |
+| `POST /api/v1/files/{id}/deletion` | Administrador, con motivo |
+| `GET /api/v1/storage/status` y `POST /api/v1/storage/reconciliation` | Administrador |
+
+### Conciliación
+
+```bash
+python -m app.cli storage-check --verify-hashes sample   # none | sample | all
+```
+
+Devuelve código 0 si el disco y la base coinciden y 2 si no. Hace lo descrito arriba: cierra cargas interrumpidas, manda a cuarentena los archivos sin registro (nunca los borra), reporta los registros sin archivo, termina los borrados pendientes y recalcula hashes (`sample` revisa los 200 documentos más antiguos; `all`, todos). **Todavía no se ejecuta sola cada noche:** hay que programarla (por ejemplo con `cron` sobre el contenedor de la API) o lanzarla desde la API.
+
+### Pendiente en esta área
+
+- **Documentos sensibles.** Psicometría y estudios socioeconómicos no se aceptan todavía: la decisión 8 exige cifrarlos archivo por archivo y ese cifrado se construye en la Fase 4, junto con la custodia de la clave maestra. El permiso adicional ya funciona y está probado con datos sintéticos.
+- **Versiones de un documento** (`file_versions`): se crean cuando exista el primer documento versionado (perfiles de puesto, Fase 4).
+- **Fecha de retención:** la columna existe, pero no se aplica ninguna política hasta que el área legal la defina.
+- **Vista previa de PDF:** hoy solo hay descarga.
+- **Pantalla de administración** del almacenamiento: hoy se consulta por la API o por comando.
+- **Duplicados:** se detectan por vacante; pasarán a ser por convocatoria cuando existan (Fase 5).

@@ -17,7 +17,8 @@ cp .env.example .env
 | `RECLU_ENVIRONMENT` | `development`, `test` o `production` | No (por omisión `development`) |
 | `RECLU_DATABASE_URL` | Conexión a SQL Server con `mssql+pyodbc` | Sí para iniciar sesión y usar la aplicación |
 | `RECLU_REDIS_URL` | Cola de tareas | Solo para ejecutar el worker |
-| `RECLU_STORAGE_ROOT` | Ruta absoluta del almacenamiento documental | No hasta la Fase 3 |
+| `RECLU_STORAGE_ROOT` | Carpeta, ya existente, donde se guardan los documentos. Ruta absoluta, fuera del repositorio | Sí para cargar y descargar documentos |
+| `RECLU_ANTIVIRUS_MODE` | `clamd` o `disabled` | No (por omisión `disabled`); obligatoria en producción |
 | `RECLU_AI_ALLOW_REAL_DOCUMENTS` | Permite enviar documentos reales a la IA | Mantener en `false` |
 | `API_INTERNAL_URL` | Dirección de la API para el frontend | No (por omisión `http://localhost:8000`) |
 
@@ -107,7 +108,7 @@ alembic upgrade head            # requiere RECLU_DATABASE_URL
 alembic upgrade head --sql      # genera el T-SQL sin conectarse, para revisión
 ```
 
-La migración `0001` crea los esquemas `auth` y `ops` con usuarios, roles, sesiones y auditoría. La `0002` crea el esquema `vacancy` con vacantes, accesos, permisos de documentos sensibles, transferencias e historial de responsables.
+La migración `0001` crea los esquemas `auth` y `ops` con usuarios, roles, sesiones y auditoría. La `0002` crea el esquema `vacancy` con vacantes, accesos, permisos de documentos sensibles, transferencias e historial de responsables. La `0003` crea el esquema `files` con los metadatos de los documentos.
 
 ### Scripts para Sistemas
 
@@ -117,6 +118,7 @@ Si Sistemas prefiere ejecutar T-SQL en lugar de Alembic, los scripts equivalente
 | --- | --- |
 | `instalacion_completa.sql` | Base vacía: crea todo hasta la versión actual |
 | `actualizacion_0001_a_0002.sql` | Base que ya tiene la versión `0001` |
+| `actualizacion_0002_a_0003.sql` | Base que ya tiene la versión `0002` |
 | `permisos_usuario_aplicacion.sql` | Plantilla de permisos mínimos para el usuario de la aplicación |
 | `reversion_completa.sql` | Elimina todo. Solo para bases de prueba |
 
@@ -158,6 +160,8 @@ Es Visual Studio Code (el editor gratuito), no Visual Studio. La aplicación nec
    RECLU_DATABASE_URL=mssql+pyodbc://@localhost/reclutamiento?driver=ODBC+Driver+18+for+SQL+Server&Trusted_Connection=yes&Encrypt=yes&TrustServerCertificate=yes
    ```
    `.env` no se sube a GitHub. `TrustServerCertificate=yes` solo es aceptable en tu equipo.
+
+   Para cargar documentos, crea una carpeta fuera del proyecto (por ejemplo `C:\\reclutamiento\\storage`) y añade `RECLU_STORAGE_ROOT=C:\\reclutamiento\\storage`. La carpeta debe existir antes de arrancar.
 
 **Ejecutar** (panel "Ejecutar y depurar", `Ctrl+Shift+D`; elige en la lista y pulsa el botón verde)
 

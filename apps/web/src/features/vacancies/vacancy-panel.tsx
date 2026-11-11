@@ -10,6 +10,7 @@ import {
   secondaryButtonClass,
 } from "@/components/ui/styles";
 import { UserPicker } from "@/components/ui/user-picker";
+import { VacancyDocuments } from "@/features/files/vacancy-documents";
 import { describeError } from "@/lib/api/client";
 import { transferVacancy } from "@/lib/api/transfers";
 import {
@@ -266,6 +267,12 @@ export function VacancyPanel({ vacancyId, onClose, initialNotice }: Props) {
           socioeconómicos: esos permisos se otorgan aparte, por persona.
         </p>
       </section>
+
+      <VacancyDocuments
+        vacancyId={vacancy.id}
+        canUpload={vacancy.my_access !== "LECTURA"}
+        canDelete={isAdmin}
+      />
 
       <section aria-labelledby="history-title" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">

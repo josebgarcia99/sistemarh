@@ -12,7 +12,7 @@ Son las nueve fases del documento maestro, de la 0 a la 8, cada una con un crite
 | 0. Arquitectura | Este documento y las maquetas de pantallas | Tú la apruebas |
 | 1. Fundamentos | Estructura del proyecto, API FastAPI, frontend Next.js, contratos comunes, configuración local y pruebas iniciales | El proyecto arranca en local y sus pruebas pasan |
 | 2. Seguridad y usuarios | Autenticación, administradores, reclutadores, autorización, vacantes, compartición, transferencias y auditoría | Pasan las pruebas de seguridad 1 a 6. **Estado:** construida; pasan sobre el motor de pruebas, falta repetirlas en SQL Server |
-| 3. Almacenamiento documental | `FileStorageService`, carga, persistencia, descargas autorizadas, hash, recuperación y respaldos | Pasan las pruebas de almacenamiento, incluido el reinicio |
+| 3. Almacenamiento documental | `FileStorageService`, carga, persistencia, descargas autorizadas, hash, recuperación y respaldos | Pasan las pruebas de almacenamiento, incluido el reinicio. **Estado:** construida; falta probarla con SQL Server, Docker y ClamAV reales |
 | 4. Inteligencia documental | Perfiles, generador de prompts, rúbricas, configuración de API keys, procesamiento de CV, calificaciones, ZIP, Excel e histórico | Un lote sintético produce Excel y ZIP de principio a fin |
 | 5. Reclutamiento operativo | Expedientes, etapas, movimientos, bancos de preguntas, llamadas y análisis de respuestas | Un candidato rechazado por la IA avanza a llamada por decisión humana y queda registrado |
 | 6. Evaluaciones posteriores | Psicometría, gerentes, pruebas técnicas, estudios, digitalización y síntesis acumulativa | El expediente muestra todas las etapas con sus fuentes |

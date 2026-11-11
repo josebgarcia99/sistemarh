@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0002`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0003`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -33,6 +33,7 @@ Personas que pueden iniciar sesión. Nunca se borran: se dan de baja.
 | `password_changed_at` | `DATETIME2(3)` | No | Último cambio o restablecimiento de contraseña. |
 | `failed_login_count` | `INT` | Sí | Intentos fallidos seguidos. No negativo. |
 | `locked_until` | `DATETIME2(3)` | No | Fin del bloqueo por intentos fallidos. |
+| `row_version` | `ROWVERSION` | Sí | Marca que SQL Server cambia sola en cada modificación. La aplicación no la lee todavía. |
 
 ### `auth.user_roles`
 
@@ -149,6 +150,36 @@ Historial de responsables de cada vacante. Solo recibe inserciones.
 | `transfer_id` | `UNIQUEIDENTIFIER` | No | Baja con transferencia (`vacancy.vacancy_transfers`) a la que pertenece. Vacío en la fila de creación y en las transferencias individuales. |
 
 Índice: `ix_vacancy_ownership_history_vacancy (vacancy_id, changed_at)`.
+
+## Esquema `files`: documentos
+
+### `files.file_assets`
+
+Metadatos de cada documento guardado en el disco privado del servidor. El archivo está en el disco; aquí está qué es, de qué vacante, dónde está y en qué estado. Las filas nunca se borran: una eliminación autorizada cambia el estado y borra el archivo físico.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. También es el nombre del archivo en el disco. |
+| `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Vacante a la que pertenece (`vacancy.vacancies`). Determina quién puede verlo. |
+| `document_type` | `VARCHAR(40)` | Sí | `CV`, `PERFIL_PUESTO`, `PSICOMETRIA`, `PRUEBA_TECNICA`, `ESTUDIO_SOCIOECONOMICO` o `ADJUNTO`. |
+| `sensitive_class` | `VARCHAR(40)` | No | `PSICOMETRIA` o `ESTUDIO_SOCIOECONOMICO` si exige el permiso adicional; vacío en documentos ordinarios. |
+| `original_name` | `NVARCHAR(200)` | Sí | Nombre original, saneado. Solo se usa para mostrarlo y al descargar; nunca para ubicar el archivo. |
+| `extension` | `VARCHAR(10)` | Sí | Extensión en minúsculas. |
+| `content_type` | `VARCHAR(100)` | No | Tipo real detectado por contenido. |
+| `size_bytes` | `BIGINT` | No | Tamaño en bytes. Obligatorio si el estado es `CONFIRMADO` o `ELIMINADO`. |
+| `sha256` | `VARCHAR(64)` | No | Huella SHA-256 del contenido. Obligatoria si el estado es `CONFIRMADO` o `ELIMINADO`. |
+| `storage_backend` | `VARCHAR(20)` | Sí | Dónde está guardado. Hoy siempre `local` (disco del servidor). |
+| `storage_key` | `VARCHAR(200)` | Sí | Referencia lógica relativa, por ejemplo `private/cv/3f/a9/<uuid>`. Única. Nunca una ruta absoluta. |
+| `status` | `VARCHAR(20)` | Sí | `RECIBIENDO`, `CONFIRMADO`, `RECHAZADO`, `FALLIDO` o `ELIMINADO`. |
+| `malware_scan` | `VARCHAR(20)` | No | `LIMPIO` si el antivirus lo analizó; `NO_ANALIZADO` si el antivirus está desactivado. |
+| `failure_code` | `VARCHAR(40)` | No | Motivo del rechazo o del fallo, por ejemplo `contiene_macros` o `carga_interrumpida`. |
+| `uploaded_by` | `UNIQUEIDENTIFIER` | Sí | Quién lo cargó (`auth.users`). |
+| `created_at` | `DATETIME2(3)` | Sí | Inicio de la carga. |
+| `confirmed_at` | `DATETIME2(3)` | No | Momento en que quedó guardado y verificado. |
+| `retention_until` | `DATETIME2(3)` | No | Fecha de retención. Vacía hasta que exista la política aprobada. |
+| `deleted_at`, `deleted_by`, `deletion_reason` | `DATETIME2(3)`, `UNIQUEIDENTIFIER`, `NVARCHAR(500)` | No | Cuándo, quién y por qué se eliminó. Obligatorios si el estado es `ELIMINADO`. |
+
+Índices: `ix_file_assets_vacancy (vacancy_id, status)`, `ix_file_assets_hash (vacancy_id, sha256)` para detectar duplicados e `ix_file_assets_status (status, created_at)` para la conciliación.
 
 ## Esquema `ops`: operación
 

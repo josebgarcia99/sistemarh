@@ -46,7 +46,9 @@ function makeVacancy(overrides: Partial<Vacancy> = {}): Vacancy {
     ...overrides,
   };
 }
-const page = (items: Vacancy[]) => ({ body: { items, total: items.length, page: 1, page_size: 10 } });
+const page = (items: Vacancy[]) => ({
+  body: { items, total: items.length, page: 1, page_size: 10 },
+});
 const initialHistory = {
   body: [
     {
@@ -68,7 +70,9 @@ afterEach(() => {
 
 describe("VacanciesScreen", () => {
   it("un reclutador empieza en «Mis vacantes» y puede pedir las compartidas", async () => {
-    const fetchMock = mockApi({ "GET /api/v1/vacancies": page([makeVacancy()]) });
+    const fetchMock = mockApi({
+      "GET /api/v1/vacancies": page([makeVacancy()]),
+    });
     const user = userEvent.setup();
     renderApp(<VacanciesScreen />, { session: recruiter });
 
@@ -77,20 +81,32 @@ describe("VacanciesScreen", () => {
     expect(screen.queryByRole("button", { name: "Todas" })).toBeNull();
     expect(String(fetchMock.mock.calls[0][0])).toContain("scope=mine");
 
-    await user.click(screen.getByRole("button", { name: "Compartidas conmigo" }));
+    await user.click(
+      screen.getByRole("button", { name: "Compartidas conmigo" }),
+    );
     await vi.waitFor(() =>
-      expect(fetchMock.mock.calls.some(([url]) => String(url).includes("scope=shared"))).toBe(true),
+      expect(
+        fetchMock.mock.calls.some(([url]) =>
+          String(url).includes("scope=shared"),
+        ),
+      ).toBe(true),
     );
   });
 
   it("una administradora empieza viendo todas las vacantes", async () => {
     const fetchMock = mockApi({
-      "GET /api/v1/vacancies": page([makeVacancy({ my_access: "ADMINISTRADOR" })]),
+      "GET /api/v1/vacancies": page([
+        makeVacancy({ my_access: "ADMINISTRADOR" }),
+      ]),
     });
     renderApp(<VacanciesScreen />, { session: admin });
     expect(await screen.findByText("Analista de Nómina")).toBeTruthy();
     expect(String(fetchMock.mock.calls[0][0])).toContain("scope=all");
-    expect(screen.getByRole("button", { name: "Todas" }).getAttribute("aria-pressed")).toBe("true");
+    expect(
+      screen
+        .getByRole("button", { name: "Todas" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   it("explica cuando no hay vacantes compartidas", async () => {
@@ -98,8 +114,12 @@ describe("VacanciesScreen", () => {
     const user = userEvent.setup();
     renderApp(<VacanciesScreen />, { session: recruiter });
     expect(await screen.findByText(/Todavía no hay vacantes/)).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Compartidas conmigo" }));
-    expect(await screen.findByText("Nadie ha compartido vacantes contigo.")).toBeTruthy();
+    await user.click(
+      screen.getByRole("button", { name: "Compartidas conmigo" }),
+    );
+    expect(
+      await screen.findByText("Nadie ha compartido vacantes contigo."),
+    ).toBeTruthy();
   });
 
   it("crea una vacante y abre su detalle", async () => {
@@ -109,6 +129,7 @@ describe("VacanciesScreen", () => {
       "POST /api/v1/vacancies": { status: 201, body: created },
       [`GET ${VACANCY_URL}`]: { body: created },
       [`GET ${VACANCY_URL}/members`]: { body: [] },
+      [`GET ${VACANCY_URL}/files`]: { body: [] },
       [`GET ${VACANCY_URL}/ownership-history`]: initialHistory,
     });
     const user = userEvent.setup();
@@ -116,20 +137,40 @@ describe("VacanciesScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "Nueva vacante" }));
     const dialog = screen.getByRole("dialog", { name: "Nueva vacante" });
-    await user.type(within(dialog).getByLabelText("Nombre de la vacante"), "Analista de Nómina");
+    await user.type(
+      within(dialog).getByLabelText("Nombre de la vacante"),
+      "Analista de Nómina",
+    );
     await user.type(within(dialog).getByLabelText("Departamento"), "Finanzas");
     await user.type(within(dialog).getByLabelText("Ubicación"), "Monterrey");
-    await user.type(within(dialog).getByLabelText("Tipo de contratación"), "Tiempo completo");
+    await user.type(
+      within(dialog).getByLabelText("Tipo de contratación"),
+      "Tiempo completo",
+    );
     await user.clear(within(dialog).getByLabelText("Número de posiciones"));
     await user.type(within(dialog).getByLabelText("Número de posiciones"), "2");
-    await user.click(within(dialog).getByRole("button", { name: "Crear vacante" }));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Crear vacante" }),
+    );
 
-    const panel = await screen.findByRole("complementary", { name: "Detalle de Analista de Nómina" });
+    const panel = await screen.findByRole("complementary", {
+      name: "Detalle de Analista de Nómina",
+    });
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(within(panel).getByRole("status").textContent).toContain("Se creó la vacante");
-    expect(await within(panel).findByText(/Nadie más tiene acceso/)).toBeTruthy();
-    expect(await within(panel).findByText(/Responsable inicial: Reclutadora de Prueba/)).toBeTruthy();
-    const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(within(panel).getByRole("status").textContent).toContain(
+      "Se creó la vacante",
+    );
+    expect(
+      await within(panel).findByText(/Nadie más tiene acceso/),
+    ).toBeTruthy();
+    expect(
+      await within(panel).findByText(
+        /Responsable inicial: Reclutadora de Prueba/,
+      ),
+    ).toBeTruthy();
+    const post = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "POST",
+    );
     expect(JSON.parse(String((post?.[1] as RequestInit).body))).toEqual({
       name: "Analista de Nómina",
       department: "Finanzas",
@@ -148,9 +189,17 @@ describe("VacanciesScreen", () => {
     renderApp(<VacanciesScreen />, { session: recruiter });
     await user.click(screen.getByRole("button", { name: "Nueva vacante" }));
     const dialog = screen.getByRole("dialog", { name: "Nueva vacante" });
-    await user.click(within(dialog).getByRole("button", { name: "Crear vacante" }));
-    expect(await within(dialog).findByText(/nombre/i, { selector: "p" })).toBeTruthy();
-    expect(fetchMock.mock.calls.every(([, init]) => (init?.method ?? "GET") === "GET")).toBe(true);
+    await user.click(
+      within(dialog).getByRole("button", { name: "Crear vacante" }),
+    );
+    expect(
+      await within(dialog).findByText(/nombre/i, { selector: "p" }),
+    ).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.every(
+        ([, init]) => (init?.method ?? "GET") === "GET",
+      ),
+    ).toBe(true);
   });
 
   it("la responsable comparte la vacante en modo lectura", async () => {
@@ -159,6 +208,7 @@ describe("VacanciesScreen", () => {
       "GET /api/v1/vacancies": page([vacancy]),
       [`GET ${VACANCY_URL}`]: { body: vacancy },
       [`GET ${VACANCY_URL}/members`]: { body: [] },
+      [`GET ${VACANCY_URL}/files`]: { body: [] },
       [`GET ${VACANCY_URL}/ownership-history`]: initialHistory,
       "GET /api/v1/users/directory": { body: [colleague] },
       [`PUT ${VACANCY_URL}/members/${colleague.id}`]: { status: 204 },
@@ -166,19 +216,35 @@ describe("VacanciesScreen", () => {
     const user = userEvent.setup();
     renderApp(<VacanciesScreen />, { session: recruiter });
 
-    await user.click(await screen.findByRole("button", { name: "Abrir Analista de Nómina" }));
-    const panel = await screen.findByRole("complementary", { name: "Detalle de Analista de Nómina" });
+    await user.click(
+      await screen.findByRole("button", { name: "Abrir Analista de Nómina" }),
+    );
+    const panel = await screen.findByRole("complementary", {
+      name: "Detalle de Analista de Nómina",
+    });
     await user.type(within(panel).getByLabelText("Compartir con"), "col");
-    await user.click(await within(panel).findByRole("button", { name: /Colega de Prueba/ }));
+    await user.click(
+      await within(panel).findByRole("button", { name: /Colega de Prueba/ }),
+    );
     await user.click(within(panel).getByRole("button", { name: "Compartir" }));
 
-    expect(await within(panel).findByText(/Compartiste la vacante con Colega de Prueba/)).toBeTruthy();
+    expect(
+      await within(panel).findByText(
+        /Compartiste la vacante con Colega de Prueba/,
+      ),
+    ).toBeTruthy();
     const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
-    expect(JSON.parse(String((put?.[1] as RequestInit).body))).toEqual({ access_type: "LECTURA" });
+    expect(JSON.parse(String((put?.[1] as RequestInit).body))).toEqual({
+      access_type: "LECTURA",
+    });
     // El buscador queda vacío para compartir con otra persona.
-    expect((within(panel).getByLabelText("Compartir con") as HTMLInputElement).value).toBe("");
+    expect(
+      (within(panel).getByLabelText("Compartir con") as HTMLInputElement).value,
+    ).toBe("");
     // Solo una administradora puede transferir la propiedad.
-    expect(within(panel).queryByRole("button", { name: "Transferir responsable" })).toBeNull();
+    expect(
+      within(panel).queryByRole("button", { name: "Transferir responsable" }),
+    ).toBeNull();
   });
 
   it("con acceso de lectura no ofrece editar, cambiar estado ni compartir", async () => {
@@ -191,13 +257,20 @@ describe("VacanciesScreen", () => {
       "GET /api/v1/vacancies": page([vacancy]),
       [`GET ${VACANCY_URL}`]: { body: vacancy },
       [`GET ${VACANCY_URL}/members`]: { body: [] },
+      [`GET ${VACANCY_URL}/files`]: { body: [] },
       [`GET ${VACANCY_URL}/ownership-history`]: { body: [] },
     });
     const user = userEvent.setup();
     renderApp(<VacanciesScreen />, { session: recruiter });
-    await user.click(await screen.findByRole("button", { name: "Abrir Analista de Nómina" }));
-    const panel = await screen.findByRole("complementary", { name: "Detalle de Analista de Nómina" });
-    expect(within(panel).queryByRole("button", { name: "Editar datos" })).toBeNull();
+    await user.click(
+      await screen.findByRole("button", { name: "Abrir Analista de Nómina" }),
+    );
+    const panel = await screen.findByRole("complementary", {
+      name: "Detalle de Analista de Nómina",
+    });
+    expect(
+      within(panel).queryByRole("button", { name: "Editar datos" }),
+    ).toBeNull();
     expect(within(panel).queryByRole("button", { name: /Pasar a/ })).toBeNull();
     expect(within(panel).queryByLabelText("Compartir con")).toBeNull();
   });
@@ -208,6 +281,7 @@ describe("VacanciesScreen", () => {
       "GET /api/v1/vacancies": page([vacancy]),
       [`GET ${VACANCY_URL}`]: { body: vacancy },
       [`GET ${VACANCY_URL}/members`]: { body: [] },
+      [`GET ${VACANCY_URL}/files`]: { body: [] },
       [`GET ${VACANCY_URL}/ownership-history`]: initialHistory,
       [`POST ${VACANCY_URL}/status`]: problem(
         409,
@@ -217,15 +291,31 @@ describe("VacanciesScreen", () => {
     });
     const user = userEvent.setup();
     renderApp(<VacanciesScreen />, { session: recruiter });
-    await user.click(await screen.findByRole("button", { name: "Abrir Analista de Nómina" }));
-    const panel = await screen.findByRole("complementary", { name: "Detalle de Analista de Nómina" });
-    await user.click(await within(panel).findByRole("button", { name: "Pasar a abierta" }));
-    expect((await within(panel).findByRole("alert")).textContent).toContain("Otra persona modificó");
+    await user.click(
+      await screen.findByRole("button", { name: "Abrir Analista de Nómina" }),
+    );
+    const panel = await screen.findByRole("complementary", {
+      name: "Detalle de Analista de Nómina",
+    });
+    await user.click(
+      await within(panel).findByRole("button", { name: "Pasar a abierta" }),
+    );
+    expect((await within(panel).findByRole("alert")).textContent).toContain(
+      "Otra persona modificó",
+    );
   });
 
   it("muestra el error cuando la lista no carga", async () => {
-    mockApi({ "GET /api/v1/vacancies": problem(503, "service_unavailable", "Servicio no disponible.") });
+    mockApi({
+      "GET /api/v1/vacancies": problem(
+        503,
+        "service_unavailable",
+        "Servicio no disponible.",
+      ),
+    });
     renderApp(<VacanciesScreen />, { session: recruiter });
-    expect((await screen.findByRole("alert")).textContent).toContain("Servicio no disponible");
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Servicio no disponible",
+    );
   });
 });

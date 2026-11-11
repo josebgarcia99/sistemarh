@@ -34,6 +34,12 @@ class AuditAction(StrEnum):
     VACANTE_PERMISO_SENSIBLE = "vacante.permiso_sensible_cambiado"
     VACANTE_TRANSFERIDA = "vacante.transferida"
     TRANSFERENCIA_MASIVA = "transferencia_masiva.completada"
+    DOCUMENTO_CARGADO = "documento.cargado"
+    DOCUMENTO_RECHAZADO = "documento.rechazado"
+    DOCUMENTO_DESCARGADO = "documento.descargado"
+    DOCUMENTO_NO_DISPONIBLE = "documento.no_disponible"
+    DOCUMENTO_ELIMINADO = "documento.eliminado"
+    ALMACENAMIENTO_CONCILIADO = "almacenamiento.conciliado"
 
 
 @dataclass(frozen=True)

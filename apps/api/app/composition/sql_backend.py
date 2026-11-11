@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.composition.backend import Repositories
 from app.modules.audit.infrastructure.sql_repository import SqlAuditRepository
 from app.modules.authentication.infrastructure.sql_repository import SqlSessionRepository
+from app.modules.file_management.infrastructure.sql_repository import SqlFileRepository
 from app.modules.users.infrastructure.sql_repository import SqlUserRepository
 from app.modules.vacancies.infrastructure.sql_repository import SqlVacancyRepository
 from app.modules.vacancy_transfers.infrastructure.sql_repository import SqlTransferRepository
@@ -29,6 +30,7 @@ class SqlBackend:
                 audit=SqlAuditRepository(session),
                 vacancies=SqlVacancyRepository(session),
                 transfers=SqlTransferRepository(session),
+                files=SqlFileRepository(session),
             )
             session.commit()
         except BaseException:

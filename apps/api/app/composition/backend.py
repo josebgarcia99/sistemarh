@@ -14,6 +14,7 @@ from typing import Protocol
 
 from app.modules.audit.domain.models import AuditRepository
 from app.modules.authentication.domain.models import SessionRepository
+from app.modules.file_management.domain.models import FileRepository
 from app.modules.users.domain.repository import UserRepository
 from app.modules.vacancies.domain.models import VacancyRepository
 from app.modules.vacancy_transfers.domain.models import TransferRepository
@@ -26,6 +27,7 @@ class Repositories:
     audit: AuditRepository
     vacancies: VacancyRepository
     transfers: TransferRepository
+    files: FileRepository
 
 
 class Backend(Protocol):

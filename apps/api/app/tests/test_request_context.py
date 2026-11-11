@@ -101,6 +101,7 @@ def test_la_documentacion_no_se_publica_en_produccion(tmp_path):
         database_url="mssql+pyodbc://u:p@servidor/base?driver=ODBC+Driver+18+for+SQL+Server",
         redis_url="redis://redis:6379/0",
         storage_root=tmp_path,
+        antivirus_mode="disabled",
     )
     app = create_app(
         settings=settings, health_checks={"x": lambda: True}, backend=build_test_backend()

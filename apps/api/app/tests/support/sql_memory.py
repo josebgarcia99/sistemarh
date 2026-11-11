@@ -19,7 +19,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.composition.sql_backend import SqlBackend
-from app.infrastructure.database.base import SCHEMA_AUTH, SCHEMA_OPS, SCHEMA_VACANCY, Base
+from app.infrastructure.database.base import (
+    SCHEMA_AUTH,
+    SCHEMA_FILES,
+    SCHEMA_OPS,
+    SCHEMA_VACANCY,
+    Base,
+)
 from app.modules.users.infrastructure.orm import RoleRow
 
 
@@ -33,7 +39,12 @@ def build_test_backend() -> SqlBackend:
         connection.execute("PRAGMA foreign_keys=ON")
 
     scoped = engine.execution_options(
-        schema_translate_map={SCHEMA_AUTH: None, SCHEMA_OPS: None, SCHEMA_VACANCY: None}
+        schema_translate_map={
+            SCHEMA_AUTH: None,
+            SCHEMA_OPS: None,
+            SCHEMA_VACANCY: None,
+            SCHEMA_FILES: None,
+        }
     )
     Base.metadata.create_all(scoped)
     factory = sessionmaker(bind=scoped, expire_on_commit=False)

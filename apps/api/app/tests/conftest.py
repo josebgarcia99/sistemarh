@@ -12,7 +12,12 @@ from app.modules.system.application.health import HealthCheck
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings(environment=Environment.TEST)
+    return Settings(
+        environment=Environment.TEST,
+        storage_min_free_bytes=0,
+        # Las pruebas usan documentos sintéticos; el cifrado por archivo aún no existe.
+        allow_unencrypted_sensitive_files=True,
+    )
 
 
 @pytest.fixture
@@ -73,13 +78,25 @@ def backend():
 
 
 @pytest.fixture
-def app_with_data(settings, backend, hasher, clock):
+def storage(tmp_path):
+    from app.infrastructure.storage.local import LocalFileStorage
+
+    root = tmp_path / "almacenamiento"
+    root.mkdir()
+    local = LocalFileStorage(root)
+    local.prepare()
+    return local
+
+
+@pytest.fixture
+def app_with_data(settings, backend, hasher, clock, storage):
     return create_app(
         settings=settings,
         health_checks={"componente": lambda: True},
         backend=backend,
         hasher=hasher,
         clock=clock,
+        storage=storage,
     )
 
 
@@ -126,3 +143,47 @@ def admin_client(seeded) -> TestClient:
 @pytest.fixture
 def recruiter_client(seeded) -> TestClient:
     return login(seeded[0], RECRUITER_EMAIL, RECRUITER_PASSWORD)
+
+
+# --- Datos compartidos de vacantes -------------------------------------------
+
+VACANCY = {
+    "name": "Analista de Nómina",
+    "department": "Finanzas",
+    "location": "CDMX",
+    "work_mode": "HIBRIDA",
+    "contract_type": "Tiempo indeterminado",
+    "description": "Cálculo de nómina quincenal.",
+    "positions": 2,
+    "notes": None,
+}
+OTHER_PASSWORD = "Clave-Segunda-2026"
+
+
+@pytest.fixture
+def other(seeded, admin_client) -> tuple[TestClient, str]:
+    """Una segunda reclutadora (B) con sesión iniciada, y su identificador."""
+    created = admin_client.post(
+        "/api/v1/users",
+        json={
+            "email": "segunda@ejemplo.test",
+            "full_name": "Segunda Reclutadora",
+            "password": OTHER_PASSWORD,
+            "role": "RECLUTADOR",
+        },
+    ).json()
+    return login(seeded[0], "segunda@ejemplo.test", OTHER_PASSWORD), created["id"]
+
+
+@pytest.fixture
+def vacancy(recruiter_client) -> dict:
+    """Vacante creada por la reclutadora A."""
+    response = recruiter_client.post("/api/v1/vacancies", json=VACANCY)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def share(client, vacancy_id, user_id, access_type):
+    return client.put(
+        f"/api/v1/vacancies/{vacancy_id}/members/{user_id}", json={"access_type": access_type}
+    )

@@ -8,51 +8,12 @@ from __future__ import annotations
 
 import uuid
 
-import pytest
-from fastapi.testclient import TestClient
-
-from app.tests.conftest import RECRUITER_EMAIL, RECRUITER_PASSWORD, login
-
-VACANCY = {
-    "name": "Analista de Nómina",
-    "department": "Finanzas",
-    "location": "CDMX",
-    "work_mode": "HIBRIDA",
-    "contract_type": "Tiempo indeterminado",
-    "description": "Cálculo de nómina quincenal.",
-    "positions": 2,
-    "notes": None,
-}
-OTHER_PASSWORD = "Clave-Segunda-2026"
-
-
-@pytest.fixture
-def other(seeded, admin_client) -> tuple[TestClient, str]:
-    """Una segunda reclutadora (B) con sesión iniciada, y su identificador."""
-    created = admin_client.post(
-        "/api/v1/users",
-        json={
-            "email": "segunda@ejemplo.test",
-            "full_name": "Segunda Reclutadora",
-            "password": OTHER_PASSWORD,
-            "role": "RECLUTADOR",
-        },
-    ).json()
-    return login(seeded[0], "segunda@ejemplo.test", OTHER_PASSWORD), created["id"]
-
-
-@pytest.fixture
-def vacancy(recruiter_client) -> dict:
-    """Vacante creada por la reclutadora A."""
-    response = recruiter_client.post("/api/v1/vacancies", json=VACANCY)
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
-def _share(client, vacancy_id, user_id, access_type):
-    return client.put(
-        f"/api/v1/vacancies/{vacancy_id}/members/{user_id}", json={"access_type": access_type}
-    )
+from app.tests.conftest import (
+    RECRUITER_EMAIL,
+    RECRUITER_PASSWORD,
+    VACANCY,
+    share,
+)
 
 
 def _names(client, **params) -> list[str]:
@@ -176,7 +137,7 @@ def test_los_accesos_denegados_a_vacantes_quedan_auditados(
     assert hidden[0]["details"] == {"metodo": "GET", "ruta": base, "motivo": "no_encontrado"}
 
     # Con acceso de lectura, intentar modificar también queda registrado.
-    assert _share(recruiter_client, vacancy["id"], other_id, "LECTURA").status_code == 204
+    assert share(recruiter_client, vacancy["id"], other_id, "LECTURA").status_code == 204
     status_url = f"{base}/status"
     assert (
         other_client.post(status_url, json={"status": "ABIERTA", "version": 1}).status_code == 403
@@ -195,7 +156,7 @@ def test_los_accesos_denegados_a_vacantes_quedan_auditados(
 def test_seguridad_2_lectura_permite_consultar_pero_no_modificar(vacancy, other, recruiter_client):
     other_client, other_id = other
     base = f"/api/v1/vacancies/{vacancy['id']}"
-    assert _share(recruiter_client, vacancy["id"], other_id, "LECTURA").status_code == 204
+    assert share(recruiter_client, vacancy["id"], other_id, "LECTURA").status_code == 204
 
     seen = other_client.get(base)
     assert seen.status_code == 200 and seen.json()["my_access"] == "LECTURA"
@@ -209,7 +170,7 @@ def test_seguridad_2_lectura_permite_consultar_pero_no_modificar(vacancy, other,
         other_client.post(f"{base}/status", json={"status": "ABIERTA", "version": 1}).status_code
         == 403
     )
-    assert _share(other_client, vacancy["id"], other_id, "COLABORACION").status_code == 403
+    assert share(other_client, vacancy["id"], other_id, "COLABORACION").status_code == 403
 
 
 def test_seguridad_2_colaboracion_no_edita_la_vacante_ni_la_comparte(
@@ -217,10 +178,10 @@ def test_seguridad_2_colaboracion_no_edita_la_vacante_ni_la_comparte(
 ):
     other_client, other_id = other
     base = f"/api/v1/vacancies/{vacancy['id']}"
-    _share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
+    share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
     assert other_client.get(base).json()["my_access"] == "COLABORACION"
     assert other_client.put(base, json={**VACANCY, "version": 1}).status_code == 403
-    assert _share(other_client, vacancy["id"], str(seeded[1].id), "LECTURA").status_code == 403
+    assert share(other_client, vacancy["id"], str(seeded[1].id), "LECTURA").status_code == 403
     assert other_client.delete(f"{base}/members/{other_id}").status_code == 403
 
 
@@ -228,8 +189,8 @@ def test_compartir_no_cambia_al_responsable_y_se_puede_cambiar_el_tipo_de_acceso
     seeded, vacancy, other, recruiter_client
 ):
     other_client, other_id = other
-    _share(recruiter_client, vacancy["id"], other_id, "LECTURA")
-    _share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
+    share(recruiter_client, vacancy["id"], other_id, "LECTURA")
+    share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
     base = f"/api/v1/vacancies/{vacancy['id']}"
     assert recruiter_client.get(base).json()["owner"]["id"] == str(seeded[2].id)
     members = recruiter_client.get(f"{base}/members").json()
@@ -239,13 +200,13 @@ def test_compartir_no_cambia_al_responsable_y_se_puede_cambiar_el_tipo_de_acceso
 def test_seguridad_3_revocar_bloquea_la_siguiente_consulta(vacancy, other, recruiter_client):
     other_client, other_id = other
     base = f"/api/v1/vacancies/{vacancy['id']}"
-    _share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
+    share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
     assert other_client.get(base).status_code == 200
     assert recruiter_client.delete(f"{base}/members/{other_id}").status_code == 204
     assert other_client.get(base).status_code == 404
     assert _names(other_client) == []
     # Se puede volver a compartir: el acceso revocado se conserva como historial.
-    assert _share(recruiter_client, vacancy["id"], other_id, "LECTURA").status_code == 204
+    assert share(recruiter_client, vacancy["id"], other_id, "LECTURA").status_code == 204
     assert other_client.get(base).json()["my_access"] == "LECTURA"
 
 
@@ -254,10 +215,10 @@ def test_no_se_comparte_con_usuarios_inexistentes_inactivos_ni_con_el_responsabl
 ):
     _, other_id = other
     owner_id = str(seeded[2].id)
-    assert _share(recruiter_client, vacancy["id"], str(uuid.uuid4()), "LECTURA").status_code == 404
-    assert _share(recruiter_client, vacancy["id"], owner_id, "LECTURA").status_code == 409
+    assert share(recruiter_client, vacancy["id"], str(uuid.uuid4()), "LECTURA").status_code == 404
+    assert share(recruiter_client, vacancy["id"], owner_id, "LECTURA").status_code == 409
     admin_client.post(f"/api/v1/users/{other_id}/deactivate")
-    assert _share(recruiter_client, vacancy["id"], other_id, "LECTURA").status_code == 404
+    assert share(recruiter_client, vacancy["id"], other_id, "LECTURA").status_code == 404
 
 
 def test_seguridad_8_los_documentos_sensibles_exigen_un_permiso_adicional(
@@ -271,7 +232,7 @@ def test_seguridad_8_los_documentos_sensibles_exigen_un_permiso_adicional(
         recruiter_client.put(grants_url, json={"document_classes": ["PSICOMETRIA"]}).status_code
         == 404
     )
-    _share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
+    share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
     # Compartir no concede nada por sí solo.
     assert recruiter_client.get(f"{base}/members").json()[0]["sensitive_classes"] == []
     granted = recruiter_client.put(grants_url, json={"document_classes": ["PSICOMETRIA"]})
@@ -286,7 +247,7 @@ def test_seguridad_8_los_documentos_sensibles_exigen_un_permiso_adicional(
     )
     # Revocar el acceso retira también los permisos adicionales.
     recruiter_client.delete(f"{base}/members/{other_id}")
-    _share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
+    share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
     assert recruiter_client.get(f"{base}/members").json()[0]["sensitive_classes"] == []
 
 
@@ -298,7 +259,7 @@ def test_el_administrador_ve_todas_las_vacantes_y_puede_administrarlas(
     assert _names(admin_client, scope="mine") == []
     base = f"/api/v1/vacancies/{vacancy['id']}"
     assert admin_client.get(base).json()["my_access"] == "ADMINISTRADOR"
-    assert _share(admin_client, vacancy["id"], other_id, "LECTURA").status_code == 204
+    assert share(admin_client, vacancy["id"], other_id, "LECTURA").status_code == 204
 
 
 def test_el_directorio_solo_da_lo_minimo_y_solo_usuarios_activos(
@@ -328,7 +289,7 @@ def test_seguridad_6_y_7_el_administrador_transfiere_y_no_se_pierde_nada(
     base = f"/api/v1/vacancies/{vacancy['id']}"
     before = recruiter_client.get(base).json()
     clock.advance(minutes=5)
-    _share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
+    share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
 
     response = admin_client.post(
         "/api/v1/vacancy-transfers/individual",
@@ -413,13 +374,13 @@ def test_la_baja_de_un_reclutador_transfiere_todo_y_no_pierde_informacion(
     theirs = other_client.post(
         "/api/v1/vacancies", json={**VACANCY, "name": "Jefe de Turno"}
     ).json()
-    _share(other_client, theirs["id"], leaving_id, "COLABORACION")
+    share(other_client, theirs["id"], leaving_id, "COLABORACION")
     other_client.put(
         f"/api/v1/vacancies/{theirs['id']}/members/{leaving_id}/sensitive-grants",
         json={"document_classes": ["PSICOMETRIA"]},
     )
     # B ya colaboraba en una vacante de A: al recibirla deja de figurar como colaboradora.
-    _share(recruiter_client, first["id"], other_id, "LECTURA")
+    share(recruiter_client, first["id"], other_id, "LECTURA")
 
     clock.advance(minutes=5)
     operation_id = str(uuid.uuid4())

@@ -45,6 +45,8 @@ type RequestOptions<T> = {
   schema?: z.ZodType<T>;
   method?: Method;
   body?: unknown;
+  /** Archivo que se envía tal cual como cuerpo de la petición. */
+  file?: Blob;
   query?: Record<string, string | number | undefined>;
   /** Códigos distintos de 2xx cuyo cuerpo también cumple el esquema. */
   acceptStatuses?: number[];
@@ -61,17 +63,18 @@ function buildUrl(path: string, query?: RequestOptions<unknown>["query"]): strin
 }
 
 export async function apiFetch<T = void>(path: string, options: RequestOptions<T> = {}): Promise<T> {
-  const { schema, method = "GET", body, query, acceptStatuses = [], signal } = options;
+  const { schema, method = "GET", body, file, query, acceptStatuses = [], signal } = options;
 
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (file !== undefined) headers["Content-Type"] = "application/octet-stream";
   if (method !== "GET" && csrfToken) headers["X-CSRF-Token"] = csrfToken;
 
   const response = await fetch(buildUrl(path, query), {
     method,
     credentials: "same-origin",
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: file ?? (body === undefined ? undefined : JSON.stringify(body)),
     signal,
   });
 

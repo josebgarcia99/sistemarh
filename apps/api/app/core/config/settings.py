@@ -20,6 +20,11 @@ class Environment(StrEnum):
     PRODUCTION = "production"
 
 
+class AntivirusMode(StrEnum):
+    CLAMD = "clamd"
+    DISABLED = "disabled"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RECLU_", extra="ignore")
 
@@ -43,6 +48,18 @@ class Settings(BaseSettings):
     ai_allow_real_documents: bool = False
 
     max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
+    # Las cargas se rechazan si el disco de documentos tiene menos espacio libre.
+    storage_min_free_bytes: int = Field(default=1024 * 1024 * 1024, ge=0)
+
+    # Antivirus local: "clamd" (ClamAV en la infraestructura propia) o "disabled".
+    # En producción debe elegirse de forma expresa.
+    antivirus_mode: AntivirusMode | None = None
+    clamd_host: str = "clamav"
+    clamd_port: int = Field(default=3310, gt=0, lt=65536)
+
+    # Hasta que exista el cifrado por archivo (decisión 8), los documentos de
+    # clase sensible no se aceptan. Solo para desarrollo con datos sintéticos.
+    allow_unencrypted_sensitive_files: bool = False
 
     @model_validator(mode="after")
     def _validate_production(self) -> Settings:
@@ -53,12 +70,17 @@ class Settings(BaseSettings):
                     ("RECLU_DATABASE_URL", self.database_url),
                     ("RECLU_REDIS_URL", self.redis_url),
                     ("RECLU_STORAGE_ROOT", self.storage_root),
+                    ("RECLU_ANTIVIRUS_MODE", self.antivirus_mode),
                 )
                 if value is None
             ]
             if missing:
                 raise ValueError(
                     "Faltan variables obligatorias en producción: " + ", ".join(missing)
+                )
+            if self.allow_unencrypted_sensitive_files:
+                raise ValueError(
+                    "RECLU_ALLOW_UNENCRYPTED_SENSITIVE_FILES no puede activarse en producción"
                 )
         if self.storage_root is not None and not self.storage_root.is_absolute():
             raise ValueError("RECLU_STORAGE_ROOT debe ser una ruta absoluta")

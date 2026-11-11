@@ -12,6 +12,7 @@ from sqlalchemy.types import TypeDecorator
 SCHEMA_AUTH = "auth"
 SCHEMA_OPS = "ops"
 SCHEMA_VACANCY = "vacancy"
+SCHEMA_FILES = "files"
 
 # En SQL Server se materializa como UNIQUEIDENTIFIER.
 GUID = sa.Uuid(as_uuid=True)

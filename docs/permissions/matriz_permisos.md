@@ -45,6 +45,7 @@ Todo se deniega por defecto y el permiso se evalúa en el backend en cada operac
 - El worker comprueba de nuevo el permiso antes de procesar y antes de generar exportaciones.
 - Los reportes históricos usan los permisos vigentes hoy, no los del momento del evento.
 - Row-Level Security de SQL Server se propone como segunda barrera (decisión 11). Todavía no está implementada.
+- Documentos (Fase 3): ver la lista y descargar exige acceso de lectura a la vacante; cargar exige colaboración; los de clase sensible exigen además el permiso adicional, salvo para el responsable y el administrador; eliminar es solo del administrador y con motivo. El permiso se evalúa en cada descarga.
 - Todo intento rechazado queda en la auditoría como `acceso.denegado`, también cuando la respuesta es "no encontrado" para no revelar que el recurso existe.
 
 ## 12. Reglas de compartición y transferencia
