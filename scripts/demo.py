@@ -130,7 +130,49 @@ class SimulatedProvider:
         # Consumo inventado, para ver la pantalla de costos.
         tokens = len(system + user) // 4 + 50
         simulated = None
-        if user.startswith("CV a ordenar"):
+        note = "Respuesta simulada del modo demostración: no la produjo ningún modelo real."
+        if system.startswith(
+            ("Recibes el texto de un reporte", "Recibes el material de una prueba")
+        ):
+            simulated = {
+                "resumen": note,
+                "resultados_documentados": ["Resultado simulado tomado del documento."],
+                "datos_no_legibles": [],
+                "advertencias": ["Resumen simulado: revisa el documento original."],
+            }
+        elif system.startswith("Recibes las notas de una entrevista"):
+            simulated = {
+                "resumen": note,
+                "competencias_observadas": ["Competencia simulada"],
+                "evidencias": ["Evidencia simulada tomada de las notas."],
+                "informacion_faltante": [],
+                "preguntas_de_seguimiento": ["Pregunta de seguimiento simulada."],
+            }
+        elif system.startswith("Recibes el texto de un formulario"):
+            # "Lectura" inventada: un valor de ejemplo por campo, según su tipo.
+            examples = {
+                "FECHA": "2026-11-10",
+                "TEXTO": "Dato simulado",
+                "NUMERO": "2",
+                "PARRAFO": "Texto simulado leído del formulario.",
+                "CASILLA": True,
+            }
+            fields = re.findall(r"^- (\S+): (.+?) \[(\w+)\]", user, re.MULTILINE)
+            simulated = {
+                "valores": {fid: examples[kind] for fid, _, kind in fields if kind in examples},
+                "ilegibles": [label for _, label, kind in fields if kind == "OPCIONES"],
+                "faltantes": [],
+            }
+        elif system.startswith("Recibes el expediente"):
+            simulated = {
+                "hechos_documentados": ["Hecho simulado tomado del CV (CV)."],
+                "declaraciones": ["Declaración simulada de la llamada (llamada 1)."],
+                "observaciones_humanas": ["Observación simulada de quien evaluó."],
+                "resultados_tecnicos": [],
+                "informacion_pendiente": ["Punto pendiente simulado."],
+                "discrepancias_verificables": [],
+            }
+        elif user.startswith("CV a ordenar"):
             # "Extracción" inventada: solo el nombre sale de la primera línea del CV.
             first = user.split("<<<CV\n", 1)[-1].splitlines()[0]
             simulated = {
@@ -356,6 +398,9 @@ def seed(app, password: str) -> None:
             Operation.GENERACION_PROMPTS,
             Operation.EXTRACCION_CV,
             Operation.ANALISIS_LLAMADAS,
+            Operation.RESUMEN_PRUEBAS,
+            Operation.LECTURA_DOCUMENTOS,
+            Operation.SINTESIS_EXPEDIENTES,
         ):
             ai.assign(admin, operation, model.id)
 
@@ -381,6 +426,25 @@ def seed(app, password: str) -> None:
             DocumentType.PERFIL_PUESTO,
             "Perfil Auxiliar Contable.docx",
             PROFILE_DOCUMENT,
+        )
+    )
+    # Documentos ficticios para probar la psicometría y la digitalización del estudio.
+    uploads.append(
+        (
+            payroll.id,
+            DocumentType.PSICOMETRIA,
+            "Reporte psicométrico ficticio.docx",
+            docx_cv("Reporte ficticio de una prueba inventada.", "Escala A: percentil 70."),
+        )
+    )
+    uploads.append(
+        (
+            payroll.id,
+            DocumentType.ESTUDIO_SOCIOECONOMICO,
+            "Estudio escaneado ficticio.docx",
+            docx_cv(
+                "Estudio socioeconómico ficticio.", "Fecha de la visita: 10 de noviembre de 2026."
+            ),
         )
     )
     for vacancy_id, document_type, name, content in uploads:

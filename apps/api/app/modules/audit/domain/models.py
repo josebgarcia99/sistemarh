@@ -76,6 +76,12 @@ class AuditAction(StrEnum):
     LLAMADA_GUARDADA = "llamada.guardada"
     LLAMADA_CERRADA = "llamada.cerrada"
     LLAMADA_ANALIZADA = "llamada.analizada"
+    FORMULARIO_VERSION_CREADA = "formulario.version_creada"
+    EVALUACION_CREADA = "evaluacion.creada"
+    EVALUACION_ACTUALIZADA = "evaluacion.actualizada"
+    EVALUACION_RESUMIDA = "evaluacion.resumida"
+    ESTUDIO_DIGITALIZADO = "estudio.digitalizado"
+    EXPEDIENTE_SINTETIZADO = "expediente.sintetizado"
 
 
 @dataclass(frozen=True)

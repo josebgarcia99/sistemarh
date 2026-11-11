@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.composition.backend import Repositories
 from app.modules.ai_settings.infrastructure.sql_repository import SqlAiRepository
+from app.modules.assessments.infrastructure.sql_repository import SqlAssessmentRepository
 from app.modules.audit.infrastructure.sql_repository import SqlAuditRepository
 from app.modules.authentication.infrastructure.sql_repository import SqlSessionRepository
 from app.modules.cv_processing.infrastructure.sql_repository import SqlCvBatchRepository
@@ -43,6 +44,7 @@ class SqlBackend:
                 cv_batches=SqlCvBatchRepository(session),
                 recruitment=SqlRecruitmentRepository(session),
                 phone_calls=SqlPhoneCallRepository(session),
+                assessments=SqlAssessmentRepository(session),
             )
             session.commit()
         except BaseException:

@@ -191,3 +191,19 @@ Estado al 11 de noviembre de 2026.
 | Auditoría | Postulaciones creadas, movimientos (con cuántas personas no aceptadas por la IA se avanzaron), cambios de estado, anotaciones, convocatorias, versiones de etapas, bancos, y apertura, guardado, cierre y análisis de llamadas |
 
 **Sin verificar:** con SQL Server, con un modelo real y con escaneos reales.
+
+## Evaluaciones posteriores y síntesis (Fase 6)
+
+| Aspecto | Cómo quedó |
+| --- | --- |
+| Datos sensibles | La psicometría y el estudio socioeconómico exigen, además del acceso a la vacante, el permiso adicional por persona (el mismo de sus documentos). Sin él, la evaluación responde «sin permiso» y en las listas solo se indica que existe. El responsable y el administrador lo tienen siempre. Compartir la vacante no lo concede |
+| Documentos | Los reportes psicométricos y los estudios se guardan cifrados. Para resumirlos o digitalizarlos se descifran en memoria dentro del servidor; el texto es lo único que se envía al proveedor |
+| Sin decisiones automáticas | Registrar o cambiar una evaluación nunca mueve de etapa ni cambia el estado de una postulación |
+| Psicometría | El sistema no diagnostica ni declara aptitud. «Validada» exige el nombre del profesional que la interpretó. A la IA se le pide transcribir lo que el reporte documenta; su respuesta se reduce a resumen, resultados documentados, datos ilegibles y avisos |
+| Estudio socioeconómico | No existe ninguna puntuación, ni en la base de datos ni en la pantalla. A la IA se le prohíbe inferir nivel socioeconómico, confiabilidad, moralidad, religión, salud o idoneidad; solo se aceptan valores para campos de la plantilla. Un dato leído por la IA entra sin verificar y solo una persona puede marcarlo como verificado. No se envían fotografías ni imágenes a ningún proveedor |
+| Síntesis del expediente | Seis listas por tipo de fuente; cualquier puntuación, índice o recomendación en la respuesta se descarta en el servidor. No se envían el nombre ni el contacto. La psicometría entra solo si está validada y quien pide la síntesis tiene ese permiso; una síntesis que la incluye solo la ve quien lo tiene. El contenido del estudio socioeconómico nunca entra |
+| Auditoría | Alta y cambios de cada evaluación (tipo y estado, nunca el contenido), resúmenes, digitalizaciones, versiones de formularios y síntesis con sus fuentes |
+
+**Límite conocido:** el servidor controla la forma de la respuesta de la IA, no cada frase. Un resumen podría contener una valoración indebida escrita dentro de un texto permitido. Por eso cada pantalla lo presenta como resumen y no como conclusión, y por eso debe revisarse con casos sintéticos antes de usarlo con datos reales.
+
+**Sin verificar:** con SQL Server y con un modelo real.

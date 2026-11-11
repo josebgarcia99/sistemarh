@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.modules.ai_settings.domain.models import AiRepository
+from app.modules.assessments.domain.models import AssessmentRepository
 from app.modules.audit.domain.models import AuditRepository
 from app.modules.authentication.domain.models import SessionRepository
 from app.modules.cv_processing.domain.models import CvBatchRepository
@@ -38,6 +39,7 @@ class Repositories:
     cv_batches: CvBatchRepository
     recruitment: RecruitmentRepository
     phone_calls: PhoneCallRepository
+    assessments: AssessmentRepository
 
 
 class Backend(Protocol):

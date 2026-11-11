@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Reversión completa (DESTRUCTIVO)
-   Versión del esquema: 0009 -> (vacía)
-   Generado: 2026-11-11 18:44 (UTC) con scripts/generate_sql.py
+   Versión del esquema: 0010 -> (vacía)
+   Generado: 2026-11-11 19:31 (UTC) con scripts/generate_sql.py
 
    ELIMINA todas las tablas y esquemas del sistema, con todos sus datos.
    Solo para entornos de prueba. Nunca ejecutar en producción sin respaldo.
@@ -24,14 +24,36 @@ SET XACT_ABORT ON;
 GO
 
 -- Protección: si la base no está en la versión esperada, no se ejecuta nada.
-IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0009')
+IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0010')
 BEGIN
-    RAISERROR(N'La base no esta en la version 0009. No se aplico ningun cambio.', 16, 1);
+    RAISERROR(N'La base no esta en la version 0010. No se aplico ningun cambio.', 16, 1);
     SET NOEXEC ON;
 END
 GO
 
 BEGIN TRANSACTION;
+
+-- Running downgrade 0010 -> 0009
+
+DROP TABLE recruitment.application_syntheses;
+
+GO
+
+DROP TABLE recruitment.assessments;
+
+GO
+
+DROP TABLE recruitment.form_template_versions;
+
+GO
+
+DROP TABLE recruitment.form_templates;
+
+GO
+
+UPDATE alembic_version SET version_num='0009' WHERE alembic_version.version_num = '0010';
+
+GO
 
 -- Running downgrade 0009 -> 0008
 

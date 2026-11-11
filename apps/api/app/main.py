@@ -33,6 +33,7 @@ from app.infrastructure.antivirus.scanner import MalwareScanner
 from app.infrastructure.storage.local import LocalFileStorage
 from app.modules.ai_settings.api.router import router as ai_router
 from app.modules.ai_settings.domain.models import ProviderClient, ProviderCode
+from app.modules.assessments.api.router import router as assessments_router
 from app.modules.audit.api.router import router as audit_router
 from app.modules.authentication.api.router import router as auth_router
 from app.modules.authentication.domain.models import AuthPolicy
@@ -71,7 +72,7 @@ def create_app(
     docs_enabled = settings.environment is not Environment.PRODUCTION
     app = FastAPI(
         title=settings.app_name,
-        version="0.6.0",
+        version="0.7.0",
         openapi_url=f"{settings.api_prefix}/openapi.json" if docs_enabled else None,
         docs_url=f"{settings.api_prefix}/docs" if docs_enabled else None,
         redoc_url=None,
@@ -111,6 +112,7 @@ def create_app(
     api.include_router(cv_processing_router)
     api.include_router(recruitment_router)
     api.include_router(phone_calls_router)
+    api.include_router(assessments_router)
     api.include_router(audit_router)
     app.include_router(api)
     return app

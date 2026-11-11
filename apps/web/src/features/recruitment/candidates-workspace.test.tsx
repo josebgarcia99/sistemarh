@@ -198,6 +198,8 @@ describe("CandidatesWorkspace", () => {
       [`GET ${BOARD_URL}`]: { body: makeBoard() },
       ["GET /api/v1/applications/a1"]: { body: makeDetail() },
       ["GET /api/v1/applications/a1/calls"]: { body: [] },
+      ["GET /api/v1/applications/a1/assessments"]: { body: { items: [], restricted: [], writable: [] } },
+      ["GET /api/v1/applications/a1/syntheses"]: { body: { latest: null, total: 0, hidden: false } },
       ["POST /api/v1/applications/a1/status"]: {
         body: makeDetail({ application: makeApplication({ status: "DESISTIO" }) }),
       },

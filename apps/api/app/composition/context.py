@@ -10,6 +10,12 @@ from dataclasses import dataclass, field
 from fastapi import Request
 
 from app.composition.ai import env_api_keys
+from app.composition.assessments import (
+    AssessmentApplications,
+    AssessmentAssistant,
+    AssessmentDocuments,
+    VacancyAssessmentAccess,
+)
 from app.composition.backend import Backend, Repositories
 from app.composition.cv_processing import (
     AiEvaluator,
@@ -35,6 +41,7 @@ from app.infrastructure.documents.text import Ocr
 from app.infrastructure.storage.local import LocalFileStorage
 from app.modules.ai_settings.application.service import AiSettingsService
 from app.modules.ai_settings.domain.models import ProviderClient, ProviderCode
+from app.modules.assessments.application.service import AssessmentService
 from app.modules.audit.application.service import AuditLog
 from app.modules.authentication.application.service import AuthService
 from app.modules.authentication.domain.models import AuthPolicy
@@ -144,6 +151,19 @@ class AppContext:
             CallApplications(repos.recruitment, repos.cv_batches, repos.evaluation_setup),
             VacancyProfiles(repos.evaluation_setup),
             CallAssistant(self.ai_settings(repos)),
+            self.audit(repos),
+            self.clock,
+        )
+
+    def assessments(self, repos: Repositories) -> AssessmentService:
+        return AssessmentService(
+            repos.assessments,
+            VacancyAssessmentAccess(repos.vacancies),
+            AssessmentApplications(
+                repos.recruitment, repos.cv_batches, repos.phone_calls, repos.evaluation_setup
+            ),
+            AssessmentDocuments(repos.files, self.storage, self.master_key, self.ocr),
+            AssessmentAssistant(self.ai_settings(repos)),
             self.audit(repos),
             self.clock,
         )

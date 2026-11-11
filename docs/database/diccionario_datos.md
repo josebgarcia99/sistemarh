@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0009`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0010`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -464,6 +464,52 @@ Una llamada telefónica de una postulación.
 | `answers` | `NVARCHAR(MAX)` | Sí | Respuestas en JSON (`ISJSON`): pregunta, respuesta, observación y si no se realizó. |
 | `analysis`, `analysis_at`, `analysis_by` | | No | Último análisis de IA, en JSON, con su fecha y quién lo pidió. |
 | `created_at`, `created_by`, `updated_at`, `closed_at` | | | Registro y cierre. |
+
+### `recruitment.form_templates` y `recruitment.form_template_versions`
+
+Formularios configurables del estudio socioeconómico, por versiones.
+
+| Tabla | Columna | Tipo | Descripción |
+| --- | --- | --- | --- |
+| `form_templates` | `name`, `description` | `NVARCHAR(150)`, `NVARCHAR(500)` | Nombre y descripción. |
+| `form_templates` | `status` | `VARCHAR(20)` | `ACTIVA` o `ARCHIVADA`. |
+| `form_template_versions` | `template_id`, `version_number` | | Versión del formulario (única por formulario). No cambia. |
+| `form_template_versions` | `sections` | `NVARCHAR(MAX)` | Secciones y campos en JSON (`ISJSON`): identificador, nombre, tipo, obligatoriedad, opciones, mínimo y máximo. |
+| `form_template_versions` | `created_at`, `created_by` | | `created_by` vacío en la plantilla inicial, que crea el sistema. |
+
+### `recruitment.assessments`
+
+Una evaluación de una postulación. Lo capturado va en JSON y se valida en la aplicación según el tipo.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `application_id`, `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Postulación y su vacante. |
+| `kind` | `VARCHAR(30)` | Sí | `PSICOMETRIA`, `ENTREVISTA`, `PRUEBA_TECNICA` o `ESTUDIO_SOCIOECONOMICO`. Los tipos `PSICOMETRIA` y `ESTUDIO_SOCIOECONOMICO` son datos sensibles: la aplicación exige el permiso adicional para leerlos. |
+| `status` | `VARCHAR(20)` | Sí | Según el tipo. Psicometría: `PENDIENTE`, `PRESENTADA`, `NO_PRESENTADA`, `INCOMPLETA`, `NO_APLICA`, `ANULADA`, `VALIDADA`. Prueba técnica: `PENDIENTE`, `REALIZADA`, `NO_PRESENTADA`, `INCOMPLETA`, `NO_APLICA`, `ANULADA`. Entrevista: `PROGRAMADA`, `REALIZADA`, `NO_REALIZADA`, `CANCELADA`. Estudio: `PENDIENTE`, `EN_PROCESO`, `COMPLETADO`, `NO_APLICA`, `ANULADO`. |
+| `event_date` | `DATETIME2(3)` | No | Fecha de la prueba, entrevista o visita. |
+| `file_id` | `UNIQUEIDENTIFIER` | No | Documento de la vacante (`files.file_assets`). |
+| `template_version_id` | `UNIQUEIDENTIFIER` | Solo estudios | Versión del formulario con la que se capturó. Obligatoria en un estudio y vacía en los demás tipos (`ck_assessments_template`). |
+| `data` | `NVARCHAR(MAX)` | Sí | Lo capturado, en JSON (`ISJSON`). En un estudio, cada respuesta lleva su valor, si una persona la verificó y si la leyó la IA. Contiene datos personales y, según el tipo, sensibles. |
+| `score` | `NUMERIC(5,2)` | No | Solo en pruebas técnicas con rúbrica completa: puntos obtenidos entre posibles, de 0 a 100. Nunca en psicometría ni en estudios. |
+| `ai_summary`, `ai_summary_at`, `ai_summary_by` | | No | Último resumen de IA, en JSON, con su fecha y quién lo pidió. |
+| `version` | `INT` | Sí | Aumenta con cada guardado; evita que dos personas se pisen. |
+| `created_at`, `created_by`, `updated_at`, `updated_by` | | Sí | Registro. |
+
+Índice: `ix_assessments_application (application_id, kind)`.
+
+### `recruitment.application_syntheses`
+
+Síntesis del expediente generadas por la IA. Se conservan todas.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
+| `application_id`, `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Postulación y su vacante. |
+| `result` | `NVARCHAR(MAX)` | Sí | JSON (`ISJSON`) con seis listas: hechos documentados, declaraciones, observaciones humanas, resultados técnicos, información pendiente y discrepancias verificables. Nunca una puntuación. |
+| `sources` | `NVARCHAR(MAX)` | Sí | Fuentes usadas, en JSON (por ejemplo, «2 llamadas»). |
+| `includes_psychometrics` | `BIT` | Sí | Si incluyó psicometría validada; en ese caso solo la ve quien tiene ese permiso. |
+| `created_at`, `created_by` | | Sí | Cuándo y quién la pidió. |
 
 ## Esquema `ops`: operación
 

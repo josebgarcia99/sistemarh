@@ -10,6 +10,8 @@ import {
   primaryButtonClass,
   secondaryButtonClass,
 } from "@/components/ui/styles";
+import { AssessmentsSection } from "@/features/assessments/assessments-section";
+import { DossierSection } from "@/features/assessments/dossier-section";
 import { CallsSection } from "@/features/calls/calls-section";
 import { describeError } from "@/lib/api/client";
 import { downloadUrl } from "@/lib/api/files";
@@ -160,6 +162,8 @@ export function ApplicationDetailView({ applicationId, vacancyId, vacancyName, c
           />
           <EvaluationCard detail={detail} />
           <CallsSection applicationId={application.id} canEdit={canEdit} active={active} />
+          <AssessmentsSection applicationId={application.id} vacancyId={vacancyId} active={active} />
+          <DossierSection detail={detail} canEdit={canEdit} />
         </div>
         <section className={`${cardClass} flex min-w-0 flex-[1_1_300px] flex-col gap-3`}>
           <h2 className="text-xl font-medium">Historial</h2>

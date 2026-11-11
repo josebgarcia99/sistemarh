@@ -41,6 +41,7 @@ containers =
     app.modules.cv_processing
     app.modules.recruitment
     app.modules.phone_calls
+    app.modules.assessments
 
 [importlinter:contract:capas-system]
 name = capas del modulo system
@@ -152,5 +153,25 @@ forbidden_modules =
     app.modules.evaluation_setup
     app.modules.file_management
     app.modules.ai_settings
+    app.modules.vacancy_transfers
+    app.modules.system
+
+# Las evaluaciones posteriores usan sus propios puertos para permisos,
+# documentos, expediente e IA.
+[importlinter:contract:evaluaciones-independiente]
+name = assessments no depende de otros modulos de negocio
+type = forbidden
+source_modules =
+    app.modules.assessments.domain
+    app.modules.assessments.application
+    app.modules.assessments.infrastructure
+forbidden_modules =
+    app.modules.recruitment
+    app.modules.phone_calls
+    app.modules.cv_processing
+    app.modules.evaluation_setup
+    app.modules.file_management
+    app.modules.ai_settings
+    app.modules.vacancies
     app.modules.vacancy_transfers
     app.modules.system
