@@ -95,6 +95,8 @@ El inicio de sesión y los usuarios necesitan SQL Server. Sin `RECLU_DATABASE_UR
    ```
    El comando pregunta tu correo, tu nombre completo y la contraseña que tú elijas (mínimo 12 caracteres). La contraseña no se muestra, no se guarda en ningún archivo y nadie más la conoce. Si ya existe un administrador, el comando se niega: los demás usuarios se crean desde la pantalla **Usuarios**.
 
+Los pasos 4 y 5 necesitan `RECLU_DATABASE_URL` definida en la terminal (no leen `.env`), o lanzarse desde el panel de Visual Studio Code (ver más abajo).
+
 > Estos cinco pasos están escritos pero **no se han ejecutado contra un SQL Server real**. Si alguno falla, el mensaje de error indica el motivo; repórtalo para corregirlo.
 
 ## Migraciones de base de datos
@@ -122,6 +124,47 @@ Se ejecutan con `sqlcmd -b` o en SSMS con el modo SQLCMD. Se regeneran con `pyth
 
 Para que la auditoría sea inalterable, Sistemas debe aplicar `permisos_usuario_aplicacion.sql`, que niega `UPDATE` y `DELETE` sobre `ops.audit_events` al usuario de base de datos de la aplicación.
 
-## Depuración en Visual Studio Code
+## Verlo en Visual Studio Code, paso a paso (Windows)
 
-`.vscode/launch.json` trae cuatro configuraciones: API, Worker, pruebas de la API y Frontend. Requieren el entorno virtual de Python seleccionado y el archivo `.env`.
+> Esta guía está escrita pero **no se ha probado en Windows ni contra un SQL Server real**. Si un paso falla, copia el mensaje de error.
+
+Es Visual Studio Code (el editor gratuito), no Visual Studio. La aplicación necesita un SQL Server para funcionar: sin él las pantallas abren, pero no se puede iniciar sesión.
+
+**Instalar una sola vez**
+
+1. [Visual Studio Code](https://code.visualstudio.com/), [Git](https://git-scm.com/), [Python 3.12 o posterior](https://www.python.org/downloads/) (marca "Add python.exe to PATH") y [Node.js 22 LTS](https://nodejs.org/).
+2. SQL Server 2022 Developer (gratuito para desarrollo) y SQL Server Management Studio.
+3. Microsoft ODBC Driver 18 for SQL Server.
+4. En Management Studio, crea una base de datos vacía llamada `reclutamiento`.
+
+**Preparar el proyecto**
+
+5. En VS Code: `Ctrl+Shift+P` → "Git: Clone" → la dirección del repositorio. Abre la carpeta y acepta instalar las extensiones recomendadas.
+6. Abre una terminal (`Ctrl+ñ`) y ejecuta:
+   ```powershell
+   py -m venv .venv
+   .venv\Scripts\activate
+   pip install -r apps/api/requirements.lock
+   pip install -e apps/api --no-deps
+   cd apps/web
+   npm ci
+   cd ../..
+   copy .env.example .env
+   ```
+   Si PowerShell no deja activar el entorno, ejecuta antes `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+7. `Ctrl+Shift+P` → "Python: Select Interpreter" → el que está en `.venv`.
+8. En `.env`, completa la conexión. Con un SQL Server instalado en el mismo equipo y tu usuario de Windows:
+   ```
+   RECLU_DATABASE_URL=mssql+pyodbc://@localhost/reclutamiento?driver=ODBC+Driver+18+for+SQL+Server&Trusted_Connection=yes&Encrypt=yes&TrustServerCertificate=yes
+   ```
+   `.env` no se sube a GitHub. `TrustServerCertificate=yes` solo es aceptable en tu equipo.
+
+**Ejecutar** (panel "Ejecutar y depurar", `Ctrl+Shift+D`; elige en la lista y pulsa el botón verde)
+
+9. **1. Base de datos: crear o actualizar tablas.** Una vez, y de nuevo cuando haya migraciones nuevas.
+10. **2. Crear usuario maestro (una sola vez).** Pregunta en la terminal tu correo, tu nombre y la contraseña que elijas (mínimo 12 caracteres; no se ve al escribirla).
+11. **3. Sistema (API + Frontend).** Cuando la terminal muestre que está listo, abre http://localhost:3000 y entra con ese correo y esa contraseña.
+
+Las demás configuraciones de `.vscode/launch.json` (API, Frontend, Worker y pruebas de la API) sirven para ejecutar cada parte por separado. El worker no hace falta todavía y en Windows requiere Docker o WSL2.
+
+Los comandos escritos en una terminal no leen `.env`: por eso los pasos 9 y 10 se lanzan desde el panel. Para usarlos en una terminal, define antes la variable (`$env:RECLU_DATABASE_URL = "..."`).

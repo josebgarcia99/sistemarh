@@ -2,11 +2,43 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "1. Base de datos: crear o actualizar tablas",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "alembic",
+      "args": [
+        "upgrade",
+        "head"
+      ],
+      "cwd": "${workspaceFolder}/database",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "2. Crear usuario maestro (una sola vez)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.cli",
+      "args": [
+        "create-admin"
+      ],
+      "cwd": "${workspaceFolder}/apps/api",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
       "name": "API (FastAPI)",
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["app.main:app", "--reload", "--port", "8000"],
+      "args": [
+        "app.main:app",
+        "--reload",
+        "--port",
+        "8000"
+      ],
       "cwd": "${workspaceFolder}/apps/api",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true
@@ -16,7 +48,13 @@
       "type": "debugpy",
       "request": "launch",
       "module": "celery",
-      "args": ["-A", "worker.celery_app", "worker", "--loglevel=INFO", "--pool=solo"],
+      "args": [
+        "-A",
+        "worker.celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--pool=solo"
+      ],
       "cwd": "${workspaceFolder}/apps/worker",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true
@@ -35,6 +73,16 @@
       "request": "launch",
       "command": "npm run dev",
       "cwd": "${workspaceFolder}/apps/web"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "3. Sistema (API + Frontend)",
+      "configurations": [
+        "API (FastAPI)",
+        "Frontend (Next.js)"
+      ],
+      "stopAll": true
     }
   ]
 }

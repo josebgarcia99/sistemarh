@@ -20,7 +20,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Los modelos se registran aquí a partir de la Fase 2.
+# Las migraciones se escriben a mano; no se usa la generación automática.
 target_metadata = None
 
 
