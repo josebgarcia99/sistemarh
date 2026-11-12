@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import BaseModel, Field
 
 from app.composition.backend import Repositories
 from app.composition.context import AppContext, client_ip, get_context
-from app.core.exceptions.errors import ServiceUnavailableError
+from app.core.exceptions.errors import PermissionDeniedError, ServiceUnavailableError
 from app.modules.assessments.domain.models import (
     STATUSES,
     Assessment,
@@ -131,6 +132,16 @@ class AssessmentListOut(BaseModel):
 
 class DigitizationIn(BaseModel):
     file_id: uuid.UUID
+
+
+class StudyQueueItemOut(BaseModel):
+    application_id: uuid.UUID
+    vacancy_id: uuid.UUID
+    candidate_name: str
+    vacancy_name: str
+    active: bool
+    study_status: str | None
+    study_updated_at: datetime | None
 
 
 class PhotoDescriptionIn(BaseModel):
@@ -453,6 +464,26 @@ def digitize_study(
     if outcome.content is None:
         raise ServiceUnavailableError(outcome.error)
     return DigitizationOut(**outcome.content)
+
+
+@router.get(
+    "/study-queue",
+    response_model=list[StudyQueueItemOut],
+    summary="Lista de trabajo de estudios socioeconómicos (analista de estudios o administrador)",
+)
+def study_queue(
+    search: str | None = Query(default=None, max_length=100),
+    principal: Principal = _user,
+    context: AppContext = _context,
+) -> list[StudyQueueItemOut]:
+    user = principal.user
+    if not (user.is_admin or user.is_study_analyst):
+        raise PermissionDeniedError(
+            "Esta lista es para el analista de estudios socioeconómicos y los administradores."
+        )
+    with context.require_backend().transaction() as repos:
+        items = repos.study_queue.items(search)
+    return [StudyQueueItemOut(**asdict(item)) for item in items]
 
 
 @router.post(

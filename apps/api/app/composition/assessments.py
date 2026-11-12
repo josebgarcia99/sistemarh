@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import uuid
 
-from app.composition.file_access import VacancyFileAccessPolicy
+from app.composition.file_access import VacancyFileAccessPolicy, is_study_analyst
 from app.core.security.master_key import DecryptionError, MasterKey
 from app.infrastructure.documents.photos import PHOTO_EXTENSIONS, PhotoError, prepare_photo
 from app.infrastructure.documents.text import Ocr, TextExtractionError, extract_text
@@ -59,6 +59,9 @@ class VacancyAssessmentAccess:
 
     def readable(self, actor: Actor, vacancy_id: uuid.UUID) -> frozenset[Kind]:
         granted = self._policy.readable_sensitive_classes(actor, vacancy_id)
+        if is_study_analyst(actor):
+            # Ni entrevistas ni pruebas técnicas: solo el estudio.
+            return frozenset({Kind.ESTUDIO_SOCIOECONOMICO})
         return frozenset(k for k in Kind if k not in SENSITIVE_KINDS or k.value in granted)
 
 

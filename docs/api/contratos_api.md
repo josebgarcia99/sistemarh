@@ -2,7 +2,7 @@
 
 > Generado por `scripts/generate_docs.py` a partir del contrato OpenAPI. No editar a mano.
 
-Versión de la API: `0.8.0`. Rutas: 110. Todas cuelgan de `/api/v1`.
+Versión de la API: `0.8.0`. Rutas: 111. Todas cuelgan de `/api/v1`.
 
 **Reglas comunes**
 
@@ -66,6 +66,7 @@ Versión de la API: `0.8.0`. Rutas: 110. Todas cuelgan de `/api/v1`.
 | PUT | `/form-templates/{template_id}` | Guarda el formulario; si cambian sus campos crea una versión nueva | `TemplateIn` | 200 `TemplateOut` |
 | POST | `/form-templates/{template_id}/archive` | Archiva el formulario | — | 200 `TemplateOut` |
 | POST | `/form-templates/{template_id}/restore` | Restaura un formulario archivado | — | 200 `TemplateOut` |
+| GET | `/study-queue` | Lista de trabajo de estudios socioeconómicos (analista de estudios o administrador) | — | 200 lista de `StudyQueueItemOut` |
 
 ## Evaluación de cv
 

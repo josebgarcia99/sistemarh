@@ -2,7 +2,7 @@
 
 > Generado por `scripts/generate_docs.py` a partir del modelo de datos. No editar a mano.
 
-Versión del esquema: `0015`. Tablas: 36. El detalle de cada columna está en [`diccionario_datos.md`](diccionario_datos.md).
+Versión del esquema: `0016`. Tablas: 36. El detalle de cada columna está en [`diccionario_datos.md`](diccionario_datos.md).
 
 Cada diagrama muestra las tablas de un esquema y sus relaciones, también con tablas de otros esquemas. Para que se lean, se omiten las columnas de autoría (quién creó, modificó o aprobó algo), que apuntan todas a `auth.users`.
 

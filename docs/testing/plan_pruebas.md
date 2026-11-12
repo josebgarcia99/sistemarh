@@ -49,9 +49,9 @@ Lo que sigue describe las pruebas que existen hoy y dónde están. Todas corren 
 ### Cómo ejecutarlas
 
 ```bash
-cd apps/api && pytest            # 370 pruebas de la API
+cd apps/api && pytest            # 374 pruebas de la API
 cd apps/worker && pytest         # 5 pruebas del worker
-cd apps/web && npm test          # 98 pruebas de pantallas
+cd apps/web && npm test          # 102 pruebas de pantallas
 python scripts/generate_docs.py --check   # la documentación generada está al día
 python scripts/medir_rendimiento.py       # medición con volumen sintético
 python tests/e2e/run.py                   # seis recorridos en navegador (requiere las pantallas compiladas)
@@ -101,7 +101,7 @@ Transversales, en `test_seguridad.py` y `test_route_protection.py`:
 
 `test_flujo_completo.py::test_flujo_completo_de_principio_a_fin` recorre los 20 pasos del documento maestro en una sola prueba: la administradora crea usuarios; la reclutadora crea la vacante, la comparte, carga el perfil con ayuda de la IA y aprueba el prompt; carga los CV; la IA evalúa y se generan el Excel y los ZIP; RH revisa; un rechazado por la IA avanza a llamada por decisión humana; se responden las preguntas y se registra el análisis; se carga la psicometría; se registra la entrevista; la prueba técnica se marca como «no aplica»; se digitaliza un formulario; se registra la contratación; se consulta el histórico; la vacante se transfiere; y al final los documentos siguen disponibles para la nueva responsable y dejan de estarlo para la anterior.
 
-En navegador, seis recorridos con Playwright (`tests/e2e/`, 47 pasos en total) usan la aplicación como una persona: formatos de la empresa (subir el perfil en Excel, Gemini y la plantilla del estudio), evaluación de CV, ayudas de IA, reclutamiento, evaluaciones posteriores e indicadores. Cada uno arranca un modo demostración nuevo. No recorren los 20 pasos seguidos en una sola sesión: eso lo hace la prueba de la API. Los recorridos de identidad y de vacantes de las primeras fases se hicieron a mano con guiones que no se conservaron en el repositorio.
+En navegador, seis recorridos con Playwright (`tests/e2e/`, 48 pasos en total) usan la aplicación como una persona: formatos de la empresa (subir el perfil en Excel, Gemini y la plantilla del estudio), evaluación de CV, ayudas de IA, reclutamiento, evaluaciones posteriores e indicadores. Cada uno arranca un modo demostración nuevo. No recorren los 20 pasos seguidos en una sola sesión: eso lo hace la prueba de la API. Los recorridos de identidad y de vacantes de las primeras fases se hicieron a mano con guiones que no se conservaron en el repositorio.
 
 ### Migraciones y scripts
 

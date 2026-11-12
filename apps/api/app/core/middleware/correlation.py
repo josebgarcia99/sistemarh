@@ -42,7 +42,7 @@ CONTENT_SECURITY_POLICY = ("content-security-policy", "default-src 'none'; frame
 STRICT_TRANSPORT_SECURITY = ("strict-transport-security", "max-age=31536000; includeSubDomains")
 
 
-def _route_template(scope: Scope) -> str:
+def route_template(scope: Scope) -> str:
     """La ruta declarada (``/vacancies/{vacancy_id}``), sin los identificadores reales."""
     if "route" not in scope:
         return UNROUTED
@@ -129,7 +129,7 @@ class RequestContextMiddleware:
             await send({"type": "http.response.body", "body": body})
         finally:
             duration_ms = (time.perf_counter() - started) * 1000
-            route = _route_template(scope)
+            route = route_template(scope)
             method = scope.get("method", "")
             if self._metrics is not None:
                 self._metrics.record(method, route, status, duration_ms)

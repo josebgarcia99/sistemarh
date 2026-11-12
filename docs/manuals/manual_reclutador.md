@@ -122,6 +122,16 @@ Cuando el proceso de una persona termina, pulsa «Registrar resultado final» y 
 
 Todos piden motivo, salvo la contratación. No se puede contratar a más personas que plazas tiene la vacante: si se abrió otra plaza, primero actualiza la vacante. Con resultado final la persona ya no se mueve de etapa. Si hubo un error o la situación cambió, «Reabrir proceso» lo deshace: pide motivo y el resultado anterior queda anulado, a la vista, sin borrarse.
 
+## Si tu puesto es analista de estudios socioeconómicos
+
+Al entrar verás solo «Estudios»: la lista de personas en proceso de todas las vacantes, con el estado de su estudio. Puedes buscar por persona o por vacante.
+
+1. Abre a la persona. Si no tiene estudio, «Registrar evaluación» lo crea con el formato de la empresa.
+2. Captura el formato. Con «Adjuntar foto o archivo» subes las fotografías y el formato firmado; «Leer el formulario escaneado con IA» y «Describir con IA» te proponen datos y descripciones que tú revisas.
+3. Anota el dictamen y guarda. Cuando esté terminado, cambia el estado a «Completado».
+
+No verás el CV ni el resto del expediente: tu puesto solo da acceso a los estudios. La reclutadora responsable y los administradores ven el estudio que captures.
+
 ## Indicadores
 
 Menú «Indicadores». Tiene tres secciones:

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { cardClass, secondaryButtonClass } from "@/components/ui/styles";
 import { useSession } from "@/features/auth/use-session";
 import { ActivityList, StatGroup, StatTile } from "@/features/reports/dashboard-view";
+import { StudyQueueScreen } from "@/features/studies/study-queue-screen";
 import { SystemStatus } from "@/features/system/system-status";
 import { describeError } from "@/lib/api/client";
 import { getOverview, lastDays } from "@/lib/api/reports";
@@ -17,11 +18,15 @@ export function HomeScreen() {
   const { user } = useSession();
   const firstName = user?.full_name.split(" ")[0] ?? "";
   const isAdmin = user?.role === "ADMINISTRADOR";
+  // El analista de estudios no tiene tablero: su inicio es su lista de trabajo.
+  const isAnalyst = user?.role === "ANALISTA_ESTUDIOS";
   const [range] = useState(() => lastDays(DAYS));
   const { data, error } = useQuery({
     queryKey: ["reports", "overview", "home", range],
     queryFn: ({ signal }) => getOverview(range, signal),
+    enabled: !isAnalyst,
   });
+  if (isAnalyst) return <StudyQueueScreen />;
 
   return (
     <>

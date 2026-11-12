@@ -12,6 +12,7 @@ Toda descarga pasa por la API, que evalúa el permiso en ese momento, no cuando 
 | Privado por defecto | El disco está fuera del directorio público; no hay carpetas estáticas ni enlaces directos. |
 | Autorización por objeto | `GET /api/v1/files/{id}/download` exige sesión, acceso vigente a la vacante y, si aplica, permiso de documento sensible. |
 | Documentos sensibles | Psicometría, estudios socioeconómicos y fotografías documentales requieren un permiso adicional por persona. Compartir la vacante no lo concede. |
+| Analista de estudios socioeconómicos | Rol con acceso por puesto a los estudios de todas las vacantes y a nada más: la política solo le concede la clase «estudio socioeconómico» y, además, una lista cerrada de rutas deja en 403 cualquier otra operación (también las que se añadan después). No ve CV ni el resto del expediente. |
 | Path traversal | Las claves las genera el servidor; el usuario nunca envía rutas. La ruta resuelta debe quedar dentro de la raíz. |
 | Validación de archivos | Lista de formatos permitidos, verificación del tipo real, límite de 20 MB configurable, rechazo de documentos con macros. |
 | Archivos maliciosos | Antivirus local en el servidor. Ningún documento se envía a servicios externos de análisis. |

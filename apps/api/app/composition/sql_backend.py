@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.composition.backend import Repositories
+from app.composition.study_queue import SqlStudyQueue
 from app.modules.ai_settings.infrastructure.sql_repository import SqlAiRepository
 from app.modules.assessments.infrastructure.sql_repository import SqlAssessmentRepository
 from app.modules.audit.infrastructure.sql_repository import SqlAuditRepository
@@ -47,6 +48,7 @@ class SqlBackend:
                 phone_calls=SqlPhoneCallRepository(session),
                 assessments=SqlAssessmentRepository(session),
                 reporting=SqlReportingSource(session),
+                study_queue=SqlStudyQueue(session),
             )
             session.commit()
         except BaseException:

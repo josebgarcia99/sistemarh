@@ -9,12 +9,20 @@ from __future__ import annotations
 
 import uuid
 
-from app.core.exceptions.errors import PermissionDeniedError
+from app.core.exceptions.errors import NotFoundError, PermissionDeniedError
 from app.modules.file_management.domain.models import Actor
 from app.modules.vacancies.application.access import VacancyAccess
 from app.modules.vacancies.domain.models import AccessLevel, SensitiveClass, VacancyRepository
 
 _ALL_CLASSES = frozenset(item.value for item in SensitiveClass)
+STUDY_CLASS = SensitiveClass.ESTUDIO_SOCIOECONOMICO.value
+_ANALYST_ONLY = "Tu puesto solo da acceso a los estudios socioeconómicos."
+
+
+def is_study_analyst(actor: object) -> bool:
+    """Analista de estudios socioeconómicos: trabaja los estudios de cualquier
+    vacante y nada más."""
+    return getattr(actor, "is_study_analyst", False) is True
 
 
 class VacancyFileAccessPolicy:
@@ -36,6 +44,13 @@ class VacancyFileAccessPolicy:
         minimum: AccessLevel,
         sensitive_class: str | None,
     ) -> None:
+        if is_study_analyst(actor):
+            # No depende de que le compartan la vacante: su acceso es por puesto y
+            # se limita a lo clasificado como estudio socioeconómico.
+            self._existing(vacancy_id)
+            if sensitive_class != STUDY_CLASS:
+                raise PermissionDeniedError(_ANALYST_ONLY)
+            return
         _, level = self._access.require(actor, vacancy_id, minimum)  # type: ignore[arg-type]
         if sensitive_class is not None and sensitive_class not in self._granted(
             actor, vacancy_id, level
@@ -54,6 +69,13 @@ class VacancyFileAccessPolicy:
     ) -> None:
         self._require(actor, vacancy_id, AccessLevel.COLABORACION, sensitive_class)
 
+    def _existing(self, vacancy_id: uuid.UUID) -> None:
+        if self._vacancies.get(vacancy_id) is None:
+            raise NotFoundError("La vacante no existe.")
+
     def readable_sensitive_classes(self, actor: Actor, vacancy_id: uuid.UUID) -> frozenset[str]:
+        if is_study_analyst(actor):
+            self._existing(vacancy_id)
+            return frozenset({STUDY_CLASS})
         _, level = self._access.require(actor, vacancy_id, AccessLevel.LECTURA)  # type: ignore[arg-type]
         return self._granted(actor, vacancy_id, level)

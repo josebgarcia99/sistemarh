@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0015`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0016`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -8,7 +8,7 @@ Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden c
 
 ### `auth.roles`
 
-Catálogo de roles. Se carga al instalar con `ADMINISTRADOR` y `RECLUTADOR`.
+Catálogo de roles. Se carga al instalar con `ADMINISTRADOR` y `RECLUTADOR`; la migración `0016` añade `ANALISTA_ESTUDIOS` (analista de estudios socioeconómicos).
 
 | Columna | Tipo | Oblig. | Descripción |
 | --- | --- | --- | --- |

@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { apiFetch, setCsrfToken } from "./client";
 
-export const roleSchema = z.enum(["ADMINISTRADOR", "RECLUTADOR"]);
+export const roleSchema = z.enum(["ADMINISTRADOR", "RECLUTADOR", "ANALISTA_ESTUDIOS"]);
 export type Role = z.infer<typeof roleSchema>;
 
 export const ROLE_LABELS: Record<Role, string> = {
   ADMINISTRADOR: "Administrador",
   RECLUTADOR: "Reclutador",
+  ANALISTA_ESTUDIOS: "Analista de estudios socioeconómicos",
 };
 
 export const userSchema = z.object({

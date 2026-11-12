@@ -12,6 +12,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.composition.study_queue import SqlStudyQueue
 from app.modules.ai_settings.domain.models import AiRepository
 from app.modules.assessments.domain.models import AssessmentRepository
 from app.modules.audit.domain.models import AuditRepository
@@ -42,6 +43,7 @@ class Repositories:
     phone_calls: PhoneCallRepository
     assessments: AssessmentRepository
     reporting: ReportingSource
+    study_queue: SqlStudyQueue
 
 
 class Backend(Protocol):

@@ -23,6 +23,8 @@ npm run dev
 
 Abre http://localhost:3000. La primera terminal muestra los tres usuarios de ejemplo y la contraseña, que cambia en cada arranque.
 
+**Para probar el puesto de analista de estudios.** Entra como `carla@demo.test` (misma contraseña de demostración): solo verás «Estudios», con las personas en proceso de todas las vacantes.
+
 **Para probar la evaluación de CV.** Entra como `ana@demo.test`, abre Vacantes, elige «Analista de Nómina», pulsa «Perfil, prompt y evaluación de CV» y después la pestaña «Evaluación de CV». La vacante ya trae un prompt aprobado y cuatro CV ficticios (uno «escaneado», sin texto). Pulsa «Evaluar 4 CV» y descarga el Excel y los ZIP. Los niveles y las puntuaciones que verás son inventados por el proveedor simulado: sirven para ver la pantalla, no para juzgar la calidad de la evaluación.
 
 **Para probar candidatos, etapas y llamadas.** Después de evaluar los CV de «Analista de Nómina», vuelve a la vacante y pulsa «Candidatos y etapas»: las cuatro personas están en «Revisión local RH». Selecciona a una rechazada por la IA, pulsa «Mover de etapa» y elige «Llamada telefónica»: te pedirá el motivo. Abre su expediente, pulsa «Nueva llamada», captura respuestas, guarda y pulsa «Analizar con IA». En el menú, «Bancos» tiene los bancos de preguntas y, como administradora, «Etapas» permite cambiar las etapas del proceso.
@@ -169,6 +171,7 @@ Si Sistemas prefiere ejecutar T-SQL en lugar de Alembic, los scripts equivalente
 | `actualizacion_0012_a_0013.sql` | Base que ya tiene la versión `0012` |
 | `actualizacion_0013_a_0014.sql` | Base que ya tiene la versión `0013` |
 | `actualizacion_0014_a_0015.sql` | Base que ya tiene la versión `0014` |
+| `actualizacion_0015_a_0016.sql` | Base que ya tiene la versión `0015` |
 | `permisos_usuario_aplicacion.sql` | Plantilla de permisos mínimos para el usuario de la aplicación |
 | `validaciones_integridad.sql` | Solo lectura. Comprueba la coherencia de los datos tras instalar, actualizar o restaurar: todas las filas deben dar 0 |
 | `reversion_completa.sql` | Elimina todo. Solo para bases de prueba |

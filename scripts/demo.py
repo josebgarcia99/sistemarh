@@ -63,6 +63,7 @@ from app.tests.support.sql_memory import build_test_backend
 ADMIN_EMAIL = "admin@demo.test"
 ANA_EMAIL = "ana@demo.test"
 BETO_EMAIL = "beto@demo.test"
+CARLA_EMAIL = "carla@demo.test"
 SAMPLE_PDF = (
     b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
     b"% Documento ficticio del modo demostracion\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"
@@ -334,6 +335,14 @@ def seed(app, password: str) -> None:
             password=password,
             role=Role.RECLUTADOR,
         )
+        # Analista de estudios socioeconómicos: solo ve y trabaja los estudios.
+        users.create_user(
+            admin,
+            email=CARLA_EMAIL,
+            full_name="Carla Demo",
+            password=password,
+            role=Role.ANALISTA_ESTUDIOS,
+        )
         vacancies = context.vacancy_service(repos)
         payroll = vacancies.create(
             ana,
@@ -526,6 +535,7 @@ def main() -> int:
     print(" Abre http://localhost:3000 (con el frontend en marcha) y entra con:")
     print(f"   Administradora: {ADMIN_EMAIL}")
     print(f"   Reclutadores:   {ANA_EMAIL}   {BETO_EMAIL}")
+    print(f"   Analista de estudios socioeconómicos:   {CARLA_EMAIL}")
     print(f"   Contraseña (la misma para los tres): {password}")
     print(" Para detenerlo: Ctrl+C")
     print(line, flush=True)

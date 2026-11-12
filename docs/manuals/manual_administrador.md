@@ -14,9 +14,10 @@ Para quien administra el sistema: da de alta a las personas, configura la IA, de
 
 Menú «Usuarios».
 
-- **Dar de alta.** «Nuevo usuario»: correo, nombre completo, contraseña y rol (administrador o reclutador) → «Crear usuario». El sistema no envía correos: comunica tú la contraseña a la persona por un medio seguro. La contraseña debe tener al menos 12 caracteres.
+- **Dar de alta.** «Nuevo usuario»: correo, nombre completo, contraseña y rol (administrador, reclutador o analista de estudios socioeconómicos) → «Crear usuario». El sistema no envía correos: comunica tú la contraseña a la persona por un medio seguro. La contraseña debe tener al menos 12 caracteres.
 - **Restablecer contraseña.** «Restablecer contraseña» pone una nueva y cierra todas las sesiones abiertas de esa persona.
 - **Editar.** Puedes cambiar el nombre y el rol.
+- **Analista de estudios socioeconómicos.** Es un rol aparte para quien solo hace estudios: ve la lista de personas en proceso de todas las vacantes y trabaja su estudio (formato, fotografías y ayudas de IA). No ve vacantes, CV, otras evaluaciones, indicadores ni configuración, y no hace falta compartirle ninguna vacante. Los reclutadores y administradores siguen viendo y editando los estudios como antes.
 - **Cuenta bloqueada.** Tras cinco intentos fallidos la cuenta se bloquea quince minutos y se desbloquea sola. Restablecer la contraseña también la libera.
 
 Las contraseñas no se pueden consultar: el sistema guarda solo una huella irreversible.

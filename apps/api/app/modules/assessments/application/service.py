@@ -236,7 +236,10 @@ class AssessmentService:
                 pass
         return AssessmentList(
             items=[item for item in items if item.kind in readable],
-            restricted=sorted({item.kind for item in items if item.kind not in readable}),
+            # A quien solo trabaja el estudio no se le anuncia qué más existe.
+            restricted=[]
+            if getattr(actor, "is_study_analyst", False)
+            else sorted({item.kind for item in items if item.kind not in readable}),
             writable=frozenset(writable),
         )
 
@@ -577,6 +580,8 @@ class AssessmentService:
 
     def syntheses(self, actor: Actor, application_id: uuid.UUID) -> SynthesisView:
         application = self._application(application_id)
+        # La síntesis reúne CV, llamadas y entrevistas: exige acceso general a la vacante.
+        self._access.require(actor, application.vacancy_id, Kind.ENTREVISTA, write=False)
         readable = self._access.readable(actor, application.vacancy_id)
         found = self._repo.syntheses(application_id)
         visible = [

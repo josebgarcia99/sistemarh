@@ -406,13 +406,19 @@ class FileService:
     # --- Consulta ------------------------------------------------------------------------
 
     def list_for_vacancy(self, actor: Actor, vacancy_id: uuid.UUID) -> list[FileAsset]:
-        self._policy.require_read(actor, vacancy_id, None)
+        # Lanza si la persona no tiene ningún acceso a la vacante.
         visible = self._policy.readable_sensitive_classes(actor, vacancy_id)
+        try:
+            self._policy.require_read(actor, vacancy_id, None)
+            general = True
+        except PermissionDeniedError:
+            # Acceso limitado a una clase sensible (analista de estudios).
+            general = False
         return [
             asset
             for asset in self._files.list_for_vacancy(vacancy_id, FileStatus.CONFIRMADO)
             if asset.document_type not in GENERATED_TYPES
-            and (asset.sensitive_class is None or asset.sensitive_class in visible)
+            and (asset.sensitive_class in visible if asset.sensitive_class is not None else general)
         ]
 
     def _authorized(self, actor: Actor, file_id: uuid.UUID) -> FileAsset:

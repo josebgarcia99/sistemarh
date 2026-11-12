@@ -112,7 +112,7 @@ with sync_playwright() as p:
     page.screenshot(path=f"{SHOTS}/f7_reportes.png", full_page=True)
     print("6 histórico filtrado por resultado, Excel descargado y abierto (1 fila, Contratado), y registro con huella")
     # 8. Administrador
-    page.get_by_role("button", name="Cerrar sesión").click(); login(page, "admin@demo.test")
+    page.get_by_role("button", name="Cerrar sesión").click(); page.wait_for_url("**/login*"); login(page, "admin@demo.test")
     page.get_by_role("link", name="Indicadores", exact=True).click()
     people = page.get_by_role("table", name="Reclutadores")
     expect(people.get_by_role("row").filter(has_text="Ana Demo")).to_be_visible()
@@ -124,7 +124,7 @@ with sync_playwright() as p:
     assert book.sheetnames == ["Resumen", "Etapas", "Vacantes", "Reclutadores", "Mensual", "IA"], book.sheetnames
     print("7 administrador: carga por responsable, uso de IA y Excel de indicadores con 6 hojas")
     # 9. Beto: solo lo compartido
-    page.get_by_role("button", name="Cerrar sesión").click(); login(page, "beto@demo.test")
+    page.get_by_role("button", name="Cerrar sesión").click(); page.wait_for_url("**/login*"); login(page, "beto@demo.test")
     today = page.get_by_role("region", name="Hoy")
     own = tile(today, "Vacantes propias").inner_text(); shared = tile(today, "Vacantes compartidas").inner_text()
     print(f"8 Beto: propias {own}, compartidas {shared}")

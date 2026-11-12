@@ -7,6 +7,24 @@
 
 Todo se deniega por defecto y el permiso se evalúa en el backend en cada operación, sobre el objeto concreto. Ocultar un botón en la interfaz no cuenta como control.
 
+**Analista de estudios socioeconómicos (rol `ANALISTA_ESTUDIOS`, desde el 12 de noviembre de 2026)**
+
+Su acceso es por puesto, no por vacante: no necesita que nadie le comparta nada y abarca los estudios de todas las vacantes. Los administradores, responsables y quienes tienen el permiso adicional del estudio conservan su acceso.
+
+| Operación | Analista de estudios |
+| --- | --- |
+| Ver la lista de personas en proceso (nombre, vacante y estado de su estudio) | Sí |
+| Registrar, capturar y completar el estudio socioeconómico de cualquier postulación | Sí |
+| Cargar, ver y descargar documentos y fotografías de tipo «Estudio socioeconómico» | Sí |
+| Leer el formato con IA y pedir la descripción de una fotografía | Sí |
+| Consultar las plantillas del estudio | Sí (sin editarlas) |
+| Ver vacantes, CV, evaluación de la IA, perfil, prompt, llamadas o candidatos | No |
+| Ver o registrar psicometría, entrevistas o pruebas técnicas | No |
+| Ver o pedir la síntesis del expediente | No |
+| Indicadores, reportes, bancos, etapas, usuarios, IA, auditoría | No |
+
+Cómo se aplica: (1) la política de documentos y evaluaciones solo le concede la clase «estudio socioeconómico»; (2) además, una lista cerrada de rutas (`STUDY_ANALYST_ROUTES`): cualquier ruta que no esté en ella responde 403 para este rol, incluidas las que se añadan en el futuro. Cada rechazo queda en la auditoría.
+
 **Permisos sobre una vacante**
 
 | Operación | Administrador | Responsable | Colaboración | Lectura | Sin acceso |

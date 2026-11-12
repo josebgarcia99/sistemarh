@@ -15,6 +15,7 @@ const NAV_ITEMS: { href: string; label: string; adminOnly: boolean }[] = [
   { href: "/indicadores", label: "Indicadores", adminOnly: false },
   { href: "/bancos", label: "Bancos", adminOnly: false },
   { href: "/etapas", label: "Etapas", adminOnly: true },
+  { href: "/estudios", label: "Estudios", adminOnly: true },
   { href: "/formularios", label: "Formularios", adminOnly: true },
   { href: "/usuarios", label: "Usuarios", adminOnly: true },
   { href: "/transferencias", label: "Bajas", adminOnly: true },
@@ -93,7 +94,11 @@ function Header({ user }: { user: User }) {
       </Link>
 
       <nav aria-label="Principal" className="flex flex-wrap gap-1">
-        {NAV_ITEMS.filter((item) => !item.adminOnly || user.role === "ADMINISTRADOR").map((item) => {
+        {(user.role === "ANALISTA_ESTUDIOS"
+          ? // Su puesto solo da acceso a los estudios socioeconómicos.
+            [{ href: "/estudios", label: "Estudios", adminOnly: false }]
+          : NAV_ITEMS.filter((item) => !item.adminOnly || user.role === "ADMINISTRADOR")
+        ).map((item) => {
           const active = pathname === item.href;
           return (
             <Link

@@ -57,6 +57,7 @@ def build_test_backend() -> SqlBackend:
             [
                 RoleRow(code="ADMINISTRADOR", name="Administrador"),
                 RoleRow(code="RECLUTADOR", name="Reclutador"),
+                RoleRow(code="ANALISTA_ESTUDIOS", name="Analista de estudios socioeconómicos"),
             ]
         )
         session.commit()

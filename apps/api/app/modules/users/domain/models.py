@@ -18,6 +18,10 @@ MAX_NAME_LENGTH = 200
 class Role(StrEnum):
     ADMINISTRADOR = "ADMINISTRADOR"
     RECLUTADOR = "RECLUTADOR"
+    # Solo trabaja los estudios socioeconómicos, de cualquier vacante: captura el
+    # estudio, carga sus documentos y fotografías y usa las ayudas de IA del
+    # estudio. No ve vacantes, CV, otras evaluaciones, reportes ni configuración.
+    ANALISTA_ESTUDIOS = "ANALISTA_ESTUDIOS"
 
 
 def normalize_email(email: str) -> str:
@@ -55,6 +59,10 @@ class User:
     @property
     def is_admin(self) -> bool:
         return self.role is Role.ADMINISTRADOR
+
+    @property
+    def is_study_analyst(self) -> bool:
+        return self.role is Role.ANALISTA_ESTUDIOS
 
     def is_locked(self, now: datetime) -> bool:
         return self.locked_until is not None and self.locked_until > now

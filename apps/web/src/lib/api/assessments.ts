@@ -213,6 +213,26 @@ export function digitizeStudy(id: string, fileId: string) {
   });
 }
 
+const studyQueueItemSchema = z.object({
+  application_id: z.string(),
+  vacancy_id: z.string(),
+  candidate_name: z.string(),
+  vacancy_name: z.string(),
+  active: z.boolean(),
+  study_status: z.string().nullable(),
+  study_updated_at: z.string().nullable(),
+});
+export type StudyQueueItem = z.infer<typeof studyQueueItemSchema>;
+
+/** Lista de trabajo del analista de estudios: personas en proceso y su estudio. */
+export function listStudyQueue(search: string, signal?: AbortSignal) {
+  return apiFetch("/study-queue", {
+    query: search ? { search } : undefined,
+    schema: z.array(studyQueueItemSchema),
+    signal,
+  });
+}
+
 const photoDescriptionSchema = z.object({
   description: z.string(),
   unclear: z.array(z.string()),
