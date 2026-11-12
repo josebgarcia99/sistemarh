@@ -160,7 +160,23 @@ class MovementFact:
     occurred_at: datetime
     from_stage_id: uuid.UUID | None = None
     to_stage_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True)
+class RecentFact:
+    """Un movimiento reciente, ya con los nombres para mostrarlo."""
+
+    occurred_at: datetime
+    kind: str
+    candidate: str
+    vacancy_id: uuid.UUID
+    vacancy: str
+    stage: str | None = None
     actor_name: str | None = None
+
+
+# Intervalo en UTC: desde el primer valor (incluido) hasta el segundo (excluido).
+Window = tuple[datetime | None, datetime | None]
 
 
 @dataclass(frozen=True)
@@ -222,6 +238,7 @@ class Facts:
     cvs: list[CvFact]
     # Vacío cuando quien consulta no es administrador.
     ai: list[AiFact] = field(default_factory=list)
+    recent: list[RecentFact] = field(default_factory=list)
 
 
 # --- Exportaciones -----------------------------------------------------------------------
@@ -265,13 +282,33 @@ class ReportingSource(Protocol):
 
     def stages(self) -> dict[uuid.UUID, StageFact]: ...
 
-    def applications(self, selection: VacancySelection) -> list[ApplicationFact]: ...
+    def applications(
+        self, selection: VacancySelection, window: Window | None = None
+    ) -> list[ApplicationFact]:
+        """Postulaciones de las vacantes elegidas. Con ``window``, solo las que
+        importan para ese periodo: las activas, las dadas de alta en él y las
+        que tuvieron algún movimiento en él."""
+        ...
 
-    def movements(self, selection: VacancySelection) -> list[MovementFact]: ...
+    def movements(
+        self, selection: VacancySelection, window: Window | None = None
+    ) -> list[MovementFact]:
+        """Historial completo de las postulaciones que devuelve ``applications``."""
+        ...
 
     def outcomes(self, selection: VacancySelection) -> list[OutcomeFact]: ...
 
-    def cvs(self, selection: VacancySelection) -> list[CvFact]: ...
+    def cvs(self, selection: VacancySelection, window: Window | None = None) -> list[CvFact]: ...
+
+    def recent(self, selection: VacancySelection, limit: int) -> list[RecentFact]: ...
+
+    def last_movements(self, selection: VacancySelection) -> dict[uuid.UUID, datetime]:
+        """Fecha del último movimiento de cada postulación."""
+        ...
+
+    def moved_within(self, selection: VacancySelection, window: Window) -> set[uuid.UUID]:
+        """Postulaciones con algún movimiento dentro del intervalo."""
+        ...
 
     def ai_executions(
         self, start: datetime | None, end: datetime | None, selection: VacancySelection
@@ -293,4 +330,8 @@ class ReportingSource(Protocol):
 
     def export_keys(self) -> set[str]:
         """Rutas de todos los reportes guardados (para la conciliación)."""
+        ...
+
+    def export_files(self) -> list[tuple[uuid.UUID, StoredFile]]:
+        """Todos los reportes guardados, con su tamaño y huella (para respaldos)."""
         ...

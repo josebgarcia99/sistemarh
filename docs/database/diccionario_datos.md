@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0011`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0012`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -419,7 +419,7 @@ Postulación: la participación de una persona en una convocatoria.
 | `due_at` | `DATETIME2(3)` | No | Fecha acordada para la etapa actual. |
 | `created_at`, `created_by`, `updated_at` | | | `created_by` vacío si la creó el sistema. |
 
-Índices: `ix_applications_campaign (campaign_id, stage_id, status)`, `ix_applications_vacancy` e `ix_applications_file`.
+Índices: `ix_applications_campaign (campaign_id, stage_id, status)`, `ix_applications_vacancy`, `ix_applications_file` e `ix_applications_evaluation_item` (migración `0012`).
 
 ### `recruitment.application_movements`
 
@@ -570,6 +570,10 @@ Un registro por cada Excel de reportes generado. El archivo está en el almacena
 Índice: `ix_report_exports_user (created_by, created_at)`.
 
 Los tableros no tienen tablas propias: sus cifras se calculan en cada consulta a partir de las tablas anteriores.
+
+### Índices añadidos por la migración `0012`
+
+No cambia tablas ni columnas. Añade los índices que usan las consultas de reportes: `ix_call_sessions_vacancy` e `ix_call_sessions_bank_version` en `recruitment.call_sessions`, `ix_cv_batches_prompt_version` en `ai.cv_batches`, `ix_applications_evaluation_item` en `recruitment.applications` e `ix_executions_vacancy (vacancy_id, occurred_at)` en `ai.executions`. El criterio está en [`revision_sql_server.md`](revision_sql_server.md); las relaciones entre tablas, en [`diagrama_entidad_relacion.md`](diagrama_entidad_relacion.md).
 
 ## Esquema `dbo`
 

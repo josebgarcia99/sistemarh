@@ -218,3 +218,14 @@ Estado al 11 de noviembre de 2026.
 - **Los reportes se quedan en el servidor.** Cada Excel se guarda en el almacenamiento documental con su identificador, fecha, tamaño y SHA-256, y queda en la auditoría quién lo generó y quién lo descargó. Solo lo descarga quien lo generó (o un administrador), y solo mientras conserve acceso a todas las vacantes que contiene; si perdió alguna, debe generar uno nuevo. No se envía a ningún servicio externo.
 - **Lo que un reporte contiene.** El de postulaciones lleva nombres de candidatos, etapa, resultado y su motivo, y la clasificación inicial de la IA. No lleva datos de contacto, psicometría, estudios socioeconómicos ni contenido de llamadas.
 - **Pendiente.** Política de retención y borrado de los reportes generados; revisión de las consultas de reportes en SQL Server.
+
+## Preparación productiva (Fase 8)
+
+- **Cabeceras en toda respuesta de la API:** `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cross-Origin-Resource-Policy: same-origin`, `Cache-Control: no-store` y una política de contenido que no permite cargar ni ejecutar nada. En producción se añade `Strict-Transport-Security`. Una ruta puede fijar las suyas (las descargas usan `sandbox`). Las pantallas llevan las equivalentes desde la configuración de Next.js; su política de contenido aún no limita el origen de los scripts.
+- **Registro de accesos propio.** Una línea JSON por solicitud con método, ruta, estado, duración e identificador de correlación. No incluye la cadena de consulta, que puede llevar nombres de candidatos. La línea de acceso de Uvicorn se apaga.
+- **Métricas.** `GET /api/v1/system/metrics`, solo para administradores: contadores por ruta declarada (`/vacancies/{vacancy_id}`), nunca con identificadores reales. El proxy de ejemplo las limita además a la red interna.
+- **IP real del usuario.** Detrás del proxy se toma de la cabecera que este envía, y solo si la conexión viene de una dirección listada en `FORWARDED_ALLOW_IPS`. El proxy de ejemplo sobrescribe lo que mande el cliente.
+- **Versión del esquema.** La comprobación de salud falla si la base no tiene la versión que espera el código, para no dar servicio a medio actualizar.
+- **Barrido de acceso directo.** Una prueba pide como persona sin acceso cada ruta con identificador, con datos reales de otra persona; toda ruta nueva entra sola en el barrido.
+- **Imagen de producción** sin herramientas de desarrollo; el contenedor corre con un usuario sin privilegios; solo el proxy publica puertos; la clave maestra se monta en solo lectura.
+- **Amenazas y riesgos abiertos:** en [`modelo_amenazas.md`](modelo_amenazas.md).

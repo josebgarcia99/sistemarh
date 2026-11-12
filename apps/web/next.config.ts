@@ -5,6 +5,23 @@ import type { NextConfig } from "next";
 // La variable es del servidor: nunca usar NEXT_PUBLIC_ para direcciones internas ni secretos.
 const apiInternalUrl = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
 
+// Cabeceras de seguridad de las pantallas. Las respuestas de /api llevan las
+// suyas, que fija la propia API.
+// La política de contenido impide enmarcar la aplicación, cambiar la base de los
+// enlaces, enviar formularios a otro sitio e incrustar complementos. No limita
+// todavía el origen de los scripts: eso exige un valor de un solo uso por
+// respuesta y debe probarse en el servidor real (ver docs/security/modelo_amenazas.md).
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+  {
+    key: "Content-Security-Policy",
+    value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+  },
+];
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
@@ -21,6 +38,9 @@ const nextConfig: NextConfig = {
         as: "*.css",
       },
     },
+  },
+  async headers() {
+    return [{ source: "/((?!api/).*)", headers: securityHeaders }];
   },
   async rewrites() {
     return [

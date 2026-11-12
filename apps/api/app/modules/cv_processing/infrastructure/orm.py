@@ -28,6 +28,7 @@ class CvBatchRow(Base):
     __table_args__ = (
         sa.Index("ix_cv_batches_vacancy", "vacancy_id", "created_at"),
         sa.Index("ix_cv_batches_status", "status"),
+        sa.Index("ix_cv_batches_prompt_version", "prompt_version_id"),
         {"schema": SCHEMA_AI},
     )
 

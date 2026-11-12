@@ -6,6 +6,7 @@ import { fetchReadiness, type ComponentStatus } from "@/lib/api/health";
 
 const COMPONENT_LABELS: Record<string, string> = {
   sql_server: "SQL Server",
+  esquema: "Versión de la base de datos",
   redis: "Cola de tareas (Redis)",
   almacenamiento: "Almacenamiento documental",
 };

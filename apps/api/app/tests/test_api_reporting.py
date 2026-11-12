@@ -23,6 +23,7 @@ from app.modules.reporting.domain.models import (
     Facts,
     MovementFact,
     OutcomeFact,
+    RecentFact,
     ReportFilter,
     StageFact,
     VacancyFact,
@@ -146,8 +147,28 @@ def _facts() -> tuple[Facts, dict[str, uuid.UUID]]:
         CvFact(ids["v1"], "EVALUADO", day, "RECHAZADO_IA"),
         CvFact(ids["v1"], "FALLIDO", day, None),
     ]
-    facts = Facts(vacancies, {s.id: s for s in stages}, applications, movements, outcomes, cvs)
+    recent = [
+        RecentFact(day + timedelta(days=7), "CONTRATACION", "Ana", ids["v1"], "Analista"),
+        RecentFact(day + timedelta(days=6), "AVANCE", "Ana", ids["v1"], "Analista", names[3]),
+    ]
+    facts = Facts(
+        vacancies, {s.id: s for s in stages}, applications, movements, outcomes, cvs, recent=recent
+    )
     return facts, ids
+
+
+def _history(facts: Facts, flt: ReportFilter, period: metrics.Period) -> list[metrics.HistoryRow]:
+    """Como lo hace el servicio: la fecha del último movimiento y, si se filtra
+    por fecha de movimiento, quiénes se movieron en el periodo."""
+    last: dict[uuid.UUID, datetime] = {}
+    moved = set()
+    for movement in facts.movements:
+        last[movement.application_id] = max(
+            movement.occurred_at, last.get(movement.application_id, movement.occurred_at)
+        )
+        if period.has(movement.occurred_at):
+            moved.add(movement.application_id)
+    return metrics.history(facts, flt, period, last_movements=last, moved=moved)
 
 
 def test_indicadores_embudo_tiempos_y_cobertura_salen_de_los_movimientos():
@@ -222,7 +243,7 @@ def test_el_historico_filtra_por_resultado_fecha_y_calificacion():
     todo = metrics.period_of(None, None, MEXICO)
 
     def names(flt: ReportFilter, period: metrics.Period = todo) -> list[str]:
-        return sorted(row.candidate for row in metrics.history(facts, flt, period))
+        return sorted(row.candidate for row in _history(facts, flt, period))
 
     assert names(ReportFilter()) == ["Ana", "Beto", "Caro", "Dani"]
     assert names(ReportFilter(outcome="CONTRATADO")) == ["Ana"]
@@ -235,7 +256,7 @@ def test_el_historico_filtra_por_resultado_fecha_y_calificacion():
     assert names(ReportFilter(date_kind=DateKind.CIERRE), late) == ["Ana"]
     assert names(ReportFilter(date_kind=DateKind.MOVIMIENTO), late) == ["Ana", "Beto"]
     assert names(ReportFilter(date_kind=DateKind.EVALUACION), late) == []
-    caro = next(row for row in metrics.history(facts, ReportFilter(candidate="caro"), todo))
+    caro = next(row for row in _history(facts, ReportFilter(candidate="caro"), todo))
     assert caro.outcome == "DESISTIO" and caro.outcome_reason == "Otra oferta"
     assert caro.closed_by_name == "Rosa"
 
@@ -451,11 +472,23 @@ def test_el_periodo_acota_los_hechos_pero_no_la_fotografia(flow, recruiter):
     before = report(recruiter, date_from="2026-01-01", date_to="2026-11-09")
     assert before["totals"]["cv_analyzed"] == 0 and before["totals"]["hires"] == 0
     assert before["snapshot"]["vacancies"] == 1 and before["months"] == []
+    # Las contrataciones vigentes de la vacante no dependen del periodo consultado.
+    assert before["vacancies"][0]["hires_total"] == 1 and before["vacancies"][0]["hires"] == 0
+    assert before["funnel_hired"] == 0 and before["recent"][0]["kind"] == "CONTRATACION"
     # El lote se evaluó el día 10; los cierres son del 13.
     first = report(recruiter, date_from="2026-11-10", date_to="2026-11-10")
     assert first["totals"]["cv_analyzed"] == 2 and first["totals"]["closed"] == 0
+    # Las dos altas son de ese día: el embudo las sigue hasta donde llegaron después.
+    reached = {stage["name"]: stage["reached"] for stage in first["stages"]}
+    assert reached["Revisión local RH"] == 2 and reached["Llamada telefónica"] == 1
+    assert first["funnel_hired"] == 1 and first["totals"]["applications"] == 2
     last = report(recruiter, date_from="2026-11-13", date_to="2026-11-13")
     assert last["totals"]["cv_analyzed"] == 0 and last["totals"]["hires"] == 1
+    # Ese día no hubo altas, pero sí terminaron estancias: Beto tres días en revisión
+    # y Ana uno en llamada.
+    assert last["totals"]["applications"] == 0 and last["totals"]["coverage_days"] == 3.0
+    days = {stage["name"]: stage["average_days"] for stage in last["stages"]}
+    assert days["Revisión local RH"] == 3.0 and days["Llamada telefónica"] == 1.0
     wrong = recruiter.get(
         f"{API}/reports/overview", params={"date_from": "2026-11-13", "date_to": "2026-11-01"}
     )
@@ -693,3 +726,41 @@ def test_un_reporte_solo_se_descarga_mientras_se_conserva_el_acceso(
     denied = other_client.get(url)
     assert denied.status_code == 403 and "ya no tienes acceso" in denied.json()["detail"]
     assert export(other_client, kind="POSTULACIONES").json()["row_count"] == 0
+
+
+def test_los_reportes_entran_en_el_respaldo_y_en_la_comprobacion_del_almacenamiento(
+    flow, recruiter, app, storage, tmp_path, capsys
+):
+    """Respaldo y restauración (32.4): el manifiesto lista también los Excel de
+    reportes; una copia se verifica contra él y la falta de un reporte se detecta."""
+    import shutil
+
+    from app import cli
+
+    context = app.state.context
+    assert export(recruiter, kind="POSTULACIONES").status_code == 201
+    [key] = [k for k in storage.iter_keys() if k.startswith("generated/reports/")]
+
+    manifest = tmp_path / "manifiesto.jsonl"
+    assert cli.storage_manifest(context, manifest) == 0
+    assert key in manifest.read_text()
+    assert cli.storage_check(context, "all") == 0
+    assert "Reportes generados revisados:     1" in capsys.readouterr().out
+
+    restored = tmp_path / "restaurado"
+    shutil.copytree(tmp_path / "almacenamiento", restored)
+    verify = ["storage-verify", "--manifest", str(manifest), "--root", str(restored), "--full"]
+    assert cli.main(verify) == 0
+    (restored / key).unlink()
+    assert cli.main(verify) == 2
+
+    # En el almacenamiento en uso: un reporte alterado o perdido se informa.
+    path = tmp_path / "almacenamiento" / key
+    original = path.read_bytes()
+    path.write_bytes(original[:-1] + b"X")
+    capsys.readouterr()
+    assert cli.storage_check(context, "all") == 2
+    assert "HASH DISTINTO: reporte" in capsys.readouterr().out
+    path.unlink()
+    assert cli.storage_check(context, "none") == 2
+    assert "FALTANTE: reporte" in capsys.readouterr().out

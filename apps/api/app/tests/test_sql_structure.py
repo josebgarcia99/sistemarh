@@ -20,6 +20,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 
+from app.cli import SCHEMA_VERSION
 from app.composition.sql_backend import SqlBackend
 from app.infrastructure.database.base import Base
 from app.main import create_app
@@ -208,3 +209,167 @@ def test_ninguna_columna_usa_tipos_obsoletos_de_sql_server():
         if column.type.compile(dialect=dialect).upper() in {"NTEXT", "TEXT", "IMAGE"}
     }
     assert obsolete == set()
+
+
+# --- Revisión de SQL Server (Fase 8) -------------------------------------------------------
+
+
+def _generated_sql(monkeypatch, *, downgrade: bool = False) -> str:
+    monkeypatch.setenv(
+        "RECLU_DATABASE_URL",
+        "mssql+pyodbc://usuario:clave@servidor/base?driver=ODBC+Driver+18+for+SQL+Server",
+    )
+    buffer = io.StringIO()
+    config = Config(str(REPO_ROOT / "database" / "alembic.ini"), output_buffer=buffer)
+    config.set_main_option("script_location", str(REPO_ROOT / "database" / "migrations"))
+    previous = os.getcwd()
+    try:
+        os.chdir(REPO_ROOT / "database")
+        if downgrade:
+            command.downgrade(config, "head:base", sql=True)
+        else:
+            command.upgrade(config, "head", sql=True)
+    finally:
+        os.chdir(previous)
+    return buffer.getvalue()
+
+
+def test_el_modelo_y_la_migracion_definen_los_mismos_indices(monkeypatch):
+    """Un índice declarado en el ORM que no esté en la migración existiría en
+    las pruebas pero no en SQL Server."""
+    sql = _generated_sql(monkeypatch)
+    created = {
+        name: (bool(unique), f"{table}", [c.strip() for c in columns.split(",")])
+        for unique, name, table, columns in re.findall(
+            r"CREATE (UNIQUE )?INDEX (\w+) ON ([\w.]+) \(([^)]+)\)", sql
+        )
+    }
+    dropped = set(re.findall(r"DROP INDEX (\w+) ON", sql))
+    declared = {
+        index.name: (
+            bool(index.unique),
+            f"{table.schema}.{table.name}",
+            [column.name for column in index.columns],
+        )
+        for table in Base.metadata.tables.values()
+        for index in table.indexes
+    }
+    assert len(declared) >= 30
+    missing = {name: spec for name, spec in declared.items() if created.get(name) != spec}
+    assert not missing, f"Índices del ORM que la migración no crea igual: {missing}"
+    # Y al revés: lo que la migración crea (y no elimina después) está en el ORM
+    # o es una restricción única declarada en la columna.
+    unique_columns = {
+        (f"{table.schema}.{table.name}", column.name)
+        for table in Base.metadata.tables.values()
+        for column in table.columns
+        if column.unique
+    }
+    extra = {
+        name
+        for name, (_, table, columns) in created.items()
+        if name not in declared
+        and name not in dropped
+        and not (len(columns) == 1 and (table, columns[0]) in unique_columns)
+    }
+    assert not extra, f"Índices de la migración que el ORM no declara: {extra}"
+
+
+# Claves foráneas sin índice propio, a propósito. Las tablas son pequeñas o la
+# columna no se usa para buscar. Revisado en docs/database/revision_sql_server.md.
+UNINDEXED_ON_PURPOSE = {
+    "auth.user_roles.role_code",
+    "ai.operation_assignments.model_ref",
+    "ai.prompt_versions.profile_version_id",
+    "ai.prompt_versions.duplicated_from",
+    "ai.cv_batches.report_file_id",
+    "ai.cv_batches.accepted_zip_file_id",
+    "ai.cv_batches.rejected_zip_file_id",
+    "ai.cv_batches.unevaluable_zip_file_id",
+    "ai.cv_batch_items.duplicate_of",
+    "vacancy.job_profile_versions.source_file_id",
+    "vacancy.vacancy_ownership_history.transfer_id",
+    "recruitment.campaigns.pipeline_version_id",
+    "recruitment.question_banks.duplicated_from",
+    "recruitment.applications.stage_id",
+    "recruitment.application_movements.from_stage_id",
+    "recruitment.application_movements.to_stage_id",
+    "recruitment.application_syntheses.vacancy_id",
+    "recruitment.assessments.vacancy_id",
+    "recruitment.assessments.file_id",
+    "recruitment.assessments.template_version_id",
+}
+
+
+def test_las_claves_foraneas_sin_indice_son_una_decision_revisada():
+    """SQL Server no indexa las claves foráneas. Las de autoría (hacia usuarios)
+    no lo necesitan; cualquier otra sin índice debe estar en la lista revisada."""
+    unindexed = set()
+    for table in Base.metadata.tables.values():
+        leading = {next(iter(index.columns)).name for index in table.indexes if index.columns}
+        leading |= {column.name for column in table.columns if column.unique}
+        for constraint in table.constraints:
+            columns = list(getattr(constraint, "columns", []))
+            if (
+                type(constraint).__name__ in ("PrimaryKeyConstraint", "UniqueConstraint")
+                and columns
+            ):
+                leading.add(columns[0].name)
+        for key in table.foreign_key_constraints:
+            column = key.column_keys[0]
+            if column not in leading and key.referred_table.fullname != "auth.users":
+                unindexed.add(f"{table.schema}.{table.name}.{column}")
+    assert unindexed == UNINDEXED_ON_PURPOSE, unindexed ^ UNINDEXED_ON_PURPOSE
+
+
+def test_las_migraciones_forman_una_cadena_y_todas_se_pueden_revertir(monkeypatch):
+    """Pruebas de migración sin servidor: una sola línea de revisiones, cada una
+    con su reversión documentada, y una reversión completa que elimina todo."""
+    from alembic.script import ScriptDirectory
+
+    config = Config(str(REPO_ROOT / "database" / "alembic.ini"))
+    config.set_main_option("script_location", str(REPO_ROOT / "database" / "migrations"))
+    scripts = ScriptDirectory.from_config(config)
+    assert len(scripts.get_heads()) == 1
+    revisions = list(scripts.walk_revisions())
+    numbers = sorted(script.revision for script in revisions)
+    assert numbers == [f"{n:04d}" for n in range(1, len(numbers) + 1)]
+    assert numbers[-1] == SCHEMA_VERSION
+    for script in revisions:
+        assert script.down_revision == (
+            f"{int(script.revision) - 1:04d}" if script.revision != "0001" else None
+        )
+        assert "Reversión" in (script.doc or "") or "Reversión" in (script.module.__doc__ or "")
+
+    down = _generated_sql(monkeypatch, downgrade=True)
+    for table in Base.metadata.tables.values():
+        assert f"DROP TABLE {table.schema}.{table.name}" in down, table.name
+
+
+def test_las_validaciones_de_integridad_solo_leen_y_usan_columnas_que_existen():
+    """El script que ejecuta Sistemas no puede probarse aquí contra SQL Server,
+    pero sí se comprueba que es una sola consulta de lectura y que cada tabla y
+    columna que nombra existe en el modelo."""
+    sqlglot = pytest.importorskip("sqlglot")
+    from sqlglot import exp
+    from sqlglot.optimizer.qualify import qualify
+
+    text = (REPO_ROOT / "database" / "sqlserver" / "validaciones_integridad.sql").read_text()
+    statements = [s for s in sqlglot.parse(text, read="tsql") if s is not None]
+    selects = [s for s in statements if isinstance(s, exp.Select)]
+    assert len(selects) == 1 and len(statements) == 2  # SET NOCOUNT ON y la consulta
+    for forbidden in (exp.Insert, exp.Update, exp.Delete, exp.Drop, exp.Alter, exp.Create):
+        assert not any(statement.find(forbidden) for statement in statements), forbidden
+
+    schema: dict[str, dict[str, dict[str, str]]] = {
+        "dbo": {"alembic_version": {"version_num": "varchar"}}
+    }
+    for table in Base.metadata.tables.values():
+        schema.setdefault(table.schema, {})[table.name] = {
+            column.name: "varchar" for column in table.columns
+        }
+    # Falla si se nombra una tabla o una columna que no existe.
+    qualify(selects[0], schema=schema, dialect="tsql", validate_qualify_columns=True)
+    referenced = {f"{t.db}.{t.name}" for t in selects[0].find_all(exp.Table) if t.db}
+    assert len(referenced) >= 10 and len(re.findall(r"SELECT '\d\d\. ", text)) == 18
+    assert f"'{SCHEMA_VERSION}'" in text

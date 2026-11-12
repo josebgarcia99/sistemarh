@@ -63,3 +63,30 @@ def test_componentes_sin_configurar_devuelven_none():
     assert checks["sql_server"]() is None
     assert checks["redis"]() is None
     assert checks["almacenamiento"]() is None
+
+
+def test_la_version_del_esquema_instalada_se_compara_con_la_esperada():
+    import sqlalchemy as sa
+
+    from app.core.schema_version import SCHEMA_VERSION
+    from app.modules.system.infrastructure.checks import installed_schema_version
+
+    engine = sa.create_engine("sqlite://")
+    with engine.connect() as connection:
+        # Base sin instalar: no hay tabla de versión.
+        assert installed_schema_version(connection) is None
+        connection.execute(sa.text("CREATE TABLE alembic_version (version_num VARCHAR(32))"))
+        connection.execute(sa.text("INSERT INTO alembic_version VALUES ('0011')"))
+        assert installed_schema_version(connection) == "0011" != SCHEMA_VERSION
+        connection.execute(sa.text("UPDATE alembic_version SET version_num = :v"), {"v": "0012"})
+        assert installed_schema_version(connection) == SCHEMA_VERSION
+
+
+def test_la_comprobacion_de_salud_incluye_la_version_del_esquema():
+    from app.core.config.settings import Settings
+    from app.modules.system.infrastructure.checks import build_default_checks
+
+    checks = build_default_checks(Settings(environment="test"))
+    assert list(checks) == ["sql_server", "esquema", "redis", "almacenamiento"]
+    # Sin base de datos configurada no hay nada que comparar.
+    assert checks["esquema"]() is None

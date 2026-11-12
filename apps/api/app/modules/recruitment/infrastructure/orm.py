@@ -118,6 +118,7 @@ class ApplicationRow(Base):
         sa.Index("ix_applications_campaign", "campaign_id", "stage_id", "status"),
         sa.Index("ix_applications_vacancy", "vacancy_id"),
         sa.Index("ix_applications_file", "cv_file_id"),
+        sa.Index("ix_applications_evaluation_item", "evaluation_item_id"),
         {"schema": _S},
     )
 

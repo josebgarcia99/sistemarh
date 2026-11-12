@@ -110,39 +110,54 @@ class ReportingService:
         ):
             raise ValidationFailedError("La calificación mínima no puede superar a la máxima.")
 
-    def _facts(
-        self, viewer: Viewer, selection: VacancySelection, period: metrics.Period, *, ai: bool
-    ) -> Facts:
-        return Facts(
-            vacancies=self._source.vacancies(selection),
-            stages=self._source.stages(),
-            applications=self._source.applications(selection),
-            movements=self._source.movements(selection),
-            outcomes=self._source.outcomes(selection),
-            cvs=self._source.cvs(selection),
-            ai=self._source.ai_executions(period.start, period.end, selection)
-            if ai and viewer.is_admin
-            else [],
-        )
-
     # --- Consultas -----------------------------------------------------------------------
 
     def overview(self, viewer: Viewer, flt: ReportFilter) -> metrics.Overview:
         period = self._period(flt)
-        facts = self._facts(viewer, self._selection(viewer, flt), period, ai=True)
+        selection = self._selection(viewer, flt)
+        # Solo se leen las postulaciones que cuentan para el periodo.
+        window = (period.start, period.end)
+        facts = Facts(
+            vacancies=self._source.vacancies(selection),
+            stages=self._source.stages(),
+            applications=self._source.applications(selection, window),
+            movements=self._source.movements(selection, window),
+            outcomes=self._source.outcomes(selection),
+            cvs=self._source.cvs(selection, window),
+            ai=self._source.ai_executions(period.start, period.end, selection)
+            if viewer.is_admin
+            else [],
+            recent=self._source.recent(selection, metrics.RECENT_ACTIVITY),
+        )
         return metrics.overview(facts, period, viewer, zone=self._zone)
 
     def _history(self, viewer: Viewer, flt: ReportFilter) -> tuple[list[metrics.HistoryRow], Facts]:
         self._check(flt)
         period = self._period(flt)
         selection = self._selection(viewer, flt)
-        facts = self._facts(viewer, selection, period, ai=False)
-        with_bank = (
-            self._source.applications_with_bank(selection, flt.bank_id)
-            if flt.bank_id is not None
-            else None
+        # El historial de movimientos no se lee entero: basta la fecha del último.
+        facts = Facts(
+            vacancies=self._source.vacancies(selection),
+            stages=self._source.stages(),
+            applications=self._source.applications(selection),
+            movements=[],
+            outcomes=self._source.outcomes(selection),
+            cvs=[],
         )
-        return metrics.history(facts, flt, period, with_bank=with_bank), facts
+        bounded = period.start is not None or period.end is not None
+        rows = metrics.history(
+            facts,
+            flt,
+            period,
+            last_movements=self._source.last_movements(selection),
+            moved=self._source.moved_within(selection, (period.start, period.end))
+            if bounded and flt.date_kind is DateKind.MOVIMIENTO
+            else None,
+            with_bank=self._source.applications_with_bank(selection, flt.bank_id)
+            if flt.bank_id is not None
+            else None,
+        )
+        return rows, facts
 
     def history(
         self, viewer: Viewer, flt: ReportFilter, *, limit: int = 50, offset: int = 0

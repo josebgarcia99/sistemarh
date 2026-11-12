@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, aliased
@@ -40,16 +40,24 @@ from app.modules.reporting.domain.models import (
     MovementFact,
     Option,
     OutcomeFact,
+    RecentFact,
     ReportExport,
     StageFact,
+    StoredFile,
     VacancyFact,
     VacancySelection,
+    Window,
 )
 from app.modules.reporting.infrastructure.orm import ReportExportRow
 from app.modules.users.infrastructure.orm import UserRow
 from app.modules.vacancies.infrastructure.orm import VacancyMemberRow, VacancyRow
 
 _OK = "CORRECTA"
+
+
+def _as_datetime(value: datetime | str) -> datetime:
+    """El máximo de una fecha puede llegar como texto según el motor."""
+    return datetime.fromisoformat(value) if isinstance(value, str) else value
 
 
 def _member_of(user_id: uuid.UUID) -> sa.ColumnElement[bool]:
@@ -124,12 +132,51 @@ class SqlReportingSource:
             s.id: StageFact(s.id, s.pipeline_version_id, s.position, s.name, s.kind) for s in rows
         }
 
-    def applications(self, selection: VacancySelection) -> list[ApplicationFact]:
+    @staticmethod
+    def _within(column: sa.ColumnElement[datetime], window: Window) -> sa.ColumnElement[bool]:
+        start, end = window
+        conditions = []
+        if start is not None:
+            conditions.append(column >= start)
+        if end is not None:
+            conditions.append(column < end)
+        return sa.and_(*conditions)
+
+    def _relevant(
+        self, selection: VacancySelection, window: Window | None
+    ) -> sa.ColumnElement[bool]:
+        """Condición sobre ``ApplicationRow``: las postulaciones de las vacantes
+        elegidas y, si hay periodo, solo las que cuentan para él."""
+        in_scope = ApplicationRow.vacancy_id.in_(_selected(selection))
+        if window is None or window == (None, None):
+            return in_scope
+        moved = sa.select(ApplicationMovementRow.application_id).where(
+            self._within(ApplicationMovementRow.occurred_at, window)
+        )
+        return sa.and_(
+            in_scope,
+            sa.or_(
+                ApplicationRow.status == "ACTIVA",
+                self._within(ApplicationRow.created_at, window),
+                ApplicationRow.id.in_(moved),
+            ),
+        )
+
+    def applications(
+        self, selection: VacancySelection, window: Window | None = None
+    ) -> list[ApplicationFact]:
+        # Columnas sueltas, no entidades: son muchas filas y solo se leen.
         rows = self._session.execute(
             sa.select(
-                ApplicationRow,
+                ApplicationRow.id,
+                ApplicationRow.vacancy_id,
                 CandidateRow.full_name,
+                ApplicationRow.stage_id,
+                ApplicationRow.status,
+                ApplicationRow.created_at,
                 CampaignRow.opened_at,
+                ApplicationRow.ai_classification,
+                ApplicationRow.ai_score,
                 FileAssetRow.created_at,
                 CvBatchItemRow.updated_at,
                 AiExecutionRow.model_id,
@@ -143,74 +190,102 @@ class SqlReportingSource:
             .outerjoin(CvBatchRow, CvBatchRow.id == CvBatchItemRow.batch_id)
             .outerjoin(PromptVersionRow, PromptVersionRow.id == CvBatchRow.prompt_version_id)
             .outerjoin(AiExecutionRow, AiExecutionRow.id == CvBatchItemRow.execution_id)
-            .where(ApplicationRow.vacancy_id.in_(_selected(selection)))
+            .where(self._relevant(selection, window))
         )
-        return [
-            ApplicationFact(
-                id=a.id,
-                vacancy_id=a.vacancy_id,
-                candidate_name=name,
-                stage_id=a.stage_id,
-                status=a.status,
-                created_at=a.created_at,
-                campaign_opened_at=opened_at,
-                ai_classification=a.ai_classification,
-                ai_score=a.ai_score,
-                cv_uploaded_at=uploaded_at,
-                evaluated_at=evaluated_at,
-                model=model,
-                prompt_version_id=prompt_id,
-                prompt_version_number=prompt_number,
-            )
-            for a, name, opened_at, uploaded_at, evaluated_at, model, prompt_id, prompt_number in (
-                rows
-            )
-        ]
+        return [ApplicationFact(*row) for row in rows]
 
-    def movements(self, selection: VacancySelection) -> list[MovementFact]:
+    def movements(
+        self, selection: VacancySelection, window: Window | None = None
+    ) -> list[MovementFact]:
         rows = self._session.execute(
-            sa.select(ApplicationMovementRow, UserRow.full_name)
+            sa.select(
+                ApplicationMovementRow.application_id,
+                ApplicationMovementRow.sequence,
+                ApplicationMovementRow.kind,
+                ApplicationMovementRow.occurred_at,
+                ApplicationMovementRow.from_stage_id,
+                ApplicationMovementRow.to_stage_id,
+            )
             .join(ApplicationRow, ApplicationRow.id == ApplicationMovementRow.application_id)
+            .where(self._relevant(selection, window))
+        )
+        return [MovementFact(*row) for row in rows]
+
+    def recent(self, selection: VacancySelection, limit: int) -> list[RecentFact]:
+        target, origin = aliased(PipelineStageRow), aliased(PipelineStageRow)
+        rows = self._session.execute(
+            sa.select(
+                ApplicationMovementRow.occurred_at,
+                ApplicationMovementRow.kind,
+                CandidateRow.full_name,
+                ApplicationRow.vacancy_id,
+                VacancyRow.name,
+                sa.func.coalesce(target.name, origin.name),
+                UserRow.full_name,
+            )
+            .join(ApplicationRow, ApplicationRow.id == ApplicationMovementRow.application_id)
+            .join(CandidateRow, CandidateRow.id == ApplicationRow.candidate_id)
+            .join(VacancyRow, VacancyRow.id == ApplicationRow.vacancy_id)
+            .outerjoin(target, target.id == ApplicationMovementRow.to_stage_id)
+            .outerjoin(origin, origin.id == ApplicationMovementRow.from_stage_id)
             .outerjoin(UserRow, UserRow.id == ApplicationMovementRow.actor_user_id)
             .where(ApplicationRow.vacancy_id.in_(_selected(selection)))
-        )
-        return [
-            MovementFact(
-                application_id=m.application_id,
-                sequence=m.sequence,
-                kind=m.kind,
-                occurred_at=m.occurred_at,
-                from_stage_id=m.from_stage_id,
-                to_stage_id=m.to_stage_id,
-                actor_name=actor_name,
+            .order_by(
+                ApplicationMovementRow.occurred_at.desc(), ApplicationMovementRow.sequence.desc()
             )
-            for m, actor_name in rows
-        ]
+            .limit(limit)
+        )
+        return [RecentFact(*row) for row in rows]
+
+    def last_movements(self, selection: VacancySelection) -> dict[uuid.UUID, datetime]:
+        latest = sa.func.max(ApplicationMovementRow.occurred_at)
+        rows = self._session.execute(
+            sa.select(ApplicationMovementRow.application_id, latest)
+            .join(ApplicationRow, ApplicationRow.id == ApplicationMovementRow.application_id)
+            .where(ApplicationRow.vacancy_id.in_(_selected(selection)))
+            .group_by(ApplicationMovementRow.application_id)
+        )
+        result = {}
+        for application_id, value in rows:
+            # Según el motor, el máximo de una fecha puede llegar sin zona o como texto.
+            moment = _as_datetime(value)
+            result[application_id] = moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+        return result
+
+    def moved_within(self, selection: VacancySelection, window: Window) -> set[uuid.UUID]:
+        return set(
+            self._session.execute(
+                sa.select(ApplicationMovementRow.application_id)
+                .join(ApplicationRow, ApplicationRow.id == ApplicationMovementRow.application_id)
+                .where(
+                    ApplicationRow.vacancy_id.in_(_selected(selection)),
+                    self._within(ApplicationMovementRow.occurred_at, window),
+                )
+                .distinct()
+            ).scalars()
+        )
 
     def outcomes(self, selection: VacancySelection) -> list[OutcomeFact]:
         rows = self._session.execute(
-            sa.select(ApplicationOutcomeRow, UserRow.full_name)
+            sa.select(
+                ApplicationOutcomeRow.application_id,
+                ApplicationOutcomeRow.vacancy_id,
+                ApplicationOutcomeRow.outcome,
+                ApplicationOutcomeRow.recorded_at,
+                UserRow.full_name,
+                ApplicationOutcomeRow.reason,
+                ApplicationOutcomeRow.start_date,
+            )
             .join(UserRow, UserRow.id == ApplicationOutcomeRow.recorded_by)
             .where(
                 ApplicationOutcomeRow.voided_at.is_(None),
                 ApplicationOutcomeRow.vacancy_id.in_(_selected(selection)),
             )
         )
-        return [
-            OutcomeFact(
-                application_id=o.application_id,
-                vacancy_id=o.vacancy_id,
-                outcome=o.outcome,
-                recorded_at=o.recorded_at,
-                recorded_by_name=name,
-                reason=o.reason,
-                start_date=o.start_date,
-            )
-            for o, name in rows
-        ]
+        return [OutcomeFact(*row) for row in rows]
 
-    def cvs(self, selection: VacancySelection) -> list[CvFact]:
-        rows = self._session.execute(
+    def cvs(self, selection: VacancySelection, window: Window | None = None) -> list[CvFact]:
+        query = (
             sa.select(
                 CvBatchRow.vacancy_id,
                 CvBatchItemRow.status,
@@ -220,7 +295,9 @@ class SqlReportingSource:
             .join(CvBatchRow, CvBatchRow.id == CvBatchItemRow.batch_id)
             .where(CvBatchRow.vacancy_id.in_(_selected(selection)))
         )
-        return [CvFact(*row) for row in rows]
+        if window is not None and window != (None, None):
+            query = query.where(self._within(CvBatchItemRow.updated_at, window))
+        return [CvFact(*row) for row in self._session.execute(query)]
 
     def ai_executions(
         self, start: datetime | None, end: datetime | None, selection: VacancySelection
@@ -376,3 +453,14 @@ class SqlReportingSource:
     def export_keys(self) -> set[str]:
         """Rutas de todos los reportes guardados (para la conciliación)."""
         return set(self._session.execute(sa.select(ReportExportRow.storage_key)).scalars())
+
+    def export_files(self) -> list[tuple[uuid.UUID, StoredFile]]:
+        rows = self._session.execute(
+            sa.select(
+                ReportExportRow.id,
+                ReportExportRow.storage_key,
+                ReportExportRow.size_bytes,
+                ReportExportRow.sha256,
+            ).order_by(ReportExportRow.created_at, ReportExportRow.id)
+        )
+        return [(row.id, StoredFile(row.storage_key, row.size_bytes, row.sha256)) for row in rows]

@@ -33,6 +33,8 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.5",
     "import-linter>=2.0",
+    # Para comprobar el script de validaciones de integridad sin SQL Server.
+    "sqlglot>=25.0",
 ]
 
 [tool.pytest.ini_options]

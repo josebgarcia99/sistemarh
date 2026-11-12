@@ -27,6 +27,7 @@ from app.core.config.settings import Environment, Settings, get_settings
 from app.core.exceptions.errors import register_exception_handlers
 from app.core.logging.setup import configure_logging
 from app.core.middleware.correlation import RequestContextMiddleware
+from app.core.middleware.metrics import RequestMetrics
 from app.core.security.master_key import MasterKey
 from app.core.security.passwords import Argon2Hasher, PasswordHasher
 from app.infrastructure.antivirus.scanner import MalwareScanner
@@ -43,6 +44,7 @@ from app.modules.file_management.api.router import router as files_router
 from app.modules.phone_calls.api.router import router as phone_calls_router
 from app.modules.recruitment.api.router import router as recruitment_router
 from app.modules.reporting.api.router import router as reporting_router
+from app.modules.system.api.metrics_router import router as metrics_router
 from app.modules.system.api.router import router as system_router
 from app.modules.system.application.health import HealthCheck
 from app.modules.system.infrastructure.checks import build_default_checks
@@ -73,7 +75,7 @@ def create_app(
     docs_enabled = settings.environment is not Environment.PRODUCTION
     app = FastAPI(
         title=settings.app_name,
-        version="0.7.0",
+        version="0.8.0",
         openapi_url=f"{settings.api_prefix}/openapi.json" if docs_enabled else None,
         docs_url=f"{settings.api_prefix}/docs" if docs_enabled else None,
         redoc_url=None,
@@ -97,12 +99,20 @@ def create_app(
         ocr=build_ocr(settings),
     )
 
-    app.add_middleware(RequestContextMiddleware)
+    app.state.metrics = RequestMetrics()
+    app.add_middleware(
+        RequestContextMiddleware,
+        metrics=app.state.metrics,
+        https_only=settings.environment is Environment.PRODUCTION,
+        csp_exempt_paths=(f"{settings.api_prefix}/docs",) if docs_enabled else (),
+        slow_request_ms=settings.slow_request_ms,
+    )
     register_exception_handlers(app)
     register_denial_audit(app)
 
     api = APIRouter(prefix=settings.api_prefix)
     api.include_router(system_router)
+    api.include_router(metrics_router)
     api.include_router(auth_router)
     api.include_router(users_router)
     api.include_router(vacancies_router)

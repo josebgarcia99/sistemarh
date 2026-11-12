@@ -104,6 +104,7 @@ class AiExecutionRow(Base):
     __table_args__ = (
         sa.Index("ix_executions_provider_date", "provider_code", "occurred_at"),
         sa.Index("ix_executions_date", "occurred_at"),
+        sa.Index("ix_executions_vacancy", "vacancy_id", "occurred_at"),
         {"schema": SCHEMA_AI},
     )
 

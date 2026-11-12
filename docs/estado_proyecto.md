@@ -16,6 +16,8 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 
 **Fase 7 (Cierre e indicadores): construida completa y probada con datos sintéticos; pendiente de la misma validación.** Incluye los resultados finales de las postulaciones (contrataciones incluidas), el tablero de inicio, la pantalla de indicadores con filtros e históricos, el histórico de candidatos y los reportes en Excel guardados en el servidor. Su criterio de cierre («los tableros coinciden con los datos del flujo sintético») pasa en las pruebas y en el recorrido en navegador.
 
+**Fase 8 (Calidad y preparación productiva): construido todo lo que no depende del servidor; NO cerrada.** Hecho: prueba del flujo completo, pruebas de seguridad transversales, revisión del esquema y de los scripts de SQL Server, respaldo de reportes, medición de rendimiento con volumen sintético, métricas y registro de accesos, cabeceras de seguridad, archivos de despliegue para producción, recorridos en navegador dentro del repositorio y toda la documentación obligatoria. **Falta lo que da por cerrada la fase y el proyecto:** ejecutar todo en SQL Server 2022 y en contenedores, con antivirus, cola de tareas y proveedores de IA reales, y probar una restauración completa. Eso requiere el servidor de Sistemas y las claves de IA.
+
 ## Funcionalidades terminadas
 
 | Elemento | Detalle |
@@ -83,19 +85,28 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 | Histórico de candidatos | Lista de postulaciones con todos los filtros de la sección 24.3: fechas (de carga, evaluación, movimiento o cierre), vacante, responsable, colaborador, departamento, estado, etapa, candidato, clasificación y calificación de la IA, modelo, versión del prompt, banco de preguntas y resultado final. Paginada |
 | Reportes en Excel | De indicadores (varias hojas) y de postulaciones, con los filtros aplicados. Se guardan en el servidor con identificador, fecha, tamaño y SHA-256. Los textos capturados no pueden ejecutarse como fórmula. Un reporte solo se descarga mientras quien lo generó conserve acceso a todas las vacantes que contiene |
 | Permisos de los reportes | Las cifras se calculan en cada consulta con los permisos que la persona tiene hoy: un administrador ve todo; los demás, sus vacantes y las compartidas. Vale igual para un histórico de años anteriores |
-| Base de datos | Migraciones `0001` (identidad y auditoría), `0002` (vacantes y transferencias), `0003` (documentos), `0004` (cifrado de documentos), `0005` (configuración de IA), `0006` (perfiles y prompts), `0007` (consumo de IA), `0008` (lotes de CV), `0009` (reclutamiento operativo) `0010` (evaluaciones posteriores) y `0011` (resultados finales y reportes): 36 tablas en los esquemas `auth`, `vacancy`, `files`, `ai`, `recruitment` y `ops` |
-| Scripts para Sistemas | `database/sqlserver/`: instalación completa, actualizaciones entre versiones consecutivas (de `0001` a `0011`), reversión y plantilla de permisos del usuario de la aplicación |
+| Flujo completo probado | Una sola prueba recorre los 20 pasos de la sección 32.5, de la creación de usuarios a la transferencia final de la vacante, y comprueba que los documentos siguen disponibles y que los permisos cambian |
+| Barrido de acceso directo | Una prueba recorre las 76 rutas con identificador pidiendo, como una persona sin acceso, recursos reales de otra: ninguna lectura entrega datos y ninguna escritura cambia nada. Las rutas nuevas entran solas |
+| Cabeceras de seguridad | Todas las respuestas de la API y de las pantallas impiden enmarcar la aplicación, interpretar tipos y, en la API, guardar respuestas en cachés; HSTS en producción |
+| Métricas y registro de accesos | Cada solicitud deja una línea estructurada con método, ruta, estado y duración (sin la consulta, que puede llevar nombres). `GET /system/metrics`, solo para administradores, muestra solicitudes, errores y duración por ruta |
+| Versión del esquema en la comprobación de salud | `/health/ready` falla si la base no tiene la versión de esquema que espera la aplicación |
+| Validaciones de integridad | `validaciones_integridad.sql`: 18 comprobaciones de solo lectura para ejecutar tras instalar, actualizar o restaurar |
+| Respaldo de reportes | El manifiesto de respaldo y la comprobación del almacenamiento incluyen los Excel de reportes |
+| Despliegue de producción | Compose de producción (proxy, pantallas, API, worker, cola y antivirus), configuración de nginx con HTTPS, variables de ejemplo por entorno e imagen con solo las dependencias de ejecución. Sin ejecutar |
+| Documentación derivada del código | `scripts/generate_docs.py` genera los contratos de la API y el diagrama entidad-relación; una prueba falla si quedan desactualizados |
+| Base de datos | Migraciones `0001` (identidad y auditoría), `0002` (vacantes y transferencias), `0003` (documentos), `0004` (cifrado de documentos), `0005` (configuración de IA), `0006` (perfiles y prompts), `0007` (consumo de IA), `0008` (lotes de CV), `0009` (reclutamiento operativo) `0010` (evaluaciones posteriores), `0011` (resultados finales y reportes) y `0012` (índices para reportes): 36 tablas en los esquemas `auth`, `vacancy`, `files`, `ai`, `recruitment` y `ops` |
+| Scripts para Sistemas | `database/sqlserver/`: instalación completa, actualizaciones entre versiones consecutivas (de `0001` a `0012`), reversión, plantilla de permisos del usuario de la aplicación y validaciones de integridad |
 | Pantallas | Inicio de sesión, Inicio, Vacantes (lista, alta, detalle, compartir, documentos, perfil, prompt y evaluación de CV, candidatos con expediente y llamadas, historial, transferir), Bancos de preguntas, Etapas, Formularios, Usuarios, Bajas (baja con transferencia), Configuración de IA y Auditoría. El menú cambia según el rol |
 | Worker Celery | Configuración segura, tarea `system.ping` y tarea `cv.process_batch`, que procesa un lote de CV y, al arrancar, vuelve a encolar los lotes que quedaron a medias |
 | Reglas entre módulos | 13 contratos de `import-linter`: capas por módulo y dominios independientes |
 
 ## Pruebas ejecutadas
 
-Ejecutadas el 11 de noviembre de 2026 en el entorno de construcción (Linux, Python 3.13, Node.js 22):
+Ejecutadas el 12 de noviembre de 2026 en el entorno de construcción (Linux, Python 3.13, Node.js 22):
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 309 pruebas, todas pasan |
+| API: `pytest` | 336 pruebas, todas pasan |
 | Worker: `pytest` | 5 pruebas, todas pasan |
 | `ruff check` y `lint-imports` | Sin errores; 13 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |
@@ -104,6 +115,11 @@ Ejecutadas el 11 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 | Recorrido en navegador real, identidad | 10 pasos: redirección sin sesión, credenciales erróneas, inicio de sesión, alta de usuario, restablecer contraseña, recarga, cierre de sesión, contraseña anterior rechazada, reclutador sin acceso a Usuarios y respuesta 403 de la API |
 | Recorrido en navegador real, vacantes | 11 pasos: alta de dos reclutadores, alta de dos vacantes, cambio de estado, compartir en lectura, la otra persona solo ve la compartida y no puede editarla, la API le niega cambiar el estado, transferencia individual, baja con transferencia, auditoría con el acceso denegado, la persona dada de baja ya no entra y el receptor queda como responsable |
 | Recorrido en navegador real, evaluación de CV | 9 pasos sobre el modo demostración, con CV ficticios y un proveedor simulado: la pestaña muestra el prompt aprobado y los CV sin evaluar; el lote evalúa 4 CV y deja uno como no evaluable; el detalle muestra niveles, evidencia y motivo; se descargan el Excel y los ZIP, que suman los 4 originales con su manifiesto; se repite la evaluación y el lote anterior se conserva; los archivos generados no se mezclan con los documentos; con acceso de lectura se consulta y se descarga sin poder operar; auditoría y consumo lo registran; en móvil no hay desbordamiento |
+| Flujo completo (32.5) | `test_flujo_completo.py`: los 20 pasos en una prueba, con datos sintéticos e IA simulada. Pasa |
+| Seguridad transversal | `test_seguridad.py`: barrido de las 76 rutas con identificador, rutas de administración, textos hostiles en búsquedas, CV con instrucciones ocultas, cabeceras, registro de accesos y métricas. Pasan |
+| Revisión de SQL Server sin servidor | El modelo y las migraciones coinciden en columnas e índices; cadena de migraciones lineal y reversible; claves foráneas sin índice revisadas una a una; el script de validaciones solo lee y nombra columnas que existen. Pasan |
+| Recorridos en navegador, los cinco, tras la Fase 8 | `python tests/e2e/run.py`: 40 pasos en cinco recorridos (ayudas de IA, evaluación de CV, reclutamiento, evaluaciones posteriores e indicadores), cada uno sobre un modo demostración recién arrancado y con las cabeceras de seguridad activas. Pasan |
+| Medición de rendimiento | `scripts/medir_rendimiento.py` con 2 000, 20 000 y 50 000 postulaciones inventadas, en el motor en memoria. Resultados en `docs/testing/plan_pruebas.md` |
 | Recorrido en navegador real, Fase 7 | 9 pasos sobre el modo demostración: el inicio muestra el tablero propio; una contratación queda con fecha de incorporación, responsable e historial, y la persona ya no se mueve de etapa; un desistimiento se reabre y el resultado anterior queda anulado, no borrado; el inicio pasa a mostrar 4 CV analizados, 2 procesos cerrados y 1 contratación; los indicadores de la reclutadora no traen los datos reservados al administrador; el histórico se filtra por resultado y el Excel descargado se abre y contiene esa única fila; el administrador ve la carga por responsable, el uso de IA y descarga el Excel de seis hojas; la segunda persona solo ve lo propio y lo compartido; en móvil, inicio e indicadores no se desbordan |
 | Recorrido en navegador real, Fase 6 | 8 pasos sobre el modo demostración: la calificación de una prueba técnica la calcula el sistema con la rúbrica; la entrevista exige la conclusión humana y la IA solo organiza; validar una psicometría exige al profesional y la IA resume el documento cifrado; en el estudio la IA llena campos sin verificar y la persona marca lo verificado; el expediente muestra cada etapa con sus fuentes y la síntesis por tipo de fuente; sin el permiso adicional no se ven psicometría, estudio ni la síntesis que los incluye; el administrador guarda una versión nueva del formulario; en móvil no hay desbordamiento |
 | Recorrido en navegador real, Fase 5 | 9 pasos sobre el modo demostración: los 4 CV evaluados entran como candidatos en revisión de RH con su nombre; un rechazado por la IA avanza a llamada solo con motivo; el expediente muestra historial, clasificación inicial intacta y experiencia con permanencia; llamada con banco, análisis de IA y cierre; reprogramación y desistimiento en el historial; banco nuevo con una pregunta propuesta por la IA; con lectura se consulta sin operar y no se ve un banco privado ajeno; el administrador guarda una versión nueva de etapas y la auditoría registra los movimientos; la convocatoria abierta conserva sus 8 etapas y en móvil no hay desbordamiento |
@@ -151,6 +167,12 @@ No hay todavía una instancia de SQL Server de pruebas. Por eso:
 - **Los resúmenes, la digitalización y la síntesis con un modelo real.** Probados con respuestas programadas. No se sabe todavía si un modelo real respeta siempre las prohibiciones (no diagnosticar, no recomendar, no puntuar); el servidor descarta lo que no cabe en el formato, pero el texto de un resumen puede contener una frase indebida. Hay que revisarlo con casos sintéticos antes de usarlo.
 - **OCR con documentos reales.** Tesseract se probó con imágenes sintéticas de letra impresa y nítida. Con escaneos reales (torcidos, con sellos, en baja resolución o manuscritos) la lectura será peor; hay que medirla. Tampoco se ha construido la imagen Docker con Tesseract.
 - **Extracción del CV y análisis de llamadas con un modelo real.** Probados con respuestas programadas.
+- **Lo construido en la Fase 8 para producción no se ha ejecutado.** No hay Docker en el entorno de construcción: `docker-compose.prod.yml`, la configuración de nginx (HTTPS, límite de intentos, restricción de las métricas), la imagen con `requirements-prod.lock` y su comprobación de salud están escritos y revisados, no probados.
+- **Las cabeceras de seguridad de las pantallas en producción.** Se probaron con el servidor de Next.js en los recorridos; no detrás del proxy.
+- **`validaciones_integridad.sql`** se comprobó contra el modelo (sintaxis, tablas y columnas), no se ha ejecutado.
+- **La comprobación de la versión del esquema** se probó con un motor en memoria, no con SQL Server.
+- **La IP real del usuario detrás del proxy** (cabecera `X-Forwarded-For` y `FORWARDED_ALLOW_IPS`).
+- **Carga con usuarios simultáneos.** La medición de rendimiento envía una solicitud a la vez.
 - **Los reportes en SQL Server.** Las consultas de los tableros (subconsultas de vacantes visibles, uniones entre esquemas) y la carga inicial de resultados finales de la migración `0011` solo se han ejecutado sobre el motor en memoria o se generaron sin conexión. Falta ejecutarlas en SQL Server y medir su tiempo.
 - **Los tableros con volumen real.** Las cifras se calculan en cada consulta leyendo las postulaciones y movimientos de las vacantes visibles. Con los datos sintéticos responde al instante; no se ha medido con miles de postulaciones.
 - **El índice único de «un resultado vigente por postulación»** es un índice filtrado: se probó en el motor en memoria, no en SQL Server.
@@ -197,7 +219,10 @@ No hay todavía una instancia de SQL Server de pruebas. Por eso:
 | Tablas de indicadores o cifras precalculadas | No existen: cada tablero se calcula al consultarlo, a partir de las tablas operativas | Así no puede contradecir al expediente y respeta siempre los permisos de hoy. Si el volumen lo exige, se añaden resúmenes después |
 | Reportes «por evaluación, por vacante, por reclutador y administrativos» (sección 30) como archivos distintos | Dos Excel: indicadores (hojas Resumen, Etapas, Vacantes, Reclutadores, Mensual e IA) y postulaciones. El de un lote de CV ya existía. Se acotan con los filtros | Los mismos datos, sin multiplicar formatos |
 | Filtros de etapa, candidato, clasificación, calificación, modelo, prompt, banco y resultado en los tableros | Se aplican en el histórico de candidatos y en su Excel. Los tableros se filtran por periodo, vacante, departamento, responsable, colaborador y estado | En cifras agregadas esos filtros darían números difíciles de interpretar |
-| Exportaciones a PDF y a Word (sección 30) | No construidas | Quedan para la Fase 8 si se piden |
+| Exportaciones a PDF y a Word (sección 30) | No construidas | No se han pedido; el Excel cubre los reportes |
+| Prueba de carga con Locust (plan de pruebas) | Medición propia con volumen sintético, una solicitud a la vez | Una prueba de carga con usuarios simultáneos solo tiene sentido contra SQL Server |
+| Recorridos completos «con Playwright» como pruebas del frontend | Cinco guiones de Playwright en `tests/e2e/`, en Python, que se ejecutan sobre el modo demostración | Necesitan la API y las pantallas arrancadas; no forman parte de `npm test` |
+| Vistas SQL entre los scripts (25.5) | No hay vistas | Los reportes se calculan en la aplicación para aplicar los permisos |
 | Los reportes en `files.file_assets` | Tienen su propio registro, `ops.report_exports`, porque no pertenecen a una sola vacante. La conciliación del almacenamiento los reconoce | La tabla de documentos exige una vacante |
 | Conversión de DOC antiguos | No construida: esos CV quedan como «no evaluable» | Requiere LibreOffice en el servidor; no se ha pedido |
 | Pantallas diseñadas antes de construirlas | Las de la Fase 5 se construyeron directamente con el sistema visual aprobado, sin maqueta previa | Se pidió la fase completa de una vez |
@@ -224,16 +249,14 @@ De la Fase 3:
 
 Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 
-## Documentos de `docs/` aún no creados
+## Documentos de `docs/`
 
-`security/modelo_amenazas.md`, `api/contratos_api.md` (se genera desde OpenAPI), `manuals/manual_administrador.md` y `manuals/manual_reclutador.md`.
+Están los veinte que exige la sección 36 del documento maestro; una prueba lo comprueba. Además: `deployment/despliegue_produccion.md`, `database/revision_sql_server.md` y `database/diagrama_entidad_relacion.md`.
 
 ## Problemas conocidos
 
-- Los logs de acceso de Uvicorn no salen en JSON; solo los de la aplicación.
 - `starlette` avisa de que `httpx` quedará obsoleto para pruebas en favor de `httpx2`. No afecta hoy.
 - `npm audit` reporta avisos de severidad moderada en dependencias de desarrollo del frontend. Pendiente de revisar uno por uno.
-- `apps/api/requirements.lock` incluye las dependencias de desarrollo. Se separa en dos archivos antes de producción.
 - La tabla de auditoría depende de que Sistemas aplique `permisos_usuario_aplicacion.sql`; la migración no lo hace porque no conoce el usuario de la aplicación.
 - En la pantalla de Auditoría, el detalle muestra identificadores internos de usuarios y vacantes en lugar de nombres.
 - La búsqueda de vacantes consulta la API con cada letra que se escribe.
@@ -249,6 +272,11 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - Una casilla del estudio sin marcar no se guarda: no se distingue «no» de «sin dato».
 - En el formulario del estudio, las opciones se escriben separadas por coma, así que una opción no puede contener comas.
 - Con «Indicadores», el menú del administrador tiene diez entradas y ocupa dos líneas.
+- El tablero del administrador sobre todo el histórico tarda en proporción a las postulaciones (unos 6 segundos con 50 000, medido en memoria). Con un periodo acotado lee menos.
+- Las métricas son de cada proceso de la API y se reinician al reiniciarlo; no hay integración con una herramienta de monitoreo.
+- La política de contenido de las pantallas todavía no limita el origen de los scripts.
+- No hay procedimiento para rotar la clave maestra.
+- Los guiones de `tests/e2e/` son compactos y no siguen el estilo del resto del código.
 - «Pruebas pendientes» y «entrevistas pendientes» cuentan las postulaciones activas que están en esas etapas, no las evaluaciones con estado pendiente.
 - Para contratar no se exige que la persona esté en la etapa «Resultado final»; el resultado se puede registrar desde cualquier etapa.
 - Cerrar una convocatoria o cancelar una vacante no cierra sus postulaciones: siguen «en proceso» hasta que alguien registre su resultado.
@@ -296,6 +324,12 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 - 11 nov 2026: Fase 6 completa: psicometría, entrevistas con gerente, pruebas técnicas, formularios y estudios socioeconómicos con digitalización, expediente por etapas y síntesis con IA.
 - 11 nov 2026: Fase 7 completa: resultados finales y contrataciones, tablero de inicio, indicadores con filtros e históricos, histórico de candidatos y reportes en Excel guardados en el servidor.
 - 11 nov 2026: los atajos «Desistió», «Descartar» y «Cancelar proceso» del expediente se sustituyen por «Registrar resultado final»; «Reactivar» pasa a llamarse «Reabrir proceso».
+- 12 nov 2026: Fase 8, lo que no depende del servidor: flujo completo, seguridad transversal, revisión de SQL Server (migración `0012` con cinco índices), validaciones de integridad, respaldo de reportes, métricas, cabeceras de seguridad, despliegue de producción, manuales, modelo de amenazas, contratos de API y recorridos en navegador dentro del repositorio.
+- 12 nov 2026: los reportes leen solo las columnas y las postulaciones que necesitan; el tablero era 2.4 veces más lento. Lo detectó la medición de rendimiento.
+- 12 nov 2026: el Excel de postulaciones tardaba 14.7 s con 5 000 filas por un cálculo que crecía con el cuadrado de las filas; ahora tarda 1 s. Lo detectó la medición de rendimiento.
+- 12 nov 2026: al guardar el perfil del puesto, el aviso «Perfil guardado» desaparecía al instante porque el formulario se volvía a crear. Lo detectaron los recorridos en navegador.
+- 12 nov 2026: el manifiesto de respaldo no incluía los Excel de reportes de la Fase 7; ahora sí.
+- 12 nov 2026: las dependencias de producción se separan en `requirements-prod.lock`; la línea de acceso de la API sale en JSON.
 - 11 nov 2026: al guardar una evaluación, el aviso de «guardada» desaparecía porque el editor se volvía a crear con la versión nueva. Lo detectó el recorrido en navegador.
 - 11 nov 2026: el servidor de desarrollo de Next.js cortaba las cargas de más de 10 MB al reenviarlas a la API; se amplió el límite a 25 MB. Lo detectó el recorrido en navegador.
 
@@ -319,7 +353,10 @@ Después, Fases 4 a 8 (ver [`roadmap.md`](roadmap.md)).
 
 ## Próximos pasos
 
-1. Validar contra SQL Server en cuanto exista una instancia.
-2. Fase 8: lo que queda del documento maestro (endurecimiento, manuales, exportaciones a PDF y Word si se piden, pruebas de carga).
-3. Con las claves de IA: revisar con casos sintéticos que los resúmenes y la síntesis respetan las prohibiciones.
-4. Medir el OCR con escaneos reales de prueba.
+Lo que queda no se puede hacer sin el servidor ni las claves:
+
+1. **Sistemas monta el entorno de pruebas** siguiendo `docs/deployment/despliegue_produccion.md`: SQL Server 2022, contenedores, antivirus y certificado.
+2. **Validar ahí todo lo marcado como «no verificado»:** scripts T-SQL, permisos del usuario de aplicación, las pruebas de la API contra SQL Server, la evaluación de CV con el worker y la cola, y una restauración completa.
+3. **Con las claves de IA:** probar con casos sintéticos que un modelo real respeta el formato y las prohibiciones, y medir el OCR con escaneos reales de prueba.
+4. **Decisiones pendientes** (sección anterior): retención de documentos y aviso de privacidad, custodia de la clave maestra, antivirus definitivo.
+5. Solo entonces: producción, con datos reales.

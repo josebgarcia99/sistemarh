@@ -44,3 +44,23 @@ class StoredReports:
 
     def exists(self, key: str) -> bool:
         return self._storage.exists(key)
+
+
+def check_report_files(
+    storage: LocalFileStorage, files: list[tuple[uuid.UUID, StoredFile]], *, verify_hashes: bool
+) -> list[str]:
+    """Compara los reportes registrados con lo que hay en el disco.
+
+    Devuelve una línea por cada problema: archivo que falta, tamaño distinto o,
+    si se pide, huella distinta.
+    """
+    problems = []
+    for export_id, expected in files:
+        size = storage.size(expected.key)
+        if size is None:
+            problems.append(f"FALTANTE: reporte {export_id}")
+        elif size != expected.size_bytes:
+            problems.append(f"TAMAÑO DISTINTO: reporte {export_id}")
+        elif verify_hashes and storage.sha256(expected.key) != expected.sha256:
+            problems.append(f"HASH DISTINTO: reporte {export_id}")
+    return problems

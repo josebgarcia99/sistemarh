@@ -144,6 +144,9 @@ function ProfileTab({ vacancyId, canEdit }: { vacancyId: string; canEdit: boolea
     queryKey,
     queryFn: ({ signal }) => listProfileVersions(vacancyId, signal),
   });
+  // El aviso de «guardado» vive aquí: al guardar, el formulario se vuelve a
+  // crear con la versión nueva y perdería su propio estado.
+  const [saved, setSaved] = useState<Feedback>(null);
 
   if (error) {
     return (
@@ -161,7 +164,11 @@ function ProfileTab({ vacancyId, canEdit }: { vacancyId: string; canEdit: boolea
         vacancyId={vacancyId}
         current={current}
         canEdit={canEdit}
-        onSaved={() => queryClient.invalidateQueries({ queryKey })}
+        saved={saved}
+        onSaved={async (notice) => {
+          setSaved(notice);
+          if (notice) await queryClient.invalidateQueries({ queryKey });
+        }}
       />
       <section className={`${cardClass} flex min-w-0 flex-[1_1_280px] flex-col gap-3`}>
         <h2 className="text-xl font-medium">Versiones del perfil</h2>
@@ -193,12 +200,14 @@ function ProfileForm({
   vacancyId,
   current,
   canEdit,
+  saved,
   onSaved,
 }: {
   vacancyId: string;
   current: ProfileVersion | undefined;
   canEdit: boolean;
-  onSaved: () => Promise<void>;
+  saved: Feedback;
+  onSaved: (notice: Feedback) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<ProfileDraft>(() => toDraft(current));
   const [note, setNote] = useState("");
@@ -221,11 +230,14 @@ function ProfileForm({
     }
     setBusy(true);
     setFeedback(null);
+    await onSaved(null);
     try {
-      const saved = await saveProfile(vacancyId, input);
+      const version = await saveProfile(vacancyId, input);
       setNote("");
-      setFeedback({ kind: "ok", text: `Perfil guardado como versión ${saved.version_number}.` });
-      await onSaved();
+      await onSaved({
+        kind: "ok",
+        text: `Perfil guardado como versión ${version.version_number}.`,
+      });
     } catch (caught) {
       setFeedback({ kind: "error", text: describeError(caught) });
     } finally {
@@ -288,7 +300,7 @@ function ProfileForm({
         De cada requisito indispensable o deseable sale un criterio de la rúbrica. Si un requisito
         del perfil original es ambiguo, anótalo en «Requisitos que no están claros».
       </p>
-      <FeedbackLine feedback={feedback} />
+      <FeedbackLine feedback={feedback ?? saved} />
       {canEdit ? (
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-[1_1_260px] flex-col gap-2">

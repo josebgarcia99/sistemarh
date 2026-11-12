@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Instalación completa
-   Versión del esquema: (vacía) -> 0011
-   Generado: 2026-11-11 20:11 (UTC) con scripts/generate_sql.py
+   Versión del esquema: (vacía) -> 0012
+   Generado: 2026-11-12 15:47 (UTC) con scripts/generate_sql.py
 
    Crea todos los esquemas y tablas en una base de datos VACÍA.
 
@@ -1103,6 +1103,32 @@ CREATE INDEX ix_report_exports_user ON ops.report_exports (created_by, created_a
 GO
 
 UPDATE alembic_version SET version_num='0011' WHERE alembic_version.version_num = '0010';
+
+GO
+
+-- Running upgrade 0011 -> 0012
+
+CREATE INDEX ix_call_sessions_vacancy ON recruitment.call_sessions (vacancy_id);
+
+GO
+
+CREATE INDEX ix_call_sessions_bank_version ON recruitment.call_sessions (bank_version_id);
+
+GO
+
+CREATE INDEX ix_cv_batches_prompt_version ON ai.cv_batches (prompt_version_id);
+
+GO
+
+CREATE INDEX ix_applications_evaluation_item ON recruitment.applications (evaluation_item_id);
+
+GO
+
+CREATE INDEX ix_executions_vacancy ON ai.executions (vacancy_id, occurred_at);
+
+GO
+
+UPDATE alembic_version SET version_num='0012' WHERE alembic_version.version_num = '0011';
 
 GO
 

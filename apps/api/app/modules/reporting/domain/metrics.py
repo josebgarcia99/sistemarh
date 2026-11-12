@@ -232,11 +232,6 @@ class _Journey:
     entered: set[uuid.UUID] = field(default_factory=set)
     # (etapa, entrada, salida) de las estancias ya terminadas.
     stays: list[tuple[uuid.UUID, datetime, datetime]] = field(default_factory=list)
-    moments: list[datetime] = field(default_factory=list)
-
-    @property
-    def last_movement_at(self) -> datetime | None:
-        return self.moments[-1] if self.moments else None
 
 
 def _journeys(movements: list[MovementFact]) -> dict[uuid.UUID, _Journey]:
@@ -249,7 +244,6 @@ def _journeys(movements: list[MovementFact]) -> dict[uuid.UUID, _Journey]:
         current: uuid.UUID | None = None
         since: datetime | None = None
         for m in sorted(items, key=lambda item: item.sequence):
-            journey.moments.append(m.occurred_at)
             if m.kind == "ALTA" and m.to_stage_id is not None:
                 current, since = m.to_stage_id, m.occurred_at
                 journey.entered.add(current)
@@ -288,9 +282,12 @@ def overview(
     facts: Facts, period: Period, viewer: Viewer, *, zone: tzinfo, months_limit: int = 36
 ) -> Overview:
     vacancies = {v.id: v for v in facts.vacancies}
+    # Con un periodo, ``applications`` trae solo las que cuentan para él (las
+    # activas, las dadas de alta en él y las que se movieron en él); los
+    # resultados finales vienen siempre completos.
     applications = [a for a in facts.applications if a.vacancy_id in vacancies]
     by_id = {a.id: a for a in applications}
-    outcomes = [o for o in facts.outcomes if o.application_id in by_id]
+    outcomes = [o for o in facts.outcomes if o.vacancy_id in vacancies]
     journeys = _journeys([m for m in facts.movements if m.application_id in by_id])
     stages = facts.stages
     active = [a for a in applications if a.status == ACTIVE_STATUS]
@@ -316,7 +313,11 @@ def overview(
 
     def coverage(items: list[OutcomeFact]) -> float | None:
         return _average(
-            [_days(by_id[o.application_id].campaign_opened_at, o.recorded_at) for o in items]
+            [
+                _days(by_id[o.application_id].campaign_opened_at, o.recorded_at)
+                for o in items
+                if o.application_id in by_id
+            ]
         )
 
     def closed_as(kind: str) -> int:
@@ -342,36 +343,39 @@ def overview(
     by_pipeline: dict[uuid.UUID, list[StageFact]] = defaultdict(list)
     for stage in stages.values():
         by_pipeline[stage.pipeline_version_id].append(stage)
+    key_of = {stage.id: _stage_key(stage) for stage in stages.values()}
     labels: dict[tuple[str, str], str] = {}
     positions: dict[tuple[str, str], list[int]] = defaultdict(list)
     active_now: dict[tuple[str, str], int] = defaultdict(int)
     reached: dict[tuple[str, str], int] = defaultdict(int)
     durations: dict[tuple[str, str], list[float]] = defaultdict(list)
 
-    def seen(stage: StageFact) -> tuple[str, str]:
-        key = _stage_key(stage)
-        labels.setdefault(key, stage.name)
-        positions[key].append(stage.position)
-        return key
-
-    # Todas las etapas de los procesos en uso aparecen, aunque nadie haya llegado.
+    # Aparecen todas las etapas de los procesos en uso, aunque nadie haya llegado.
+    ladders: dict[uuid.UUID, list[tuple[int, tuple[str, str]]]] = {}
     for pipeline_id in {stages[a.stage_id].pipeline_version_id for a in applications}:
         for stage in by_pipeline[pipeline_id]:
-            seen(stage)
+            key = key_of[stage.id]
+            labels.setdefault(key, stage.name)
+            positions[key].append(stage.position)
+        ladders[pipeline_id] = sorted(
+            (stage.position, key_of[stage.id]) for stage in by_pipeline[pipeline_id]
+        )
+
     for application in active:
-        active_now[seen(stages[application.stage_id])] += 1
+        active_now[key_of[application.stage_id]] += 1
     for application in created:
         journey = journeys.get(application.id)
-        entered = (journey.entered if journey else set()) | {application.stage_id}
-        furthest = max(stages[stage_id].position for stage_id in entered)
-        pipeline = stages[application.stage_id].pipeline_version_id
-        for stage in by_pipeline[pipeline]:
-            if stage.position <= furthest:
-                reached[seen(stage)] += 1
+        furthest = stages[application.stage_id].position
+        if journey:
+            furthest = max(furthest, *(stages[stage_id].position for stage_id in journey.entered))
+        for position, key in ladders[stages[application.stage_id].pipeline_version_id]:
+            if position > furthest:
+                break
+            reached[key] += 1
     for journey in journeys.values():
         for stage_id, start, end in journey.stays:
             if end > start and period.has(end):
-                durations[seen(stages[stage_id])].append(_days(start, end))
+                durations[key_of[stage_id]].append(_days(start, end))
 
     ordered = sorted(labels, key=lambda key: (sum(positions[key]) / len(positions[key]), key[1]))
     stage_rows: list[StageRow] = []
@@ -484,27 +488,18 @@ def overview(
         for month, values in sorted(monthly.items())
     ][-months_limit:]
 
-    # --- Actividad reciente ---------------------------------------------------------------
-    latest = sorted(
-        (m for m in facts.movements if m.application_id in by_id),
-        key=lambda m: (m.occurred_at, m.sequence),
-        reverse=True,
-    )[:RECENT_ACTIVITY]
-    recent = []
-    for m in latest:
-        application = by_id[m.application_id]
-        stage_id = m.to_stage_id or m.from_stage_id
-        recent.append(
-            Activity(
-                occurred_at=m.occurred_at,
-                kind=m.kind,
-                candidate=application.candidate_name,
-                vacancy_id=application.vacancy_id,
-                vacancy=vacancies[application.vacancy_id].name,
-                stage=stages[stage_id].name if stage_id in stages else None,
-                actor_name=m.actor_name,
-            )
+    recent = [
+        Activity(
+            occurred_at=item.occurred_at,
+            kind=item.kind,
+            candidate=item.candidate,
+            vacancy_id=item.vacancy_id,
+            vacancy=item.vacancy,
+            stage=item.stage,
+            actor_name=item.actor_name,
         )
+        for item in facts.recent[:RECENT_ACTIVITY]
+    ]
 
     ai: AiUsage | None = None
     cv_failures: int | None = None
@@ -546,13 +541,13 @@ def overview(
 def _history_date(
     kind: DateKind,
     application: ApplicationFact,
-    journey: _Journey | None,
+    last_movement: datetime | None,
     closed_at: datetime | None,
 ) -> datetime | None:
     if kind is DateKind.EVALUACION:
         return application.evaluated_at
     if kind is DateKind.MOVIMIENTO:
-        return journey.last_movement_at if journey else None
+        return last_movement
     if kind is DateKind.CIERRE:
         return closed_at
     return application.cv_uploaded_at or application.created_at
@@ -563,16 +558,19 @@ def history(
     flt: ReportFilter,
     period: Period,
     *,
+    last_movements: dict[uuid.UUID, datetime],
+    moved: set[uuid.UUID] | None = None,
     with_bank: set[uuid.UUID] | None = None,
 ) -> list[HistoryRow]:
     """Postulaciones que cumplen los filtros, de la fecha más reciente a la más antigua.
 
-    ``with_bank``: postulaciones con una llamada hecha con el banco de preguntas
-    pedido; ``None`` si no se filtró por banco.
+    ``last_movements``: fecha del último movimiento de cada postulación.
+    ``moved``: postulaciones con algún movimiento en el periodo (solo cuando se
+    filtra por fecha de movimiento). ``with_bank``: postulaciones con una
+    llamada hecha con el banco de preguntas pedido; ``None`` si no se filtró.
     """
     vacancies = {v.id: v for v in facts.vacancies}
     outcomes = {o.application_id: o for o in facts.outcomes}
-    journeys = _journeys(facts.movements)
     bounded = period.start is not None or period.end is not None
     needle = (flt.candidate or "").strip().casefold()
     stage_name = (flt.stage or "").strip().casefold()
@@ -582,17 +580,17 @@ def history(
         if vacancy is None:
             continue
         outcome = outcomes.get(application.id)
-        journey = journeys.get(application.id)
+        last_movement = last_movements.get(application.id)
         stage = facts.stages[application.stage_id]
         result = outcome.outcome if outcome and application.status != ACTIVE_STATUS else IN_PROCESS
         if application.status != ACTIVE_STATUS and outcome is None:
             # Cerrada antes de que existieran los resultados finales.
             result = "OTRO_CIERRE"
         closed_at = outcome.recorded_at if outcome and result != IN_PROCESS else None
-        moment = _history_date(flt.date_kind, application, journey, closed_at)
+        moment = _history_date(flt.date_kind, application, last_movement, closed_at)
         if flt.date_kind is DateKind.MOVIMIENTO and bounded:
             # Basta con que algún movimiento caiga en el periodo.
-            if not journey or not any(period.has(at) for at in journey.moments):
+            if moved is None or application.id not in moved:
                 continue
         elif bounded and not period.has(moment):
             continue
@@ -638,7 +636,7 @@ def history(
                     prompt_version=application.prompt_version_number,
                     cv_uploaded_at=application.cv_uploaded_at,
                     evaluated_at=application.evaluated_at,
-                    last_movement_at=journey.last_movement_at if journey else None,
+                    last_movement_at=last_movement,
                     closed_at=closed_at,
                     closed_by_name=outcome.recorded_by_name if closed_at and outcome else None,
                     start_date=outcome.start_date if closed_at and outcome else None,

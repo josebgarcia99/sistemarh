@@ -30,8 +30,9 @@ RUN apt-get update \
 RUN useradd --create-home --uid 10001 reclutamiento
 WORKDIR /srv/app
 
-COPY apps/api/requirements.lock apps/api/requirements.lock
-RUN pip install -r apps/api/requirements.lock
+# Solo las dependencias de ejecución; las de desarrollo y pruebas no entran en la imagen.
+COPY apps/api/requirements-prod.lock apps/api/requirements-prod.lock
+RUN pip install -r apps/api/requirements-prod.lock
 
 COPY apps/api apps/api
 COPY apps/worker apps/worker
@@ -42,7 +43,12 @@ USER reclutamiento
 FROM base AS api
 WORKDIR /srv/app/apps/api
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# La aplicación escribe su propia línea de acceso en JSON, por eso se apaga la de
+# Uvicorn. La IP real del usuario se toma de la cabecera del proxy inverso solo si
+# la conexión viene de una dirección listada en FORWARDED_ALLOW_IPS.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=3).status == 200 else 1)"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--proxy-headers"]
 
 FROM base AS worker
 WORKDIR /srv/app/apps/worker

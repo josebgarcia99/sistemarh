@@ -63,6 +63,8 @@ class CallSessionRow(Base):
     __tablename__ = "call_sessions"
     __table_args__ = (
         sa.Index("ix_call_sessions_application", "application_id", "called_at"),
+        sa.Index("ix_call_sessions_vacancy", "vacancy_id"),
+        sa.Index("ix_call_sessions_bank_version", "bank_version_id"),
         {"schema": _S},
     )
 

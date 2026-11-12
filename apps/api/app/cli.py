@@ -33,9 +33,11 @@ from pathlib import Path
 
 from app.composition.backend import Backend
 from app.composition.context import AppContext
+from app.composition.reporting import check_report_files
 from app.core.clock import utc_now
 from app.core.config.settings import get_settings
 from app.core.exceptions.errors import AppError
+from app.core.schema_version import SCHEMA_VERSION
 from app.core.security.passwords import Argon2Hasher
 from app.modules.authentication.domain.models import AuthPolicy
 
@@ -63,7 +65,6 @@ def _build_context(backend: Backend | None = None) -> AppContext:
     )
 
 
-SCHEMA_VERSION = "0011"
 _SAMPLE_SIZE = 200
 
 
@@ -72,6 +73,7 @@ def storage_check(context: AppContext, verify: str) -> int:
     amount = {"none": 0, "sample": _SAMPLE_SIZE, "all": None}[verify]
     with context.require_backend().transaction() as repos:
         report = context.reconciler(repos).run(verify_hashes=amount)
+        exports = repos.reporting.export_files()
     print(f"Documentos confirmados revisados: {report.confirmed_checked}")
     print(f"Hashes SHA-256 verificados:       {report.hashes_verified}")
     print(f"Cargas interrumpidas cerradas:    {report.stale_uploads_failed}")
@@ -87,8 +89,14 @@ def storage_check(context: AppContext, verify: str) -> int:
     ):
         for file_id in ids:
             print(f"  {label}: documento {file_id}")
-    print("Resultado: " + ("coherente" if report.consistent else "CON INCONSISTENCIAS"))
-    return 0 if report.consistent else 2
+    # Los Excel de reportes llevan su propio registro.
+    problems = check_report_files(context.require_storage(), exports, verify_hashes=verify == "all")
+    print(f"Reportes generados revisados:     {len(exports)}")
+    for problem in problems:
+        print(f"  {problem}")
+    consistent = report.consistent and not problems
+    print("Resultado: " + ("coherente" if consistent else "CON INCONSISTENCIAS"))
+    return 0 if consistent else 2
 
 
 def storage_manifest(context: AppContext, output: Path) -> int:
@@ -98,13 +106,17 @@ def storage_manifest(context: AppContext, output: Path) -> int:
     context.require_storage()
     with context.require_backend().transaction() as repos:
         assets = repos.files.list_by_status(FileStatus.CONFIRMADO)
+        exports = repos.reporting.export_files()
+    entries = [
+        # Lo que hay en el disco: la copia se verifica sin necesitar la clave maestra.
+        ManifestEntry(a.storage_key, a.stored_size_bytes or 0, a.stored_sha256 or "")
+        for a in assets
+    ]
+    # Los Excel de reportes también forman parte del respaldo.
+    entries += [ManifestEntry(f.key, f.size_bytes, f.sha256) for _, f in exports]
     count = write_manifest(
         output,
-        # Lo que hay en el disco: la copia se verifica sin necesitar la clave maestra.
-        (
-            ManifestEntry(a.storage_key, a.stored_size_bytes or 0, a.stored_sha256 or "")
-            for a in assets
-        ),
+        entries,
         generated_at=context.clock().isoformat(),
         schema_version=SCHEMA_VERSION,
     )

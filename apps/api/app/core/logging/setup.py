@@ -57,6 +57,10 @@ class JsonFormatter(logging.Formatter):
             "message": record.getMessage(),
             "correlation_id": correlation_id_var.get(),
         }
+        # Campos estructurados (por ejemplo, los de la línea de acceso).
+        fields = getattr(record, "fields", None)
+        if isinstance(fields, dict):
+            payload.update(fields)
         if record.exc_info:
             payload["exception"] = redact(self.formatException(record.exc_info))
         return json.dumps(payload, ensure_ascii=False)

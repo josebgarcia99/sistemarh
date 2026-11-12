@@ -73,12 +73,16 @@ def _table(
         cell.font = _BOLD
     header_row = sheet.max_row
     widths = [len(header) for header in headers]
+    # La fila se lleva a mano: preguntarle a la hoja cuál es la última obliga a
+    # recorrerla entera, y con miles de filas eso se vuelve muy lento.
+    current = header_row
     for row in rows:
         values = [_cell(value, zone) for value in row]
         sheet.append(values)
+        current += 1
         for index, value in enumerate(values):
             if isinstance(value, datetime):
-                sheet.cell(row=sheet.max_row, column=index + 1).number_format = _DATE_FORMAT
+                sheet.cell(row=current, column=index + 1).number_format = _DATE_FORMAT
                 widths[index] = max(widths[index], 16)
             elif value is not None:
                 widths[index] = max(widths[index], len(str(value)))

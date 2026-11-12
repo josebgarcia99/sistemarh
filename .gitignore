@@ -68,3 +68,6 @@ Thumbs.db
 .vscode/*
 !.vscode/launch.json
 !.vscode/extensions.json
+
+# Variables reales de cada entorno: se crean en el servidor, nunca en el repositorio.
+infrastructure/env/*.env

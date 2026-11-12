@@ -29,7 +29,7 @@ Probadas con una copia local de archivos sintéticos. **No se ha hecho ningún r
    ```bash
    python -m app.cli storage-manifest --output manifiesto_AAAAMMDD.jsonl
    ```
-   Lista cada documento confirmado con su clave, tamaño y SHA-256. No contiene rutas absolutas ni nombres de personas.
+   Lista cada documento confirmado y cada Excel de reportes generado, con su clave, tamaño y SHA-256. No contiene rutas absolutas ni nombres de personas.
 3. Copiar las carpetas `private/` y `generated/` del almacenamiento al destino del respaldo, cifrado.
 4. Verificar la copia contra el manifiesto. No necesita la base de datos:
    ```bash
@@ -45,5 +45,22 @@ Como el manifiesto se genera después del respaldo de la base, puede listar docu
 
 1. Restaurar la base y copiar los archivos a la carpeta de almacenamiento.
 2. `storage-verify --full` contra el manifiesto de ese respaldo.
-3. Con la aplicación apuntando a lo restaurado: `python -m app.cli storage-check --verify-hashes all`. Reporta referencias faltantes, archivos sin registro y hashes distintos.
-4. Volver a aplicar las eliminaciones posteriores al respaldo.
+3. Con la aplicación apuntando a lo restaurado: `python -m app.cli storage-check --verify-hashes all`. Reporta referencias faltantes, archivos sin registro y hashes distintos. Incluye los Excel de reportes.
+4. Ejecutar `database/sqlserver/validaciones_integridad.sql` en la base restaurada: todas las filas deben mostrar 0. Comprueba, entre otras cosas, que hay un administrador activo, que cada postulación cerrada tiene su resultado final y que ningún documento sensible quedó sin cifrar.
+5. Volver a aplicar las eliminaciones posteriores al respaldo.
+
+## Qué se respalda, en una tabla
+
+| Qué | Dónde está | Cómo se respalda | Sin ello |
+| --- | --- | --- | --- |
+| Base de datos | SQL Server | Respaldo completo, diferencial y de registro, con suma de verificación | Se pierde todo el proceso |
+| Documentos (`private/`) y archivos generados (`generated/`) | Carpeta del servidor | Copia cifrada, verificada contra el manifiesto | Se pierden CV, pruebas, estudios, Excel y ZIP |
+| Clave maestra | Archivo del servidor, fuera de lo anterior | Aparte, bajo custodia de Sistemas | No se abren las claves de IA ni los documentos sensibles, aunque la base y los archivos estén intactos |
+| Variables de entorno y certificado | Servidor | Con la configuración del servidor | Hay que volver a configurarlo |
+
+No hace falta respaldar Redis (solo es la cola), ni las carpetas `processing/` y `quarantine/` del almacenamiento.
+
+## Estado de las pruebas de restauración
+
+- **Probado con datos sintéticos:** generar el manifiesto, verificar una copia, detectar un archivo dañado o faltante (documentos y reportes) y comprobar el almacenamiento restaurado contra la base.
+- **Sin probar:** el respaldo y la restauración de SQL Server, el orden real de los pasos en el servidor y el tiempo que tardan. El criterio de aceptación 25 («los respaldos pueden restaurarse») no puede darse por cumplido hasta hacer una restauración completa en el entorno de pruebas.

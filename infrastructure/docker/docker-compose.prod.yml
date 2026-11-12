@@ -1,0 +1,115 @@
+# Entorno de PRODUCCIÓN (también sirve para PRUEBAS con otro archivo de variables).
+#
+# NO VERIFICADO: este archivo no se ha ejecutado todavía. Es la propuesta para
+# Sistemas, que lo revisa y adapta antes de usarlo. No despliega nada por sí solo.
+#
+# Desde la raíz del repositorio, con el archivo de variables ya completado:
+#   docker compose --env-file infrastructure/env/produccion.env \
+#     -f infrastructure/docker/docker-compose.prod.yml up -d --build
+#
+# SQL Server NO está aquí: es la instancia de la empresa, administrada por Sistemas.
+# Solo el proxy publica puertos. Los documentos y la clave maestra viven en el
+# servidor, fuera de los contenedores.
+
+name: reclutamiento
+
+x-python-env: &python-env
+  RECLU_ENVIRONMENT: ${RECLU_ENVIRONMENT:-production}
+  RECLU_LOG_LEVEL: ${RECLU_LOG_LEVEL:-INFO}
+  RECLU_DATABASE_URL: ${RECLU_DATABASE_URL:?Define RECLU_DATABASE_URL}
+  RECLU_REDIS_URL: redis://redis:6379/0
+  RECLU_STORAGE_ROOT: /srv/reclutamiento/storage
+  RECLU_MASTER_KEY_FILE: /run/secrets/clave_maestra
+  RECLU_ANTIVIRUS_MODE: ${RECLU_ANTIVIRUS_MODE:-clamd}
+  RECLU_CLAMD_HOST: clamav
+  RECLU_AI_ALLOW_REAL_DOCUMENTS: ${RECLU_AI_ALLOW_REAL_DOCUMENTS:-false}
+  RECLU_DISPLAY_TIMEZONE: ${RECLU_DISPLAY_TIMEZONE:-America/Mexico_City}
+
+x-python-volumes: &python-volumes
+  - type: bind
+    source: ${RECLU_STORAGE_HOST_PATH:?Define RECLU_STORAGE_HOST_PATH}
+    target: /srv/reclutamiento/storage
+  - type: bind
+    source: ${RECLU_MASTER_KEY_HOST_FILE:?Define RECLU_MASTER_KEY_HOST_FILE}
+    target: /run/secrets/clave_maestra
+    read_only: true
+
+services:
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../nginx/reclutamiento.conf:/etc/nginx/conf.d/default.conf:ro
+      # Certificado y clave privada que entrega Sistemas (no van en el repositorio).
+      - ${RECLU_TLS_CERT_HOST_FILE:?Define RECLU_TLS_CERT_HOST_FILE}:/etc/nginx/tls/servidor.crt:ro
+      - ${RECLU_TLS_KEY_HOST_FILE:?Define RECLU_TLS_KEY_HOST_FILE}:/etc/nginx/tls/servidor.key:ro
+    depends_on:
+      - api
+      - web
+    networks: [frontal, interna]
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/python.Dockerfile
+      target: api
+    restart: unless-stopped
+    environment:
+      <<: *python-env
+      # El proxy es el único que puede decir cuál es la IP real del usuario.
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
+    volumes: *python-volumes
+    depends_on:
+      - redis
+      - clamav
+    networks: [interna]
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/python.Dockerfile
+      target: worker
+    restart: unless-stopped
+    environment: *python-env
+    volumes: *python-volumes
+    depends_on:
+      - redis
+    networks: [interna]
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/web.Dockerfile
+      target: production
+    restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    networks: [interna]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Redis es solo la cola de tareas: no guarda datos de negocio.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks: [interna]
+
+  # Antivirus local. Los documentos no salen del servidor.
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes:
+      - clamav-firmas:/var/lib/clamav
+    networks: [interna]
+
+networks:
+  frontal:
+  # Sin salida directa a Internet no funcionarían las llamadas a los proveedores de
+  # IA ni la descarga de firmas del antivirus; si Sistemas la restringe, debe
+  # permitir esos destinos.
+  interna:
+
+volumes:
+  clamav-firmas:

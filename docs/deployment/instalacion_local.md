@@ -165,7 +165,9 @@ Si Sistemas prefiere ejecutar T-SQL en lugar de Alembic, los scripts equivalente
 | `actualizacion_0008_a_0009.sql` | Base que ya tiene la versión `0008` |
 | `actualizacion_0009_a_0010.sql` | Base que ya tiene la versión `0009` |
 | `actualizacion_0010_a_0011.sql` | Base que ya tiene la versión `0010` |
+| `actualizacion_0011_a_0012.sql` | Base que ya tiene la versión `0011` |
 | `permisos_usuario_aplicacion.sql` | Plantilla de permisos mínimos para el usuario de la aplicación |
+| `validaciones_integridad.sql` | Solo lectura. Comprueba la coherencia de los datos tras instalar, actualizar o restaurar: todas las filas deben dar 0 |
 | `reversion_completa.sql` | Elimina todo. Solo para bases de prueba |
 
 Se ejecutan con `sqlcmd -b` o en SSMS con el modo SQLCMD. Se regeneran con `python scripts/generate_sql.py`. **Ninguno se ha ejecutado todavía contra un SQL Server real.**

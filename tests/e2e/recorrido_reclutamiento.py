@@ -1,0 +1,120 @@
+"""Reclutamiento operativo: candidatos, etapas, expediente, llamadas, bancos y versiones del proceso.
+
+Se ejecuta con ``python tests/e2e/run.py``, sobre el modo demostración.
+"""
+
+# ruff: noqa
+import os
+from playwright.sync_api import sync_playwright, expect
+from comun import BASE, PW, SHOTS
+errors = []
+def login(page, email):
+    page.goto(BASE + "/login")
+    page.get_by_role("textbox", name="Correo", exact=True).fill(email)
+    page.get_by_role("textbox", name="Contraseña", exact=True).fill(PW)
+    page.get_by_role("button", name="Entrar").click()
+    expect(page.get_by_role("button", name="Cerrar sesión")).to_be_visible()
+def watch(page, tag=""):
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.on("response", lambda r: errors.append(f"{tag}{r.status} {r.request.method} {r.url.split('?')[0][-45:]}") if r.status >= 400 and "health" not in r.url else None)
+with sync_playwright() as p:
+    browser = p.chromium.launch(); page = browser.new_page(viewport={"width": 1440, "height": 1000}); watch(page)
+    login(page, "ana@demo.test")
+    # 1. Evaluar CV y ver que entran como candidatos
+    page.get_by_role("link", name="Vacantes", exact=True).click()
+    page.get_by_role("button", name="Abrir Analista de Nómina").click()
+    page.get_by_role("button", name="Perfil, prompt y evaluación de CV").click()
+    page.get_by_role("button", name="Evaluación de CV").click()
+    page.get_by_role("button", name="Evaluar 4 CV").click()
+    expect(page.get_by_role("status").filter(has_text="terminó")).to_be_visible()
+    page.get_by_role("button", name="Volver a vacantes").click()
+    page.get_by_role("button", name="Abrir Analista de Nómina").click()
+    page.get_by_role("button", name="Candidatos y etapas").click()
+    people = page.get_by_role("list", name="Candidatos")
+    expect(people.get_by_role("listitem")).to_have_count(4)
+    expect(page.get_by_role("button", name="Revisión local RH (4)")).to_be_visible()
+    expect(people.get_by_role("button", name="Persona Ficticia 1")).to_be_visible(); print("1 los 4 CV evaluados entran como candidatos en revisión de RH, con su nombre")
+    page.screenshot(path=f"{SHOTS}/f5_1_candidatos.png", full_page=True)
+    # 2. Un rechazado por la IA avanza a llamada por decisión humana
+    rejected = people.get_by_role("listitem").filter(has_text="Rechazado por IA").first
+    name = rejected.get_by_role("button").first.inner_text()
+    rejected.get_by_role("checkbox").check()
+    page.get_by_role("button", name="Mover de etapa").click()
+    d = page.get_by_role("dialog"); d.get_by_label("Etapa de destino").select_option(label="3. Llamada telefónica")
+    d.get_by_role("button", name="Mover").click()
+    expect(d.get_by_role("alert").filter(has_text="motivo de tu decisión")).to_be_visible()
+    d.get_by_label("Motivo").fill("Tiene experiencia en nómina que la IA no valoró")
+    d.get_by_role("button", name="Mover").click()
+    expect(page.get_by_role("status").filter(has_text="Candidatos movidos")).to_be_visible()
+    expect(page.get_by_role("button", name="Llamada telefónica (1)")).to_be_visible(); print("2 un rechazado por la IA avanza a llamada solo con motivo:", name)
+    # 3. Expediente
+    people.get_by_role("button", name=name).click()
+    expect(page.get_by_role("heading", name=name)).to_be_visible()
+    hist = page.get_by_role("list", name="Historial de movimientos")
+    expect(hist.get_by_role("listitem").first).to_contain_text("Avance: Llamada telefónica")
+    expect(hist.get_by_role("listitem").first).to_contain_text("Ana Demo")
+    expect(hist.get_by_role("listitem").last).to_contain_text("Sistema")
+    expect(page.get_by_text("Rechazado por IA ·")).to_be_visible()
+    expect(page.get_by_role("list", name="Experiencia").get_by_role("listitem")).to_have_count(2); print("3 el expediente muestra historial, clasificación inicial intacta y experiencia con permanencia")
+    # 4. Llamada
+    page.get_by_role("button", name="Nueva llamada").click()
+    page.get_by_role("button", name="Abrir llamada").click()
+    page.get_by_label("Respuesta a la pregunta 1").fill("Nómina quincenal de 200 personas durante tres años")
+    page.get_by_label("Respuesta a la pregunta 2").fill("Concilio contra el SUA cada mes")
+    page.get_by_role("checkbox", name="No se realizó").nth(2).check()
+    page.get_by_role("button", name="Guardar", exact=True).click()
+    expect(page.get_by_role("status").filter(has_text="Llamada guardada")).to_be_visible()
+    page.get_by_role("button", name="Analizar con IA").click()
+    expect(page.get_by_role("region", name="Análisis de la IA")).to_contain_text("Resumen simulado")
+    page.get_by_role("button", name="Cerrar llamada").click()
+    expect(page.get_by_text("Cerrada", exact=True)).to_be_visible(); print("4 llamada con banco: respuestas, análisis de IA y cierre")
+    page.screenshot(path=f"{SHOTS}/f5_2_expediente.png", full_page=True)
+    # 5. Incidencia y desistimiento
+    page.get_by_role("button", name="Incidencia o reprogramación").click()
+    d = page.get_by_role("dialog"); d.get_by_label("Qué ocurrió").fill("Pidió que la llamen el viernes"); d.get_by_label("Nueva fecha (opcional)").fill("2026-11-20T10:00")
+    d.get_by_role("button", name="Registrar").click()
+    expect(page.get_by_role("status").filter(has_text="reprogramada")).to_be_visible()
+    expect(page.get_by_text("Fecha acordada:")).to_be_visible()
+    page.get_by_role("button", name="Registrar resultado final").click()
+    d = page.get_by_role("dialog"); d.get_by_label("Resultado").select_option("DESISTIO"); d.get_by_label("Motivo", exact=True).fill("Aceptó otra oferta"); d.get_by_role("button", name="Registrar resultado").click()
+    expect(page.get_by_role("button", name="Reabrir proceso")).to_be_visible(); print("5 reprogramación y desistimiento quedan en el historial")
+    # 6. Bancos de preguntas
+    page.get_by_role("link", name="Bancos", exact=True).click()
+    page.get_by_role("button", name="Nuevo banco").click()
+    page.get_by_label("Nombre", exact=True).fill("Banco técnico demo")
+    page.get_by_label("Pregunta 1", exact=True).fill("¿Qué herramientas usas a diario?")
+    page.get_by_role("button", name="Proponer preguntas con IA").click()
+    page.get_by_label("Vacante", exact=True).select_option(label="Analista de Nómina"); page.get_by_role("button", name="Proponer", exact=True).click()
+    page.get_by_role("list", name="Preguntas propuestas").get_by_role("button", name="Añadir").first.click()
+    page.get_by_role("button", name="Crear banco").click()
+    expect(page.get_by_role("status").filter(has_text="Banco guardado")).to_be_visible()
+    expect(page.get_by_role("heading", name="Banco técnico demo · versión 1")).to_be_visible(); print("6 banco nuevo con una pregunta propuesta por la IA y aceptada")
+    # 7. Beto (lectura): consulta sin operar; no ve el banco privado
+    ctx2 = browser.new_context(viewport={"width": 1440, "height": 1000}); p2 = ctx2.new_page(); watch(p2, "B ")
+    login(p2, "beto@demo.test")
+    p2.get_by_role("link", name="Bancos", exact=True).click()
+    expect(p2.get_by_role("list", name="Bancos").get_by_role("listitem")).to_have_count(1)
+    p2.get_by_role("link", name="Vacantes", exact=True).click(); p2.get_by_role("button", name="Compartidas conmigo").click()
+    p2.get_by_role("button", name="Abrir Analista de Nómina").click(); p2.get_by_role("button", name="Candidatos y etapas").click()
+    expect(p2.get_by_role("list", name="Candidatos").get_by_role("listitem")).to_have_count(4)
+    expect(p2.get_by_role("checkbox")).to_have_count(0); expect(p2.get_by_role("button", name="Agregar candidato")).to_have_count(0); print("7 con lectura se consultan candidatos sin operar; el banco privado ajeno no se ve")
+    # 8. Admin: etapas
+    ctx3 = browser.new_context(viewport={"width": 1440, "height": 1000}); p3 = ctx3.new_page(); watch(p3, "A ")
+    login(p3, "admin@demo.test")
+    p3.get_by_role("link", name="Etapas", exact=True).click()
+    expect(p3.get_by_role("list", name="Etapas").get_by_role("listitem")).to_have_count(8)
+    p3.get_by_role("button", name="Agregar etapa").click(); p3.get_by_label("Etapa 9", exact=True).fill("Oferta")
+    p3.get_by_role("button", name="Guardar como versión nueva").click()
+    expect(p3.get_by_role("heading", name="Versión 2")).to_be_visible()
+    p3.get_by_role("link", name="Auditoría", exact=True).click()
+    expect(p3.get_by_text("postulacion.movida").first).to_be_visible(); print("8 el administrador guarda una versión nueva de etapas; la auditoría registra los movimientos")
+    p3.screenshot(path=f"{SHOTS}/f5_3_admin.png")
+    # 9. La convocatoria abierta conserva 8 etapas; móvil
+    m = browser.new_context(viewport={"width": 390, "height": 844}); pm = m.new_page(); watch(pm, "M ")
+    login(pm, "ana@demo.test"); pm.goto(BASE + "/vacantes"); pm.get_by_role("button", name="Abrir Analista de Nómina").click()
+    pm.get_by_role("button", name="Candidatos y etapas").click()
+    expect(pm.get_by_role("group", name="Etapa").get_by_role("button")).to_have_count(9)
+    overflow = pm.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+    pm.screenshot(path=f"{SHOTS}/f5_4_movil.png", full_page=True); print("9 la convocatoria abierta conserva sus 8 etapas; móvil sin desbordamiento:", overflow)
+    browser.close()
+print("errores:", sorted(set(errors)))

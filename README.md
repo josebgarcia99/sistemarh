@@ -2,7 +2,7 @@
 
 Plataforma web para gestionar el proceso completo de reclutamiento: vacantes, análisis de CV con IA, etapas, llamadas, pruebas, estudios, expedientes y contratación. La IA clasifica y resume; las decisiones las registra una persona.
 
-**Estado actual: Fases 2 a 7 construidas, pendientes de validar contra SQL Server y con proveedores de IA reales.** Funcionan el inicio de sesión, los usuarios, las vacantes, la compartición, las transferencias, la auditoría, el almacenamiento de documentos, la configuración de IA, los perfiles y prompts, la evaluación de CV por lotes (con lectura de escaneados por OCR), los candidatos con sus etapas e historial, los bancos de preguntas, las llamadas telefónicas con su análisis, y la psicometría, las entrevistas, las pruebas técnicas, los estudios socioeconómicos y la síntesis del expediente, y los resultados finales (contrataciones), el tablero de inicio, los indicadores con históricos y los reportes en Excel. Nada se ha ejecutado todavía contra un SQL Server real ni contra un proveedor de IA real. Lo que existe y lo que falta está en [`docs/estado_proyecto.md`](docs/estado_proyecto.md).
+**Estado actual: Fases 2 a 8 construidas, pendientes de validar contra SQL Server y con proveedores de IA reales.** Funcionan el inicio de sesión, los usuarios, las vacantes, la compartición, las transferencias, la auditoría, el almacenamiento de documentos, la configuración de IA, los perfiles y prompts, la evaluación de CV por lotes (con lectura de escaneados por OCR), los candidatos con sus etapas e historial, los bancos de preguntas, las llamadas telefónicas con su análisis, y la psicometría, las entrevistas, las pruebas técnicas, los estudios socioeconómicos y la síntesis del expediente, y los resultados finales (contrataciones), el tablero de inicio, los indicadores con históricos y los reportes en Excel. Están también las pruebas de seguridad y del flujo completo, los manuales y el paquete de despliegue para Sistemas ([`docs/deployment/despliegue_produccion.md`](docs/deployment/despliegue_produccion.md)). Nada se ha ejecutado todavía contra un SQL Server real ni contra un proveedor de IA real. Lo que existe y lo que falta está en [`docs/estado_proyecto.md`](docs/estado_proyecto.md).
 
 ## Arquitectura en una línea
 
@@ -16,10 +16,14 @@ apps/
   worker/     Tareas Celery; importa los casos de uso de la API
   web/        Interfaz Next.js (TypeScript estricto, Tailwind)
 database/     Migraciones Alembic y scripts T-SQL para Sistemas (database/sqlserver)
-scripts/      Generador de los scripts T-SQL y modo demostración (demo.py)
+scripts/      Scripts T-SQL (generate_sql.py), documentación derivada (generate_docs.py),
+              modo demostración (demo.py) y medición de rendimiento (medir_rendimiento.py)
+tests/e2e/    Recorridos completos en navegador (Playwright) sobre el modo demostración
 infrastructure/
-  docker/     Imágenes y Docker Compose de desarrollo
-docs/         Arquitectura, permisos, base de datos, seguridad, pruebas, despliegue
+  docker/     Imágenes y Docker Compose de desarrollo y de producción
+  nginx/      Proxy inverso de ejemplo con HTTPS
+  env/        Variables de ejemplo por entorno
+docs/         Arquitectura, permisos, base de datos, seguridad, pruebas, despliegue y manuales
 ```
 
 ## Puesta en marcha local

@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Reversión completa (DESTRUCTIVO)
-   Versión del esquema: 0011 -> (vacía)
-   Generado: 2026-11-11 20:11 (UTC) con scripts/generate_sql.py
+   Versión del esquema: 0012 -> (vacía)
+   Generado: 2026-11-12 15:47 (UTC) con scripts/generate_sql.py
 
    ELIMINA todas las tablas y esquemas del sistema, con todos sus datos.
    Solo para entornos de prueba. Nunca ejecutar en producción sin respaldo.
@@ -24,14 +24,40 @@ SET XACT_ABORT ON;
 GO
 
 -- Protección: si la base no está en la versión esperada, no se ejecuta nada.
-IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0011')
+IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0012')
 BEGIN
-    RAISERROR(N'La base no esta en la version 0011. No se aplico ningun cambio.', 16, 1);
+    RAISERROR(N'La base no esta en la version 0012. No se aplico ningun cambio.', 16, 1);
     SET NOEXEC ON;
 END
 GO
 
 BEGIN TRANSACTION;
+
+-- Running downgrade 0012 -> 0011
+
+DROP INDEX ix_executions_vacancy ON ai.executions;
+
+GO
+
+DROP INDEX ix_applications_evaluation_item ON recruitment.applications;
+
+GO
+
+DROP INDEX ix_cv_batches_prompt_version ON ai.cv_batches;
+
+GO
+
+DROP INDEX ix_call_sessions_bank_version ON recruitment.call_sessions;
+
+GO
+
+DROP INDEX ix_call_sessions_vacancy ON recruitment.call_sessions;
+
+GO
+
+UPDATE alembic_version SET version_num='0011' WHERE alembic_version.version_num = '0012';
+
+GO
 
 -- Running downgrade 0011 -> 0010
 

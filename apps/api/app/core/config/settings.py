@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     app_name: str = "Sistema Integral de Reclutamiento e IA"
     api_prefix: str = "/api/v1"
     log_level: str = "INFO"
+    # Una solicitud que tarda más que esto se registra como advertencia.
+    slow_request_ms: int = 2000
 
     # SQL Server. Formato: mssql+pyodbc://usuario:clave@servidor/base?driver=ODBC+Driver+18+for+SQL+Server
     database_url: SecretStr | None = None
