@@ -138,9 +138,9 @@ FROM (
 
     -- Version del esquema ------------------------------------------------------
     UNION ALL
-    SELECT '18. La version del esquema debe ser 0013',
+    SELECT '18. La version del esquema debe ser 0014',
            CASE WHEN EXISTS (
-                SELECT 1 FROM dbo.alembic_version AS x WHERE x.version_num = '0013'
+                SELECT 1 FROM dbo.alembic_version AS x WHERE x.version_num = '0014'
            ) THEN 0 ELSE 1 END
 ) AS v
 ORDER BY v.validacion;

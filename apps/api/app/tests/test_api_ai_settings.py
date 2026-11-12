@@ -55,8 +55,9 @@ class FakeProvider:
     script: list[Generation | ProviderError] | None = None
     prompts: list[tuple[str, str, str]] | None = None
 
-    def generate(self, api_key, model, *, system, user, max_output_tokens) -> Generation:
+    def generate(self, api_key, model, *, system, user, max_output_tokens, images=()) -> Generation:
         self.prompts = [*(self.prompts or []), (model, system, user)]
+        self.images = [*getattr(self, "images", []), *images]
         step = self.script.pop(0) if self.script else Generation("OK", 1000, 500, True)
         if isinstance(step, ProviderError):
             raise step

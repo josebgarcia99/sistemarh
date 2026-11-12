@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Actualización 0012 -> 0013
    Versión del esquema: 0012 -> 0013
-   Generado: 2026-11-12 19:37 (UTC) con scripts/generate_sql.py
+   Generado: 2026-11-12 20:00 (UTC) con scripts/generate_sql.py
 
    Aplica solo los cambios de la versión 0013 sobre una base que ya
    está en la versión 0012. Si está en otra versión, no hace nada.

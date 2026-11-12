@@ -211,6 +211,21 @@ export function digitizeStudy(id: string, fileId: string) {
   });
 }
 
+const photoDescriptionSchema = z.object({
+  description: z.string(),
+  unclear: z.array(z.string()),
+});
+export type PhotoDescription = z.infer<typeof photoDescriptionSchema>;
+
+/** La IA describe lo que se ve en una fotografía del estudio. No guarda nada. */
+export function describePhoto(id: string, fileId: string, fieldId: string) {
+  return apiFetch(`/assessments/${id}/photo-descriptions`, {
+    method: "POST",
+    body: { file_id: fileId, field_id: fieldId },
+    schema: photoDescriptionSchema,
+  });
+}
+
 export function getSyntheses(applicationId: string, signal?: AbortSignal) {
   return apiFetch(`/applications/${applicationId}/syntheses`, {
     schema: synthesisViewSchema,

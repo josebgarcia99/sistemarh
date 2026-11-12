@@ -197,6 +197,12 @@ class AssessmentAccess(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class Photo:
+    media_type: str  # image/jpeg
+    data: bytes
+
+
 class DocumentError(Exception):
     """El documento no se puede usar. Mensaje apto para mostrarse."""
 
@@ -208,6 +214,11 @@ class Documents(Protocol):
 
     def read_text(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> tuple[str, bool]:
         """Texto del documento y si se obtuvo por OCR. Lanza ``DocumentError``."""
+        ...
+
+    def read_photo(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> Photo:
+        """Fotografía lista para enviarse a la IA: reducida y sin metadatos (fecha,
+        cámara, coordenadas). Lanza ``DocumentError`` si el documento no es una imagen."""
         ...
 
 
@@ -228,6 +239,7 @@ class Assistant(Protocol):
         user: str,
         vacancy_id: uuid.UUID,
         actor_user_id: uuid.UUID,
+        photos: tuple[Photo, ...] = (),
     ) -> AssistantAnswer: ...
 
 

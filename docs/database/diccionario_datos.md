@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0013`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0014`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -250,7 +250,7 @@ Modelo asignado a cada operación (extracción de CV, evaluación, generación d
 
 | Columna | Tipo | Oblig. | Descripción |
 | --- | --- | --- | --- |
-| `operation` | `VARCHAR(40)` | Sí | Clave primaria. Una de las ocho operaciones. |
+| `operation` | `VARCHAR(40)` | Sí | Clave primaria. Una de las nueve operaciones (la novena, `DESCRIPCION_FOTOGRAFIAS`, desde la migración `0014`). |
 | `model_ref` | `UNIQUEIDENTIFIER` | No | Modelo asignado (`ai.models`). Vacío: sin asignar. |
 | `updated_at`, `updated_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | No | Último cambio y quién lo hizo. |
 

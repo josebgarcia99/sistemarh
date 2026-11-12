@@ -1,15 +1,16 @@
 """Clientes HTTP de los proveedores de IA.
 
-Por ahora solo consultan la lista de modelos (comprobación de conexión y
-registro de modelos): no envían documentos. Los errores se traducen a mensajes
+Consultan la lista de modelos y piden respuestas de texto, con imágenes
+adjuntas cuando la operación las lleva. Los errores se traducen a mensajes
 que nunca contienen la clave ni la respuesta completa del proveedor.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import base64
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
 
@@ -22,6 +23,16 @@ class DiscoveredModel:
     model_id: str
     display_name: str
     capabilities: dict[str, Any] | None = None
+
+
+class ImageInput(Protocol):
+    """Imagen adjunta a una solicitud: tipo (image/jpeg, image/png) y contenido."""
+
+    @property
+    def media_type(self) -> str: ...
+
+    @property
+    def data(self) -> bytes: ...
 
 
 @dataclass(frozen=True)
@@ -77,6 +88,10 @@ def _checked(response: httpx.Response) -> Any:
         ) from error
 
 
+def _b64(image: ImageInput) -> str:
+    return base64.b64encode(image.data).decode("ascii")
+
+
 class _BaseClient:
     def __init__(
         self, base_url: str, client_factory: Callable[[], httpx.Client] | None = None
@@ -96,6 +111,20 @@ class AnthropicClient(_BaseClient):
     ) -> None:
         super().__init__(base_url, client_factory)
         self._api_version = api_version
+
+    @staticmethod
+    def _content(user: str, images: Sequence[ImageInput]) -> object:
+        """Sin imágenes, el texto tal cual; con ellas, bloques de imagen y de texto."""
+        if not images:
+            return user
+        blocks: list[dict[str, object]] = [
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": image.media_type, "data": _b64(image)},
+            }
+            for image in images
+        ]
+        return [*blocks, {"type": "text", "text": user}]
 
     def list_models(self, api_key: str) -> list[DiscoveredModel]:
         headers = {"Authorization": f"Bearer {api_key}", "anthropic-version": self._api_version}
@@ -119,7 +148,14 @@ class AnthropicClient(_BaseClient):
         return models
 
     def generate(
-        self, api_key: str, model: str, *, system: str, user: str, max_output_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        *,
+        system: str,
+        user: str,
+        max_output_tokens: int,
+        images: Sequence[ImageInput] = (),
     ) -> Generation:
         """API de mensajes. No se ha ejecutado contra el servicio real."""
         headers = {"Authorization": f"Bearer {api_key}", "anthropic-version": self._api_version}
@@ -127,7 +163,7 @@ class AnthropicClient(_BaseClient):
             "model": model,
             "max_tokens": max_output_tokens,
             "system": system,
-            "messages": [{"role": "user", "content": user}],
+            "messages": [{"role": "user", "content": self._content(user, images)}],
         }
         with self._client_factory() as client:
             payload = _post(client, f"{self._base_url}/v1/messages", headers, body)
@@ -149,6 +185,18 @@ class AnthropicClient(_BaseClient):
 
 
 class OpenAIClient(_BaseClient):
+    @staticmethod
+    def _input(user: str, images: Sequence[ImageInput]) -> object:
+        """Sin imágenes, el texto tal cual; con ellas, un mensaje con sus partes."""
+        if not images:
+            return user
+        parts: list[dict[str, object]] = [{"type": "input_text", "text": user}]
+        parts += [
+            {"type": "input_image", "image_url": f"data:{image.media_type};base64,{_b64(image)}"}
+            for image in images
+        ]
+        return [{"role": "user", "content": parts}]
+
     def __init__(
         self,
         base_url: str = "https://api.openai.com",
@@ -166,14 +214,21 @@ class OpenAIClient(_BaseClient):
         ]
 
     def generate(
-        self, api_key: str, model: str, *, system: str, user: str, max_output_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        *,
+        system: str,
+        user: str,
+        max_output_tokens: int,
+        images: Sequence[ImageInput] = (),
     ) -> Generation:
         """API de respuestas. No se ha ejecutado contra el servicio real."""
         headers = {"Authorization": f"Bearer {api_key}"}
         body = {
             "model": model,
             "instructions": system,
-            "input": user,
+            "input": self._input(user, images),
             "max_output_tokens": max_output_tokens,
             # Los documentos no se conservan en el proveedor.
             "store": False,
@@ -256,12 +311,30 @@ class GeminiClient(_BaseClient):
         return models
 
     def generate(
-        self, api_key: str, model: str, *, system: str, user: str, max_output_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        *,
+        system: str,
+        user: str,
+        max_output_tokens: int,
+        images: Sequence[ImageInput] = (),
     ) -> Generation:
         headers = {"x-goog-api-key": api_key}
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
-            "contents": [{"role": "user", "parts": [{"text": user}]}],
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        *(
+                            {"inline_data": {"mime_type": image.media_type, "data": _b64(image)}}
+                            for image in images
+                        ),
+                        {"text": user},
+                    ],
+                }
+            ],
             "generationConfig": {"maxOutputTokens": max_output_tokens},
         }
         url = f"{self._base_url}/{self._api_version}/models/{model}:{self._GENERATE}"

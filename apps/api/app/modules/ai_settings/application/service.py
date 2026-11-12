@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -24,6 +24,7 @@ from app.modules.ai_settings.domain.models import (
     Credential,
     Execution,
     ExecutionStatus,
+    ImageInput,
     KeySource,
     Model,
     Operation,
@@ -564,6 +565,7 @@ class AiSettingsService:
         vacancy_id: uuid.UUID | None = None,
         max_output_tokens: int = 4000,
         carries_document: bool = False,
+        images: Sequence[ImageInput] = (),
     ) -> GenerationResult:
         """Llama al proveedor del modelo asignado y registra el consumo.
 
@@ -593,6 +595,8 @@ class AiSettingsService:
                     system=system,
                     user=user,
                     max_output_tokens=max_output_tokens,
+                    # Solo se pasa cuando hay imágenes: las demás llamadas no cambian.
+                    **({"images": images} if images else {}),
                 )
             except ProviderError as error:
                 if error.kind in _RETRYABLE and attempts <= len(_BACKOFF_SECONDS):

@@ -29,6 +29,7 @@ MAX_FIELDS = 120
 MAX_TABLE_COLUMNS = 8
 MAX_TABLE_ROWS = 20
 MAX_CELL = 300
+MAX_DESCRIPTION = 2000
 
 
 class RuleError(ValueError):
@@ -298,6 +299,18 @@ def _field_value(item: FormField, value: object) -> object:
     return (line(value, limit) if item.type is FieldType.TEXTO else block(value, limit)) or None
 
 
+def _photo_description(item: FormField, entry: dict[str, Any]) -> dict[str, Any]:
+    """Descripción anotada junto a una fotografía o documento, y si la propuso la
+    IA. Como cualquier dato leído por la IA, no cuenta como verificada."""
+    if item.type is not FieldType.DOCUMENTO:
+        return {}
+    description = block(entry.get("description"), MAX_DESCRIPTION)
+    if not description:
+        return {}
+    source = "IA" if entry.get("description_source") == "IA" else "MANUAL"
+    return {"description": description, "description_source": source}
+
+
 def study(data: dict[str, Any], status: str, version: FormTemplateVersion) -> dict[str, Any]:
     raw = data.get("answers") if isinstance(data.get("answers"), dict) else {}
     answers: dict[str, dict[str, Any]] = {}
@@ -310,6 +323,7 @@ def study(data: dict[str, Any], status: str, version: FormTemplateVersion) -> di
         if value is None:
             continue
         answers[item.id] = {
+            **_photo_description(item, entry),
             "value": value,
             # Un dato solo está verificado si una persona lo marcó así.
             "verified": entry.get("verified") is True,

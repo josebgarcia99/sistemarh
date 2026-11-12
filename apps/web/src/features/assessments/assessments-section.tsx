@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   cardClass,
   dangerButtonClass,
@@ -20,6 +20,7 @@ import {
   type Assessment,
   type AssessmentData,
   createAssessment,
+  describePhoto,
   type Digitization,
   digitizeStudy,
   type FormField,
@@ -33,11 +34,26 @@ import {
   updateAssessment,
 } from "@/lib/api/assessments";
 import { describeError } from "@/lib/api/client";
-import { downloadUrl, listFiles } from "@/lib/api/files";
+import {
+  acceptedExtensions,
+  downloadUrl,
+  listFiles,
+  MAX_UPLOAD_BYTES,
+  uploadFile,
+} from "@/lib/api/files";
 
 type Props = { applicationId: string; vacancyId: string; active: boolean };
 type Row = Record<string, string>;
-type Answer = { value: string | boolean | string[][]; verified: boolean; source: string };
+type Answer = {
+  value: string | boolean | string[][];
+  verified: boolean;
+  source: string;
+  /** Descripción anotada junto a una fotografía, y si la propuso la IA. */
+  description?: string;
+  description_source?: string;
+};
+const PHOTO_NAME = /\.(jpe?g|png)$/i;
+const STUDY_EXTENSIONS = acceptedExtensions("ESTUDIO_SOCIOECONOMICO");
 
 /** Dato obligatorio para dar de alta cada tipo; el resto se captura después. */
 const FIRST_FIELD: Record<Kind, { key: string; label: string } | null> = {
@@ -322,6 +338,7 @@ function AssessmentEditor({
   const [reading, setReading] = useState<Digitization | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
+  const filesClient = useQueryClient();
   const files = useQuery({
     queryKey: ["vacancy", vacancyId, "files"],
     queryFn: ({ signal }) => listFiles(vacancyId, signal),
@@ -539,6 +556,11 @@ function AssessmentEditor({
                   answer={answers[field.id]}
                   canEdit={canEdit}
                   documents={documents.map((file) => ({ id: file.id, name: file.original_name }))}
+                  assessmentId={item.id}
+                  vacancyId={vacancyId}
+                  onUploaded={() =>
+                    filesClient.invalidateQueries({ queryKey: ["vacancy", vacancyId, "files"] })
+                  }
                   onChange={(answer) => {
                     const next = { ...answers };
                     if (answer) next[field.id] = answer;
@@ -612,12 +634,18 @@ function StudyField({
   answer,
   canEdit,
   documents,
+  assessmentId,
+  vacancyId,
+  onUploaded,
   onChange,
 }: {
   field: FormField;
   answer: Answer | undefined;
   canEdit: boolean;
   documents: { id: string; name: string }[];
+  assessmentId: string;
+  vacancyId: string;
+  onUploaded: () => Promise<void>;
   onChange: (answer: Answer | null) => void;
 }) {
   const id = `study-${field.id}`;
@@ -631,7 +659,7 @@ function StudyField({
     );
   const label = `${field.label}${field.required ? " (obligatorio)" : ""}`;
   // Las tablas y los textos largos ocupan todo el ancho; lo demás va en dos columnas.
-  const wide = ["TABLA", "PARRAFO", "OBSERVACION"].includes(field.type);
+  const wide = ["TABLA", "PARRAFO", "OBSERVACION", "DOCUMENTO"].includes(field.type);
   let control;
   if (field.type === "TABLA") {
     const rows = Array.isArray(value) ? value : [];
@@ -698,8 +726,22 @@ function StudyField({
         {label}
       </label>
     );
-  } else if (field.type === "OPCIONES" || field.type === "DOCUMENTO") {
-    const options = field.type === "OPCIONES" ? field.options.map((option) => ({ id: option, name: option })) : documents;
+  } else if (field.type === "DOCUMENTO") {
+    control = (
+      <StudyDocument
+        id={id}
+        field={field}
+        answer={answer}
+        canEdit={canEdit}
+        documents={documents}
+        assessmentId={assessmentId}
+        vacancyId={vacancyId}
+        onUploaded={onUploaded}
+        onChange={onChange}
+      />
+    );
+  } else if (field.type === "OPCIONES") {
+    const options = field.options.map((option) => ({ id: option, name: option }));
     control = (
       <select id={id} className={fieldClass} disabled={!canEdit} value={String(value)} onChange={(event) => set(event.target.value)}>
         <option value="">Sin dato</option>
@@ -750,6 +792,200 @@ function StudyField({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Documento o fotografía de un campo del estudio: se elige uno ya cargado o se
+ * adjunta ahí mismo. Si es una imagen, la IA puede proponer una descripción de
+ * lo que se observa; la persona la revisa antes de guardar.
+ */
+function StudyDocument({
+  id,
+  field,
+  answer,
+  canEdit,
+  documents,
+  assessmentId,
+  vacancyId,
+  onUploaded,
+  onChange,
+}: {
+  id: string;
+  field: FormField;
+  answer: Answer | undefined;
+  canEdit: boolean;
+  documents: { id: string; name: string }[];
+  assessmentId: string;
+  vacancyId: string;
+  onUploaded: () => Promise<void>;
+  onChange: (answer: Answer | null) => void;
+}) {
+  const picker = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<Feedback>(null);
+  const [unclear, setUnclear] = useState<string[]>([]);
+  // Recién adjuntado: se muestra aunque la lista de documentos aún no se haya actualizado.
+  const [uploaded, setUploaded] = useState<{ id: string; name: string } | null>(null);
+  const fileId = typeof answer?.value === "string" ? answer.value : "";
+  const options =
+    uploaded && !documents.some((file) => file.id === uploaded.id)
+      ? [...documents, uploaded]
+      : documents;
+  const selected = options.find((file) => file.id === fileId);
+  const isPhoto = selected !== undefined && PHOTO_NAME.test(selected.name);
+
+  const choose = (next: string) => {
+    setUnclear([]);
+    setFeedback(null);
+    // Al cambiar de documento, la descripción anterior ya no corresponde.
+    onChange(next ? { value: next, verified: false, source: "MANUAL" } : null);
+  };
+
+  async function run(action: () => Promise<void>) {
+    setBusy(true);
+    setFeedback(null);
+    try {
+      await action();
+    } catch (caught) {
+      setFeedback({ kind: "error", text: describeError(caught) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function attach(file: File) {
+    const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+    if (!STUDY_EXTENSIONS.includes(extension)) {
+      return setFeedback({
+        kind: "error",
+        text: "Formato no permitido. Adjunta una foto JPG o PNG, o un PDF, DOCX o XLSX.",
+      });
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return setFeedback({ kind: "error", text: "El archivo supera el límite de 20 MB." });
+    }
+    await run(async () => {
+      const result = await uploadFile(vacancyId, file, "ESTUDIO_SOCIOECONOMICO");
+      setUploaded({ id: result.file.id, name: result.file.original_name });
+      await onUploaded();
+      choose(result.file.id);
+      setFeedback({ kind: "ok", text: "Archivo adjuntado. Guarda el estudio para conservarlo." });
+    });
+  }
+
+  async function describe() {
+    if (!answer) return;
+    await run(async () => {
+      const proposal = await describePhoto(assessmentId, fileId, field.id);
+      setUnclear(proposal.unclear);
+      onChange({ ...answer, description: proposal.description, description_source: "IA" });
+      setFeedback({
+        kind: "ok",
+        text: "La IA propuso una descripción. Revísala y corrígela: todavía no se ha guardado.",
+      });
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          id={id}
+          className={`${fieldClass} flex-[2_1_220px]`}
+          disabled={!canEdit}
+          value={fileId}
+          onChange={(event) => choose(event.target.value)}
+        >
+          <option value="">Sin dato</option>
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+        {canEdit && (
+          <>
+            <input
+              ref={picker}
+              type="file"
+              aria-label={`Adjuntar archivo: ${field.label}`}
+              accept={STUDY_EXTENSIONS.join(",")}
+              className="sr-only"
+              tabIndex={-1}
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) await attach(file);
+              }}
+            />
+            <button
+              type="button"
+              className={secondaryButtonClass}
+              disabled={busy}
+              onClick={() => picker.current?.click()}
+            >
+              Adjuntar foto o archivo
+            </button>
+          </>
+        )}
+        {selected && (
+          <a
+            className="underline underline-offset-4"
+            href={downloadUrl(selected.id)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Ver archivo
+          </a>
+        )}
+      </div>
+      {isPhoto && answer && (
+        <div className="flex flex-col gap-2">
+          <label htmlFor={`${id}-description`} className="text-sm text-ink-muted">
+            Descripción de lo que se observa: {field.label}
+          </label>
+          <textarea
+            id={`${id}-description`}
+            rows={3}
+            maxLength={2000}
+            className={areaClass}
+            readOnly={!canEdit}
+            value={answer.description ?? ""}
+            onChange={(event) =>
+              // Al escribir a mano, deja de contar como propuesta por la IA.
+              onChange({ ...answer, description: event.target.value, description_source: "MANUAL" })
+            }
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            {canEdit && (
+              <button
+                type="button"
+                className={secondaryButtonClass}
+                disabled={busy}
+                aria-label={`Describir con IA: ${field.label}`}
+                onClick={describe}
+              >
+                {busy ? "Trabajando…" : "Describir con IA"}
+              </button>
+            )}
+            {answer.description && answer.description_source === "IA" && (
+              <span className={`${pillClass} bg-neutral-soft text-neutral-ink`}>
+                Descripción propuesta por la IA
+              </span>
+            )}
+          </div>
+          {unclear.length > 0 && (
+            <p className="text-sm text-ink-muted">La IA no distingue: {unclear.join("; ")}.</p>
+          )}
+          <p className="text-sm text-ink-muted">
+            La IA describe solo lo que se ve; no saca conclusiones sobre la persona ni califica la
+            vivienda. La foto se envía reducida y sin fecha ni ubicación.
+          </p>
+        </div>
+      )}
+      <FeedbackLine feedback={feedback} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Reversión completa (DESTRUCTIVO)
-   Versión del esquema: 0013 -> (vacía)
-   Generado: 2026-11-12 19:37 (UTC) con scripts/generate_sql.py
+   Versión del esquema: 0014 -> (vacía)
+   Generado: 2026-11-12 20:00 (UTC) con scripts/generate_sql.py
 
    ELIMINA todas las tablas y esquemas del sistema, con todos sus datos.
    Solo para entornos de prueba. Nunca ejecutar en producción sin respaldo.
@@ -24,14 +24,28 @@ SET XACT_ABORT ON;
 GO
 
 -- Protección: si la base no está en la versión esperada, no se ejecuta nada.
-IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0013')
+IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0014')
 BEGIN
-    RAISERROR(N'La base no esta en la version 0013. No se aplico ningun cambio.', 16, 1);
+    RAISERROR(N'La base no esta en la version 0014. No se aplico ningun cambio.', 16, 1);
     SET NOEXEC ON;
 END
 GO
 
 BEGIN TRANSACTION;
+
+-- Running downgrade 0014 -> 0013
+
+ALTER TABLE ai.operation_assignments DROP CONSTRAINT ck_operation_assignments_operation;
+
+GO
+
+ALTER TABLE ai.operation_assignments ADD CONSTRAINT ck_operation_assignments_operation CHECK (operation IN ('ANALISIS_PERFILES', 'GENERACION_PROMPTS', 'EXTRACCION_CV', 'EVALUACION_DOCUMENTAL', 'ANALISIS_LLAMADAS', 'LECTURA_DOCUMENTOS', 'RESUMEN_PRUEBAS', 'SINTESIS_EXPEDIENTES'));
+
+GO
+
+UPDATE alembic_version SET version_num='0013' WHERE alembic_version.version_num = '0014';
+
+GO
 
 -- Running downgrade 0013 -> 0012
 

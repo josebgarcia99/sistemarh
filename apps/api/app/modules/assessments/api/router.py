@@ -133,6 +133,20 @@ class DigitizationIn(BaseModel):
     file_id: uuid.UUID
 
 
+class PhotoDescriptionIn(BaseModel):
+    file_id: uuid.UUID
+    # Campo del formulario al que pertenece la fotografía (da contexto a la IA).
+    field_id: str | None = Field(default=None, max_length=40)
+
+
+class PhotoDescriptionOut(BaseModel):
+    """Descripción propuesta por la IA. No está guardada ni verificada."""
+
+    description: str
+    # Lo que la IA indicó que no se distingue en la imagen.
+    unclear: list[str]
+
+
 class DigitizationOut(BaseModel):
     """Propuesta de la IA. No está guardada ni verificada."""
 
@@ -437,6 +451,31 @@ def digitize_study(
     if outcome.content is None:
         raise ServiceUnavailableError(outcome.error)
     return DigitizationOut(**outcome.content)
+
+
+@router.post(
+    "/assessments/{assessment_id}/photo-descriptions",
+    response_model=PhotoDescriptionOut,
+    summary="La IA describe lo que se ve en una fotografía del estudio, sin guardar nada",
+)
+def describe_study_photo(
+    assessment_id: uuid.UUID,
+    body: PhotoDescriptionIn,
+    request: Request,
+    principal: Principal = _user,
+    context: AppContext = _context,
+) -> PhotoDescriptionOut:
+    with context.require_backend().transaction() as repos:
+        outcome = context.assessments(repos).describe_photo(
+            principal.user,
+            assessment_id,
+            body.file_id,
+            field_id=body.field_id,
+            ip=client_ip(request),
+        )
+    if outcome.content is None:
+        raise ServiceUnavailableError(outcome.error)
+    return PhotoDescriptionOut(**outcome.content)
 
 
 # --- Síntesis ----------------------------------------------------------------------------

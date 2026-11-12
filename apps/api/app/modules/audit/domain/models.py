@@ -86,6 +86,7 @@ class AuditAction(StrEnum):
     EVALUACION_ACTUALIZADA = "evaluacion.actualizada"
     EVALUACION_RESUMIDA = "evaluacion.resumida"
     ESTUDIO_DIGITALIZADO = "estudio.digitalizado"
+    ESTUDIO_FOTOGRAFIA_DESCRITA = "estudio.fotografia_descrita"
     EXPEDIENTE_SINTETIZADO = "expediente.sintetizado"
 
 

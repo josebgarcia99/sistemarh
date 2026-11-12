@@ -50,6 +50,7 @@ OPERATION_LABELS = {
     "LECTURA_DOCUMENTOS": "Lectura de documentos",
     "RESUMEN_PRUEBAS": "Resumen de pruebas",
     "SINTESIS_EXPEDIENTES": "Síntesis de expedientes",
+    "DESCRIPCION_FOTOGRAFIAS": "Descripción de fotografías",
 }
 _BOLD = Font(bold=True)
 _DATE_FORMAT = "yyyy-mm-dd hh:mm"

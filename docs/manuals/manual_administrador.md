@@ -75,6 +75,8 @@ Menú «Etapas». Define las etapas por las que pasa un candidato (por omisión:
 
 Menú «Formularios». «Nuevo formulario» crea una plantilla con secciones y campos (texto, fecha, número, opciones, casilla, documento, observación y tabla), indicando cuáles son obligatorios. En una tabla escribes los nombres de sus columnas separados por coma. «Solo captura manual» marca los campos que la IA no debe llenar al leer un documento. Cada cambio guarda una versión; los estudios ya capturados conservan la suya. Un formulario que ya no se usa se archiva.
 
+Para que el botón «Describir con IA» de las fotografías funcione, en la pantalla «IA» asigna a la operación «Descripción de fotografías del estudio» un modelo que acepte imágenes (por ejemplo, uno de Google Gemini, después de registrar su API key y habilitar el proveedor). Cada descripción cuenta en el consumo de ese proveedor.
+
 La plantilla inicial es el formato de la empresa «SGC.F3.RH. Estudio socioeconómico». Ese formato incluye un dictamen, cinco indicadores con nivel (suficiente, medio, inferior), un «score total» y si la persona se considera viable. El sistema guarda lo que anote quien aplicó el estudio, pero no calcula esa puntuación, la IA no la llena y no se usa en la síntesis del expediente ni en los reportes. Si la empresa decide no registrar esos datos en el sistema, basta con quitar esos campos de la plantilla.
 
 ## Documentos

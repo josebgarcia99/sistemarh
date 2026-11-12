@@ -294,3 +294,25 @@ def repack(content: bytes, *, add: dict[str, bytes] | None = None, replace=None)
         for name, data in (add or {}).items():
             target.writestr(name, data)
     return buffer.getvalue()
+
+
+def photo(
+    *, size: tuple[int, int] = (2400, 1800), fmt: str = "JPEG", metadata: bool = True
+) -> bytes:
+    """Fotografía inventada (un rectángulo de color). Con ``metadata`` lleva
+    datos EXIF como los que guarda un teléfono: modelo, fecha y coordenadas GPS."""
+    from PIL import Image
+
+    image = Image.new("RGB", size, (200, 180, 150))
+    image.paste((90, 60, 40), (size[0] // 3, size[1] // 3, size[0] // 2, size[1] - 1))
+    exif = Image.Exif()
+    if metadata:
+        exif[0x0110] = "Telefono Ficticio X"  # modelo
+        exif[0x0132] = "2026:11:10 10:00:00"  # fecha
+        exif[0x0112] = 6  # orientación: girada 90°
+        gps = exif.get_ifd(0x8825)
+        gps[1], gps[2] = "N", (19.0, 25.0, 57.0)
+        gps[3], gps[4] = "W", (99.0, 7.0, 59.0)
+    buffer = io.BytesIO()
+    image.save(buffer, format=fmt, **({"exif": exif} if metadata and fmt == "JPEG" else {}))
+    return buffer.getvalue()

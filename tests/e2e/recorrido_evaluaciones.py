@@ -4,9 +4,12 @@ Se ejecuta con ``python tests/e2e/run.py``, sobre el modo demostración.
 """
 
 # ruff: noqa
-import os
+import os, re, tempfile
+from PIL import Image
 from playwright.sync_api import sync_playwright, expect
 from comun import BASE, PW, SHOTS
+# Fotografía inventada (un rectángulo de color) para adjuntarla al estudio.
+FOTO = os.path.join(tempfile.mkdtemp(prefix="reclu-foto-"), "localizacion.jpg"); Image.new("RGB", (800, 600), (120, 150, 180)).save(FOTO)
 errors = []
 def login(page, email):
     page.goto(BASE + "/login")
@@ -77,6 +80,15 @@ with sync_playwright() as p:
     expect(sec.get_by_role("status").filter(has_text="todavía no se ha guardado")).to_be_visible()
     expect(sec.get_by_text("Leído por la IA").first).to_be_visible()
     v = sec.get_by_role("checkbox", name="Fecha de aplicación: verificado"); expect(v).not_to_be_checked(); v.check()
+    # 4b. Fotografía del estudio: se adjunta ahí mismo y la IA propone una descripción
+    foto = "Fotografía: fachada de la vivienda"
+    sec.get_by_label(foto, exact=True).select_option(label="Fachada ficticia.jpg")
+    sec.get_by_role("button", name=f"Describir con IA: {foto}").click()
+    desc = sec.get_by_label(f"Descripción de lo que se observa: {foto}")
+    expect(desc).to_have_value(re.compile("Descripción simulada")); expect(sec.get_by_text("Descripción propuesta por la IA")).to_be_visible()
+    desc.fill("Fachada de dos niveles, pintura clara y portón metálico."); expect(sec.get_by_text("Descripción propuesta por la IA")).to_have_count(0)
+    sec.get_by_label("Adjuntar archivo: Fotografía: localización").set_input_files(FOTO)
+    expect(sec.get_by_text("Archivo adjuntado")).to_be_visible(); expect(sec.get_by_label("Fotografía: localización", exact=True)).to_have_value(re.compile(".+")); print("4b fotos: se elige o se adjunta una foto; la IA propone la descripción y la persona la corrige")
     sec.get_by_label("Estado", exact=True).last.select_option("EN_PROCESO")
     sec.get_by_role("button", name="Guardar", exact=True).last.click()
     expect(sec.get_by_role("status").filter(has_text="Evaluación guardada")).to_be_visible(); print("4 estudio: la IA llena campos sin verificar; la persona marca lo verificado")

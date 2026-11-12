@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from app.core.config.settings import Settings
 from app.infrastructure.ai_providers.http_clients import (
     AnthropicClient,
@@ -12,6 +14,7 @@ from app.infrastructure.ai_providers.http_clients import (
 from app.modules.ai_settings.domain.models import (
     DiscoveredModel,
     Generation,
+    ImageInput,
     ProviderClient,
     ProviderCode,
     ProviderError,
@@ -30,11 +33,23 @@ class _Adapter:
         return [DiscoveredModel(m.model_id, m.display_name, m.capabilities) for m in found]
 
     def generate(
-        self, api_key: str, model: str, *, system: str, user: str, max_output_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        *,
+        system: str,
+        user: str,
+        max_output_tokens: int,
+        images: Sequence[ImageInput] = (),
     ) -> Generation:
         try:
             result = self._inner.generate(
-                api_key, model, system=system, user=user, max_output_tokens=max_output_tokens
+                api_key,
+                model,
+                system=system,
+                user=user,
+                max_output_tokens=max_output_tokens,
+                images=images,
             )
         except ProviderHttpError as error:
             raise ProviderError(error.kind, error.message) from error

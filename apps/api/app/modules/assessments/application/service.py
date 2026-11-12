@@ -39,6 +39,7 @@ from app.modules.assessments.domain.models import (
     FormTemplate,
     FormTemplateVersion,
     Kind,
+    Photo,
     Synthesis,
 )
 from app.modules.audit.application.service import AuditLog
@@ -399,9 +400,22 @@ class AssessmentService:
 
     # --- Ayudas de IA --------------------------------------------------------------------
 
-    def _ask(self, actor: Actor, vacancy_id: uuid.UUID, operation: str, system: str, user: str):  # noqa: ANN202
+    def _ask(  # noqa: ANN202
+        self,
+        actor: Actor,
+        vacancy_id: uuid.UUID,
+        operation: str,
+        system: str,
+        user: str,
+        photos: tuple[Photo, ...] = (),
+    ):
         return self._ai.ask(
-            operation, system=system, user=user, vacancy_id=vacancy_id, actor_user_id=actor.id
+            operation,
+            system=system,
+            user=user,
+            vacancy_id=vacancy_id,
+            actor_user_id=actor.id,
+            **({"photos": photos} if photos else {}),
         )
 
     @staticmethod
@@ -499,6 +513,56 @@ class AssessmentService:
         )
         self._audit.record(
             AuditAction.ESTUDIO_DIGITALIZADO,
+            result=AuditResult.PERMITIDO if outcome.content else AuditResult.FALLIDO,
+            actor_user_id=actor.id,
+            resource_type="evaluacion",
+            resource_id=assessment.id,
+            ip=ip,
+            details={"vacante": str(assessment.vacancy_id), "documento": str(file_id)},
+        )
+        return outcome
+
+    def describe_photo(
+        self,
+        actor: Actor,
+        assessment_id: uuid.UUID,
+        file_id: uuid.UUID,
+        *,
+        field_id: str | None = None,
+        ip: str | None = None,
+    ) -> AiOutcome:
+        """Pide a la IA que describa lo que se ve en una fotografía del estudio.
+
+        Es una propuesta: no guarda nada. La persona la revisa, la corrige y la
+        guarda con el estudio. La fotografía se envía reducida y sin metadatos."""
+        assessment = self._load(actor, assessment_id, write=True)
+        if assessment.kind is not Kind.ESTUDIO_SOCIOECONOMICO:
+            raise ValidationFailedError(
+                "Solo se describen fotografías de estudios socioeconómicos."
+            )
+        if not self._documents.belongs(assessment.vacancy_id, file_id, assessment.kind):
+            raise ValidationFailedError(
+                "Elige una fotografía de tipo «Estudio socioeconómico» cargada en esta vacante."
+            )
+        version = self._repo.template_version(assessment.template_version_id)  # type: ignore[arg-type]
+        label = next(
+            (item.label for item in (version.fields if version else ()) if item.id == field_id), ""
+        )
+        try:
+            photo = self._documents.read_photo(assessment.vacancy_id, file_id)
+        except DocumentError as error:
+            raise ValidationFailedError(str(error)) from error
+        answer = self._ask(
+            actor,
+            assessment.vacancy_id,
+            assistant.PHOTO_DESCRIPTION,
+            assistant.PHOTO_SYSTEM,
+            assistant.photo_request(label),
+            photos=(photo,),
+        )
+        outcome = self._outcome(answer, assistant.photo_from_answer)
+        self._audit.record(
+            AuditAction.ESTUDIO_FOTOGRAFIA_DESCRITA,
             result=AuditResult.PERMITIDO if outcome.content else AuditResult.FALLIDO,
             actor_user_id=actor.id,
             resource_type="evaluacion",

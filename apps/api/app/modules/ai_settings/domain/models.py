@@ -8,6 +8,7 @@ proveedor. En la base se guarda su texto cifrado con la clave maestra y sus
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -39,6 +40,8 @@ class Operation(StrEnum):
     LECTURA_DOCUMENTOS = "LECTURA_DOCUMENTOS"
     RESUMEN_PRUEBAS = "RESUMEN_PRUEBAS"
     SINTESIS_EXPEDIENTES = "SINTESIS_EXPEDIENTES"
+    # Describir lo que se ve en una fotografía del estudio socioeconómico.
+    DESCRIPCION_FOTOGRAFIAS = "DESCRIPCION_FOTOGRAFIAS"
 
 
 class KeySource(StrEnum):
@@ -122,11 +125,26 @@ class Generation:
     complete: bool
 
 
+@dataclass(frozen=True)
+class ImageInput:
+    """Imagen que acompaña a una solicitud. ``media_type``: image/jpeg o image/png."""
+
+    media_type: str
+    data: bytes
+
+
 class ProviderClient(Protocol):
     def list_models(self, api_key: str) -> list[DiscoveredModel]: ...
 
     def generate(
-        self, api_key: str, model: str, *, system: str, user: str, max_output_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        *,
+        system: str,
+        user: str,
+        max_output_tokens: int,
+        images: Sequence[ImageInput] = (),
     ) -> Generation: ...
 
 

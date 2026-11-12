@@ -194,6 +194,71 @@ describe("AssessmentsSection", () => {
     });
   });
 
+  it("adjunta una foto al estudio y la IA propone una descripción que la persona revisa", async () => {
+    const study = make("ESTUDIO_SOCIOECONOMICO", {
+      status: "EN_PROCESO",
+      form: [{ title: "Soporte fotográfico", fields: [
+        { ...FIELD, id: "fachada", label: "Fotografía: fachada de la vivienda", type: "DOCUMENTO" },
+        { ...FIELD, id: "firmado", label: "Formato firmado (escaneado)", type: "DOCUMENTO" },
+      ] }],
+    });
+    let files = [file("f9", "estudio escaneado.pdf", "ESTUDIO_SOCIOECONOMICO")];
+    const fetchMock = mockApi({
+      [`GET ${LIST_URL}`]: { body: list([study]) },
+      [`GET ${FILES_URL}`]: () => ({ body: files }),
+      [`POST ${FILES_URL}`]: () => {
+        const photo = file("f10", "fachada.jpg", "ESTUDIO_SOCIOECONOMICO");
+        files = [...files, photo];
+        return { status: 201, body: { file: photo, duplicates: [] } };
+      },
+      ["POST /api/v1/assessments/e-ESTUDIO_SOCIOECONOMICO/photo-descriptions"]: {
+        body: { description: "Fachada de dos niveles con portón metálico.", unclear: ["El número exterior"] },
+      },
+      ["PUT /api/v1/assessments/e-ESTUDIO_SOCIOECONOMICO"]: { body: { ...study, version: 2 } },
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: /Estudio socioeconómico/ }));
+    // Sin fotografía elegida no hay nada que describir.
+    expect(screen.queryByRole("button", { name: /Describir con IA/ })).toBeNull();
+    // Un PDF elegido como documento tampoco ofrece la descripción.
+    await user.selectOptions(await screen.findByLabelText("Formato firmado (escaneado)"), "f9");
+    expect(screen.queryByRole("button", { name: /Describir con IA/ })).toBeNull();
+
+    const picker = screen.getByLabelText("Adjuntar archivo: Fotografía: fachada de la vivienda");
+    await user.upload(picker, new File(["foto"], "fachada.jpg", { type: "image/jpeg" }));
+    expect(await screen.findByText(/Archivo adjuntado/)).toBeTruthy();
+    const upload = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/files?") && init?.method === "POST");
+    expect(String(upload?.[0])).toContain("document_type=ESTUDIO_SOCIOECONOMICO");
+    expect((screen.getByLabelText("Fotografía: fachada de la vivienda") as HTMLSelectElement).value).toBe("f10");
+
+    await user.click(screen.getByRole("button", { name: "Describir con IA: Fotografía: fachada de la vivienda" }));
+    const description = (await screen.findByLabelText(
+      "Descripción de lo que se observa: Fotografía: fachada de la vivienda",
+    )) as HTMLTextAreaElement;
+    expect(description.value).toBe("Fachada de dos niveles con portón metálico.");
+    expect(screen.getByText("Descripción propuesta por la IA")).toBeTruthy();
+    expect(screen.getByText("La IA no distingue: El número exterior.")).toBeTruthy();
+    expect(sent(fetchMock, "POST", "/photo-descriptions")).toEqual({ file_id: "f10", field_id: "fachada" });
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+
+    // La persona corrige el texto: deja de contar como propuesto por la IA.
+    await user.type(description, " Pintura clara.");
+    expect(screen.queryByText("Descripción propuesta por la IA")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByText("Evaluación guardada.");
+    expect(sent(fetchMock, "PUT", "/e-ESTUDIO_SOCIOECONOMICO").data.answers).toEqual({
+      fachada: {
+        value: "f10",
+        verified: false,
+        source: "MANUAL",
+        description: "Fachada de dos niveles con portón metálico. Pintura clara.",
+        description_source: "MANUAL",
+      },
+      firmado: { value: "f9", verified: false, source: "MANUAL" },
+    });
+  });
+
   it("avisa de lo que requiere permiso adicional y muestra el resumen de IA como tal", async () => {
     const interview = make("ENTREVISTA", {
       status: "REALIZADA",

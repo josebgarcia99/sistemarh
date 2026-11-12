@@ -57,7 +57,7 @@ from app.modules.file_management.domain.models import DocumentType
 from app.modules.users.domain.models import Role
 from app.modules.vacancies.application.service import VacancyData
 from app.modules.vacancies.domain.models import AccessType, VacancyStatus, WorkMode
-from app.tests.support.sample_files import docx_cv, pdf_cv
+from app.tests.support.sample_files import docx_cv, pdf_cv, photo
 from app.tests.support.sql_memory import build_test_backend
 
 ADMIN_EMAIL = "admin@demo.test"
@@ -131,7 +131,7 @@ class SimulatedProvider:
             DiscoveredModel(f"demo-{self._name}-rapido", f"Modelo simulado rápido ({self._name})"),
         ]
 
-    def generate(self, api_key, model, *, system, user, max_output_tokens) -> Generation:
+    def generate(self, api_key, model, *, system, user, max_output_tokens, images=()) -> Generation:
         # Consumo inventado, para ver la pantalla de costos.
         tokens = len(system + user) // 4 + 50
         simulated = None
@@ -168,6 +168,12 @@ class SimulatedProvider:
                 "valores": {fid: examples[kind] for fid, _, kind in fields if kind in examples},
                 "ilegibles": [label for _, label, kind in fields if kind == "OPCIONES"],
                 "faltantes": [],
+            }
+        elif system.startswith("Recibes una fotografía"):
+            simulated = {
+                "descripcion": "Descripción simulada del modo demostración: la imagen no se "
+                "analizó de verdad. Aquí aparecería lo que se observa en la fotografía.",
+                "no_se_distingue": ["Detalle simulado que no se distingue"],
             }
         elif system.startswith("Recibes el expediente"):
             simulated = {
@@ -407,6 +413,7 @@ def seed(app, password: str) -> None:
             Operation.RESUMEN_PRUEBAS,
             Operation.LECTURA_DOCUMENTOS,
             Operation.SINTESIS_EXPEDIENTES,
+            Operation.DESCRIPCION_FOTOGRAFIAS,
         ):
             ai.assign(admin, operation, model.id)
 
@@ -452,6 +459,10 @@ def seed(app, password: str) -> None:
                 "Estudio socioeconómico ficticio.", "Fecha de aplicación: 10 de noviembre de 2026."
             ),
         )
+    )
+    # Una fotografía inventada (un rectángulo de color) para probar «Describir con IA».
+    uploads.append(
+        (payroll.id, DocumentType.ESTUDIO_SOCIOECONOMICO, "Fachada ficticia.jpg", photo())
     )
     for vacancy_id, document_type, name, content in uploads:
         with context.require_backend().transaction() as repos:

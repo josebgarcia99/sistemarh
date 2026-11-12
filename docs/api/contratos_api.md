@@ -2,7 +2,7 @@
 
 > Generado por `scripts/generate_docs.py` a partir del contrato OpenAPI. No editar a mano.
 
-Versión de la API: `0.8.0`. Rutas: 109. Todas cuelgan de `/api/v1`.
+Versión de la API: `0.8.0`. Rutas: 110. Todas cuelgan de `/api/v1`.
 
 **Reglas comunes**
 
@@ -59,6 +59,7 @@ Versión de la API: `0.8.0`. Rutas: 109. Todas cuelgan de `/api/v1`.
 | GET | `/assessments/{assessment_id}` | Una evaluación | — | 200 `AssessmentOut` |
 | PUT | `/assessments/{assessment_id}` | Guarda la evaluación | `AssessmentUpdateIn` | 200 `AssessmentOut` |
 | POST | `/assessments/{assessment_id}/digitization` | La IA lee un formulario escaneado y propone valores, sin guardar ni verificar | `DigitizationIn` | 200 `DigitizationOut` |
+| POST | `/assessments/{assessment_id}/photo-descriptions` | La IA describe lo que se ve en una fotografía del estudio, sin guardar nada | `PhotoDescriptionIn` | 200 `PhotoDescriptionOut` |
 | POST | `/assessments/{assessment_id}/summary` | La IA resume lo documentado; no diagnostica ni decide | — | 200 `AssessmentOut` |
 | GET | `/form-templates` | Formularios de estudio socioeconómico | — | 200 lista de `TemplateOut` |
 | POST | `/form-templates` | Crea un formulario (solo administradores) | `TemplateIn` | 201 `TemplateOut` |

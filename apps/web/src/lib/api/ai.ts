@@ -64,6 +64,7 @@ export const OPERATION_LABELS: Record<string, string> = {
   LECTURA_DOCUMENTOS: "Lectura de documentos",
   RESUMEN_PRUEBAS: "Resumen de pruebas",
   SINTESIS_EXPEDIENTES: "Síntesis de expedientes",
+  DESCRIPCION_FOTOGRAFIAS: "Descripción de fotografías del estudio",
 };
 
 export function getAiOverview(signal?: AbortSignal): Promise<AiOverview> {

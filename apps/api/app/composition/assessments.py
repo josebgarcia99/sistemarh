@@ -7,10 +7,11 @@ import uuid
 
 from app.composition.file_access import VacancyFileAccessPolicy
 from app.core.security.master_key import DecryptionError, MasterKey
+from app.infrastructure.documents.photos import PHOTO_EXTENSIONS, PhotoError, prepare_photo
 from app.infrastructure.documents.text import Ocr, TextExtractionError, extract_text
 from app.infrastructure.storage.local import LocalFileStorage, StorageError
 from app.modules.ai_settings.application.service import AiSettingsService
-from app.modules.ai_settings.domain.models import Operation
+from app.modules.ai_settings.domain.models import ImageInput, Operation
 from app.modules.assessments.domain.models import (
     SENSITIVE_KINDS,
     Actor,
@@ -19,6 +20,7 @@ from app.modules.assessments.domain.models import (
     DocumentError,
     DossierMaterial,
     Kind,
+    Photo,
 )
 from app.modules.cv_processing.domain.models import CvBatchRepository
 from app.modules.evaluation_setup.domain.models import EvaluationSetupRepository
@@ -152,7 +154,8 @@ class AssessmentDocuments:
         asset = self._asset(vacancy_id, file_id)
         return asset is not None and asset.document_type is _DOCUMENT_TYPES[kind]
 
-    def read_text(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> tuple[str, bool]:
+    def _content(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> tuple[str, bytes]:
+        """Extensión y contenido original del documento, ya descifrado."""
         asset = self._asset(vacancy_id, file_id)
         if asset is None or self._storage is None:
             raise DocumentError("El documento no está disponible.")
@@ -165,13 +168,26 @@ class AssessmentDocuments:
                         "El documento está cifrado con una clave que no está disponible."
                     )
                 chunks = self._cipher.decrypt_chunks(chunks)
-            content = b"".join(chunks)
-            found = extract_text(io.BytesIO(content), asset.extension, self._ocr)
-        except TextExtractionError as error:
-            raise DocumentError(_UNREADABLE[error.code]) from error
+            return asset.extension, b"".join(chunks)
         except (StorageError, OSError, DecryptionError) as error:
             raise DocumentError("El documento no se pudo leer del almacenamiento.") from error
+
+    def read_text(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> tuple[str, bool]:
+        extension, content = self._content(vacancy_id, file_id)
+        try:
+            found = extract_text(io.BytesIO(content), extension, self._ocr)
+        except TextExtractionError as error:
+            raise DocumentError(_UNREADABLE[error.code]) from error
         return found.text, found.ocr
+
+    def read_photo(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> Photo:
+        extension, content = self._content(vacancy_id, file_id)
+        if extension not in PHOTO_EXTENSIONS:
+            raise DocumentError("Para describirla, la fotografía debe ser una imagen JPG o PNG.")
+        try:
+            return Photo("image/jpeg", prepare_photo(content))
+        except PhotoError as error:
+            raise DocumentError("La imagen está dañada o no se pudo leer.") from error
 
 
 class AssessmentAssistant:
@@ -186,6 +202,7 @@ class AssessmentAssistant:
         user: str,
         vacancy_id: uuid.UUID,
         actor_user_id: uuid.UUID,
+        photos: tuple[Photo, ...] = (),
     ) -> AssistantAnswer:
         result = self._ai.execute(
             Operation(operation),
@@ -195,6 +212,7 @@ class AssessmentAssistant:
             vacancy_id=vacancy_id,
             # Siempre lleva datos de una persona candidata.
             carries_document=True,
+            images=tuple(ImageInput(photo.media_type, photo.data) for photo in photos),
         )
         return AssistantAnswer(
             ok=result.ok, text=result.text, complete=result.complete, error=result.error
