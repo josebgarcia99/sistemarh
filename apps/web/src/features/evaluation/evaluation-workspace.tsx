@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
 import {
   cardClass,
   dangerButtonClass,
@@ -14,27 +14,19 @@ import {
   type CriteriaProposal,
   type CriterionInput,
   duplicatePrompt,
-  extractProfile,
   generatePrompt,
-  listProfileVersions,
   listPrompts,
-  PROFILE_LABELS,
-  PROFILE_LIST_FIELDS,
-  PROFILE_TEXT_FIELDS,
-  type ProfileInput,
-  type ProfileProposal,
-  type ProfileVersion,
   proposeCriteria,
   PROMPT_STATUS_LABELS,
   type PromptAction,
   promptAction,
   type PromptStatus,
   type PromptVersion,
-  saveProfile,
   updatePrompt,
 } from "@/lib/api/evaluation";
-import { listFiles } from "@/lib/api/files";
 import { CvEvaluationTab } from "./cv-evaluation-tab";
+import { ProfileTab } from "./profile-tab";
+import { areaClass, dateFormat, type Feedback, FeedbackLine } from "./shared";
 
 type Props = {
   vacancyId: string;
@@ -45,37 +37,12 @@ type Props = {
   canApprove: boolean;
   onBack: () => void;
 };
-type Feedback = { kind: "ok" | "error"; text: string } | null;
-
-const dateFormat = new Intl.DateTimeFormat("es-MX", {
-  timeZone: "America/Mexico_City",
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-const areaClass =
-  "w-full rounded-3xl border border-ink/15 bg-surface px-5 py-3 text-ink outline-none " +
-  "focus-visible:border-ink focus-visible:ring-2 focus-visible:ring-accent-blue";
 const STATUS_STYLES: Record<PromptStatus, string> = {
   BORRADOR: "bg-neutral-soft text-neutral-ink",
   EN_REVISION: "bg-accent-blue-soft text-accent-blue-ink",
   APROBADO: "bg-ink text-white",
   ARCHIVADO: "bg-neutral-soft text-neutral-ink",
 };
-
-function FeedbackLine({ feedback }: { feedback: Feedback }) {
-  if (!feedback) return null;
-  const ok = feedback.kind === "ok";
-  return (
-    <p
-      role={ok ? "status" : "alert"}
-      className={`rounded-2xl px-4 py-3 ${
-        ok ? "bg-accent-blue-soft text-accent-blue-ink" : "bg-accent-red-soft text-accent-red-ink"
-      }`}
-    >
-      {feedback.text}
-    </p>
-  );
-}
 
 /** Perfil de puesto, prompt de evaluación y evaluación de CV de una vacante. */
 export function EvaluationWorkspace({ vacancyId, vacancyName, canEdit, canApprove, onBack }: Props) {
@@ -122,319 +89,6 @@ export function EvaluationWorkspace({ vacancyId, vacancyName, canEdit, canApprov
       )}
       {tab === "cv" && <CvEvaluationTab vacancyId={vacancyId} canEdit={canEdit} />}
     </>
-  );
-}
-
-// --- Perfil ----------------------------------------------------------------------------
-
-type ProfileDraft = Record<(typeof PROFILE_TEXT_FIELDS)[number], string> &
-  Record<(typeof PROFILE_LIST_FIELDS)[number], string>;
-
-function toDraft(version: ProfileVersion | ProfileProposal | undefined): ProfileDraft {
-  const draft = {} as ProfileDraft;
-  for (const field of PROFILE_TEXT_FIELDS) draft[field] = version?.[field] ?? "";
-  for (const field of PROFILE_LIST_FIELDS) draft[field] = (version?.[field] ?? []).join("\n");
-  return draft;
-}
-
-function ProfileTab({ vacancyId, canEdit }: { vacancyId: string; canEdit: boolean }) {
-  const queryClient = useQueryClient();
-  const queryKey = ["vacancy", vacancyId, "profile"];
-  const { data: versions, error } = useQuery({
-    queryKey,
-    queryFn: ({ signal }) => listProfileVersions(vacancyId, signal),
-  });
-  // El aviso de «guardado» vive aquí: al guardar, el formulario se vuelve a
-  // crear con la versión nueva y perdería su propio estado.
-  const [saved, setSaved] = useState<Feedback>(null);
-
-  if (error) {
-    return (
-      <p role="alert" className="rounded-tile bg-accent-red-soft px-5 py-4 text-accent-red-ink">
-        {describeError(error)}
-      </p>
-    );
-  }
-  if (!versions) return <p className="text-ink-muted">Cargando perfil…</p>;
-  const current = versions[0];
-  return (
-    <div className="flex flex-wrap items-start gap-6">
-      <ProfileForm
-        key={current?.id ?? "nuevo"}
-        vacancyId={vacancyId}
-        current={current}
-        canEdit={canEdit}
-        saved={saved}
-        onSaved={async (notice) => {
-          setSaved(notice);
-          if (notice) await queryClient.invalidateQueries({ queryKey });
-        }}
-      />
-      <section className={`${cardClass} flex min-w-0 flex-[1_1_280px] flex-col gap-3`}>
-        <h2 className="text-xl font-medium">Versiones del perfil</h2>
-        {versions.length === 0 ? (
-          <p className="text-ink-muted">Todavía no hay perfil. Al guardarlo se crea la versión 1.</p>
-        ) : (
-          <ul aria-label="Versiones del perfil" className="flex flex-col gap-1.5">
-            {versions.map((version) => (
-              <li key={version.id} className="rounded-2xl bg-surface px-4 py-3">
-                <p className="font-medium">
-                  Versión {version.version_number}
-                  {version === current && " (vigente)"}
-                </p>
-                <p className="text-sm text-ink-muted">
-                  {dateFormat.format(new Date(version.created_at))} ·{" "}
-                  {version.created_by_name ?? "Sin datos"}
-                </p>
-                {version.change_note && <p className="text-sm">{version.change_note}</p>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function ProfileForm({
-  vacancyId,
-  current,
-  canEdit,
-  saved,
-  onSaved,
-}: {
-  vacancyId: string;
-  current: ProfileVersion | undefined;
-  canEdit: boolean;
-  saved: Feedback;
-  onSaved: (notice: Feedback) => Promise<void>;
-}) {
-  const [draft, setDraft] = useState<ProfileDraft>(() => toDraft(current));
-  const [note, setNote] = useState("");
-  const [feedback, setFeedback] = useState<Feedback>(null);
-  const [busy, setBusy] = useState(false);
-  // Si el formulario se llenó con una propuesta de la IA, y de qué documento salió.
-  const [aiSource, setAiSource] = useState<{ fileId: string | null } | null>(null);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const input = {
-      change_note: note.trim() || null,
-      expected_version: current?.version_number ?? 0,
-      from_ai: aiSource !== null,
-      source_file_id: aiSource?.fileId ?? null,
-    } as ProfileInput;
-    for (const field of PROFILE_TEXT_FIELDS) input[field] = draft[field];
-    for (const field of PROFILE_LIST_FIELDS) {
-      input[field] = draft[field].split("\n").map((line) => line.trim()).filter(Boolean);
-    }
-    setBusy(true);
-    setFeedback(null);
-    await onSaved(null);
-    try {
-      const version = await saveProfile(vacancyId, input);
-      setNote("");
-      await onSaved({
-        kind: "ok",
-        text: `Perfil guardado como versión ${version.version_number}.`,
-      });
-    } catch (caught) {
-      setFeedback({ kind: "error", text: describeError(caught) });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form
-      onSubmit={submit}
-      noValidate
-      className={`${cardClass} flex min-w-0 flex-[3_1_520px] flex-col gap-5`}
-    >
-      <h2 className="text-xl font-medium">
-        {current ? `Perfil vigente (versión ${current.version_number})` : "Nuevo perfil de puesto"}
-      </h2>
-      {canEdit && (
-        <ProfileAssistant
-          vacancyId={vacancyId}
-          onProposal={(proposal) => {
-            setDraft(toDraft(proposal));
-            setAiSource({ fileId: proposal.source_file_id });
-            setFeedback(null);
-          }}
-        />
-      )}
-      {PROFILE_TEXT_FIELDS.map((field) => (
-        <div key={field} className="flex flex-col gap-2">
-          <label htmlFor={`profile-${field}`} className="text-sm text-ink-muted">
-            {PROFILE_LABELS[field]}
-          </label>
-          <textarea
-            id={`profile-${field}`}
-            rows={field === "objective" ? 3 : 2}
-            readOnly={!canEdit}
-            value={draft[field]}
-            onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
-            className={areaClass}
-          />
-        </div>
-      ))}
-      <div className="grid gap-5 md:grid-cols-2">
-        {PROFILE_LIST_FIELDS.map((field) => (
-          <div key={field} className="flex flex-col gap-2">
-            <label htmlFor={`profile-${field}`} className="text-sm text-ink-muted">
-              {PROFILE_LABELS[field]} (uno por línea)
-            </label>
-            <textarea
-              id={`profile-${field}`}
-              rows={4}
-              readOnly={!canEdit}
-              value={draft[field]}
-              onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
-              className={areaClass}
-            />
-          </div>
-        ))}
-      </div>
-      <p className="text-sm text-ink-muted">
-        De cada requisito indispensable o deseable sale un criterio de la rúbrica. Si un requisito
-        del perfil original es ambiguo, anótalo en «Requisitos que no están claros».
-      </p>
-      <FeedbackLine feedback={feedback ?? saved} />
-      {canEdit ? (
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-[1_1_260px] flex-col gap-2">
-            <label htmlFor="profile-note" className="text-sm text-ink-muted">
-              Qué cambió (opcional)
-            </label>
-            <input
-              id="profile-note"
-              value={note}
-              maxLength={300}
-              onChange={(event) => setNote(event.target.value)}
-              className={fieldClass}
-            />
-          </div>
-          <button type="submit" className={primaryButtonClass} disabled={busy}>
-            {busy ? "Guardando…" : current ? "Guardar como versión nueva" : "Guardar perfil"}
-          </button>
-        </div>
-      ) : (
-        <p className="text-sm text-ink-muted">Tu acceso a esta vacante es de solo lectura.</p>
-      )}
-    </form>
-  );
-}
-
-/** Llena el formulario del perfil con lo que la IA lee de un documento o de un texto. */
-function ProfileAssistant({
-  vacancyId,
-  onProposal,
-}: {
-  vacancyId: string;
-  onProposal: (proposal: ProfileProposal) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [fileId, setFileId] = useState("");
-  const [text, setText] = useState("");
-  const [feedback, setFeedback] = useState<Feedback>(null);
-  const [busy, setBusy] = useState(false);
-  // Los documentos se piden solo al abrir el panel.
-  const { data: files, error } = useQuery({
-    queryKey: ["vacancy", vacancyId, "files"],
-    queryFn: ({ signal }) => listFiles(vacancyId, signal),
-    enabled: open,
-  });
-  const documents = (files ?? []).filter((file) => file.document_type === "PERFIL_PUESTO");
-
-  async function read() {
-    setBusy(true);
-    setFeedback(null);
-    try {
-      const proposal = await extractProfile(vacancyId, fileId ? { fileId } : { text });
-      onProposal(proposal);
-      setFeedback({
-        kind: "ok",
-        text:
-          "La IA llenó el formulario. Revísalo y corrígelo: todavía no se ha guardado." +
-          (proposal.truncated ? " El documento era muy largo y solo se leyó el inicio." : ""),
-      });
-    } catch (caught) {
-      setFeedback({ kind: "error", text: describeError(caught) });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        className={`${secondaryButtonClass} self-start`}
-        onClick={() => setOpen(true)}
-      >
-        Llenar con IA desde un documento
-      </button>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-3 rounded-3xl bg-surface p-5">
-      <p className="text-ink-muted">
-        La IA lee el perfil y llena este formulario con lo que el documento dice, sin añadir
-        nada. Después lo revisas y lo guardas tú.
-      </p>
-      {error && (
-        <p role="alert" className="text-accent-red-ink">
-          {describeError(error)}
-        </p>
-      )}
-      <div className="flex flex-col gap-2">
-        <label htmlFor="profile-source-file" className="text-sm text-ink-muted">
-          Documento de la vacante (tipo «Perfil de puesto»)
-        </label>
-        <select
-          id="profile-source-file"
-          className={fieldClass}
-          value={fileId}
-          onChange={(event) => setFileId(event.target.value)}
-        >
-          <option value="">Ninguno: pegaré el texto</option>
-          {documents.map((file) => (
-            <option key={file.id} value={file.id}>
-              {file.original_name}
-            </option>
-          ))}
-        </select>
-      </div>
-      {!fileId && (
-        <div className="flex flex-col gap-2">
-          <label htmlFor="profile-source-text" className="text-sm text-ink-muted">
-            Texto del perfil
-          </label>
-          <textarea
-            id="profile-source-text"
-            rows={5}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            className={areaClass}
-          />
-        </div>
-      )}
-      <FeedbackLine feedback={feedback} />
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          className={primaryButtonClass}
-          disabled={busy || (!fileId && text.trim().length === 0)}
-          onClick={read}
-        >
-          {busy ? "Leyendo…" : "Leer con IA"}
-        </button>
-        <button type="button" className={secondaryButtonClass} onClick={() => setOpen(false)}>
-          Cerrar
-        </button>
-      </div>
-    </div>
   );
 }
 

@@ -37,7 +37,7 @@ Los documentos de psicometría y los estudios socioeconómicos son **datos sensi
 
 ### Documentos
 
-En el detalle de la vacante, «Cargar documento» admite PDF, DOCX, DOC, JPG y PNG de hasta 20 MB. Eliges el tipo (CV, perfil del puesto, psicometría, prueba técnica, estudio socioeconómico o adjunto). Un CV en el formato DOC antiguo se guarda, pero la IA no puede leerlo: conviértelo a DOCX o PDF. El sistema rechaza archivos disfrazados o infectados y avisa si el documento ya estaba cargado. Los documentos se guardan en el servidor de la empresa; los sensibles, cifrados. Solo un administrador puede eliminar un documento, y debe dar el motivo.
+En el detalle de la vacante, «Cargar documento» admite PDF, DOCX, DOC, JPG y PNG de hasta 20 MB; para el perfil de puesto y el estudio socioeconómico admite además el formato de la empresa en Excel (XLSX). Eliges el tipo (CV, perfil del puesto, psicometría, prueba técnica, estudio socioeconómico o adjunto). Un CV en el formato DOC antiguo se guarda, pero la IA no puede leerlo: conviértelo a DOCX o PDF. El sistema rechaza archivos disfrazados o infectados y avisa si el documento ya estaba cargado. Los documentos se guardan en el servidor de la empresa; los sensibles, cifrados. Solo un administrador puede eliminar un documento, y debe dar el motivo.
 
 ## Perfil, prompt y evaluación de CV
 
@@ -45,7 +45,7 @@ Desde la vacante, pulsa «Perfil, prompt y evaluación de CV». Tiene tres pesta
 
 ### 1. Perfil del puesto
 
-Describe qué se busca: objetivo, experiencia, formación, funciones, conocimientos, requisitos indispensables y deseables. Puedes escribirlo o usar «Llenar con IA desde un documento» → «Leer con IA» para que la IA lo proponga a partir del perfil cargado o de un texto pegado. **La propuesta no se guarda sola:** revísala y pulsa «Guardar perfil». Cada guardado crea una versión nueva; las anteriores se conservan.
+El perfil sigue el formato de la empresa «SGC.F15.RH. Perfil de puesto»: identificación del puesto, propósito, alcance y relaciones, requisitos, funciones, actividades con su periodicidad y KPI. La forma más rápida de llenarlo es «Subir formato del perfil»: eliges el formato en Excel y el sistema copia sus datos a cada campo, sin IA. La edad y el género que pide el formato no se copian, porque no se usan para evaluar a las personas candidatas; el sistema te avisa cuando el formato los trae. Si subes un PDF o un Word, o usas «Usar un documento ya cargado o pegar texto», el perfil lo lee la IA. En todos los casos es una propuesta: revísala, corrígela y pulsa «Guardar perfil». De cada requisito indispensable sale un criterio de la rúbrica con la que se revisan los CV.
 
 ### 2. Prompt de evaluación
 
@@ -103,7 +103,7 @@ En el expediente, «Registrar evaluación»:
 - **Psicometría.** Instrumento, fecha, estado, documento y resultado. Para marcarla como validada hay que indicar qué profesional la interpretó. La IA puede resumir el documento, pero no diagnostica ni declara a nadie apto o no apto.
 - **Entrevista con gerente.** Recursos Humanos captura las preguntas, respuestas, competencias observadas y la conclusión del gerente. Marcarla como realizada exige esa conclusión. «Organizar con IA» ordena lo capturado sin cambiar la conclusión.
 - **Prueba técnica.** Opcional. Con la rúbrica («Agregar criterio») el sistema calcula la calificación. Si el puesto no la requiere, regístrala como «no aplica».
-- **Estudio socioeconómico.** Se llena sobre un formulario definido por el administrador. «Leer el formulario escaneado con IA» propone los valores de cada campo; entran marcados como leídos por IA y **sin verificar** hasta que una persona los revise. El estudio nunca lleva puntuación.
+- **Estudio socioeconómico.** Se llena sobre un formulario definido por el administrador. La plantilla inicial es el formato de la empresa «SGC.F3.RH. Estudio socioeconómico», con sus tablas (formación académica, familiares, contactos de emergencia). «Leer el formulario escaneado con IA» propone los valores de cada campo a partir del formato lleno (escaneado, en PDF, Word o Excel); entran marcados como leídos por IA y **sin verificar** hasta que una persona los revise. El dictamen, los niveles, el «score total» y la viabilidad los anotas tú: la IA no los llena y el sistema no los calcula ni los usa para ordenar candidatos.
 
 «Generar síntesis» ordena todo el expediente en hechos documentados, declaraciones, observaciones humanas, resultados técnicos, información pendiente y diferencias por aclarar. No produce una calificación global ni una recomendación.
 

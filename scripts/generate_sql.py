@@ -61,6 +61,10 @@ GO
 """
 
 
+# Scripts escritos a mano: el generador no los toca.
+HAND_WRITTEN = frozenset({"permisos_usuario_aplicacion.sql", "validaciones_integridad.sql"})
+
+
 def _config(buffer: io.StringIO) -> Config:
     config = Config(str(DATABASE_DIR / "alembic.ini"), output_buffer=buffer)
     config.set_main_option("script_location", str(DATABASE_DIR / "migrations"))
@@ -140,7 +144,7 @@ def main() -> int:
     head = revisions[-1]
 
     for stale in OUTPUT_DIR.glob("*.sql"):
-        if stale.name != "permisos_usuario_aplicacion.sql":
+        if stale.name not in HAND_WRITTEN:
             stale.unlink()
 
     written = [

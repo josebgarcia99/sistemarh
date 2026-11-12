@@ -29,6 +29,8 @@ const emptyField = (): FieldInput => ({
   options: [],
   minimum: null,
   maximum: null,
+  columns: [],
+  manual_only: false,
 });
 
 /** Formularios del estudio socioeconómico (solo administradores). */
@@ -199,6 +201,9 @@ function TemplateEditor({
                   {field.type === "OPCIONES" && (
                     <input aria-label={`Opciones ${label}`} placeholder="Opciones separadas por coma" className={`${fieldClass} flex-[2_1_220px]`} value={field.options.join(",")} onChange={(event) => setField(sectionIndex, fieldIndex, { options: event.target.value.split(",") })} />
                   )}
+                  {field.type === "TABLA" && (
+                    <input aria-label={`Columnas ${label}`} placeholder="Columnas separadas por coma" className={`${fieldClass} flex-[2_1_220px]`} value={field.columns.join(",")} onChange={(event) => setField(sectionIndex, fieldIndex, { columns: event.target.value.split(",") })} />
+                  )}
                   {field.type === "NUMERO" && (
                     <>
                       <input aria-label={`Mínimo ${label}`} placeholder="Mínimo" inputMode="decimal" className={`${fieldClass} flex-[1_1_100px]`} value={field.minimum ?? ""} onChange={(event) => setField(sectionIndex, fieldIndex, { minimum: event.target.value || null })} />
@@ -208,6 +213,10 @@ function TemplateEditor({
                   <label className="flex items-center gap-2">
                     <input type="checkbox" className="size-5 accent-ink" checked={field.required} onChange={(event) => setField(sectionIndex, fieldIndex, { required: event.target.checked })} />
                     Obligatorio
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" className="size-5 accent-ink" checked={field.manual_only} onChange={(event) => setField(sectionIndex, fieldIndex, { manual_only: event.target.checked })} />
+                    Solo captura manual
                   </label>
                   <button type="button" className={dangerButtonClass} aria-label={`Quitar el campo ${fieldIndex + 1} de la sección ${sectionIndex + 1}`} onClick={() => setSection(sectionIndex, { fields: section.fields.filter((_, i) => i !== fieldIndex) })}>
                     Quitar
@@ -242,6 +251,7 @@ function TemplateEditor({
                       ...field,
                       // Las opciones se escriben separadas por coma; aquí se limpian.
                       options: field.options.map((option) => option.trim()).filter(Boolean),
+                      columns: field.columns.map((column) => column.trim()).filter(Boolean),
                     })),
                   })),
                   expected_version: template?.version_number ?? 0,

@@ -45,7 +45,7 @@ Menú «IA». Hasta que configures un proveedor, las funciones de IA no están d
 
 ### Claves de los proveedores
 
-1. Elige el proveedor (Anthropic u OpenAI) y pulsa «Registrar clave». Pega la clave y «Guardar clave».
+1. Elige el proveedor (Anthropic, OpenAI o Google Gemini) y pulsa «Registrar clave». Pega la clave y «Guardar clave».
 2. «Probar conexión» comprueba que la clave funciona.
 3. «Habilitar» activa el proveedor.
 
@@ -73,9 +73,9 @@ Menú «Etapas». Define las etapas por las que pasa un candidato (por omisión:
 
 ## Formularios del estudio socioeconómico
 
-Menú «Formularios». «Nuevo formulario» crea una plantilla con secciones y campos (texto, fecha, número, opciones, casilla, documento, observación), indicando cuáles son obligatorios. Cada cambio guarda una versión; los estudios ya capturados conservan la suya. Un formulario que ya no se usa se archiva.
+Menú «Formularios». «Nuevo formulario» crea una plantilla con secciones y campos (texto, fecha, número, opciones, casilla, documento, observación y tabla), indicando cuáles son obligatorios. En una tabla escribes los nombres de sus columnas separados por coma. «Solo captura manual» marca los campos que la IA no debe llenar al leer un documento. Cada cambio guarda una versión; los estudios ya capturados conservan la suya. Un formulario que ya no se usa se archiva.
 
-El estudio socioeconómico no lleva puntuación de ningún tipo, y el sistema no permite añadirla.
+La plantilla inicial es el formato de la empresa «SGC.F3.RH. Estudio socioeconómico». Ese formato incluye un dictamen, cinco indicadores con nivel (suficiente, medio, inferior), un «score total» y si la persona se considera viable. El sistema guarda lo que anote quien aplicó el estudio, pero no calcula esa puntuación, la IA no la llena y no se usa en la síntesis del expediente ni en los reportes. Si la empresa decide no registrar esos datos en el sistema, basta con quitar esos campos de la plantilla.
 
 ## Documentos
 

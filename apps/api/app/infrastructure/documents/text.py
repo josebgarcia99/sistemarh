@@ -1,8 +1,9 @@
 """Extracción de texto de documentos, dentro del servidor.
 
-Lee PDF con texto y DOCX. Los PDF escaneados y las imágenes se leen con OCR
-(Tesseract) si está instalado. Los DOC antiguos requieren una conversión que
-no está construida: se informan como formato no legible, sin inventar contenido.
+Lee PDF con texto, DOCX y hojas de cálculo XLSX (los valores de sus celdas).
+Los PDF escaneados y las imágenes se leen con OCR (Tesseract) si está instalado.
+Los DOC antiguos requieren una conversión que no está construida: se informan
+como formato no legible, sin inventar contenido.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
 from app.infrastructure.documents.ocr import OcrError
+from app.infrastructure.documents.spreadsheet import SpreadsheetError, read_sheets, sheets_to_text
 
 # pypdf avisa de cada PDF defectuoso; aquí ya se informa como "ilegible".
 logging.getLogger("pypdf").setLevel(logging.ERROR)
@@ -101,7 +103,7 @@ def _normalize(text: str) -> str:
 
 
 def extract_text(handle: BinaryIO, extension: str, ocr: Ocr | None = None) -> ExtractedText:
-    """Texto de un PDF, un DOCX o una imagen.
+    """Texto de un PDF, un DOCX, un XLSX o una imagen.
 
     Un PDF sin capa de texto (escaneado) y las imágenes se leen con OCR si está
     disponible. Los DOC antiguos requieren conversión, que no está construida."""
@@ -115,12 +117,16 @@ def extract_text(handle: BinaryIO, extension: str, ocr: Ocr | None = None) -> Ex
                 text, used_ocr = _normalize(ocr.pdf_to_text(handle)), True
         elif extension == "docx":
             text = _normalize(_docx(handle))
+        elif extension == "xlsx":
+            text = _normalize(sheets_to_text(read_sheets(handle)))
         elif extension in IMAGE_EXTENSIONS and can_ocr:
             text, used_ocr = _normalize(ocr.image_to_text(handle.read())), True
         else:
             raise TextExtractionError("formato_sin_texto")
     except OcrError as error:
         raise TextExtractionError("ocr_fallido") from error
+    except SpreadsheetError as error:
+        raise TextExtractionError("ilegible") from error
     if len(text) < MIN_CHARS:
         raise TextExtractionError("sin_texto")
     return ExtractedText(text[:MAX_CHARS], len(text) > MAX_CHARS, used_ocr)

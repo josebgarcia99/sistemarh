@@ -31,6 +31,14 @@ export const ACCEPTED_EXTENSIONS = [
   ".jpeg",
   ".png",
 ];
+/** Tipos que además admiten Excel: los que tienen un formato de la empresa. */
+export const SPREADSHEET_TYPES: DocumentType[] = ["PERFIL_PUESTO", "ESTUDIO_SOCIOECONOMICO"];
+
+export function acceptedExtensions(documentType: DocumentType): string[] {
+  return SPREADSHEET_TYPES.includes(documentType)
+    ? [...ACCEPTED_EXTENSIONS, ".xlsx"]
+    : ACCEPTED_EXTENSIONS;
+}
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 const storedFileSchema = z.object({

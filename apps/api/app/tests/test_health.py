@@ -78,7 +78,9 @@ def test_la_version_del_esquema_instalada_se_compara_con_la_esperada():
         connection.execute(sa.text("CREATE TABLE alembic_version (version_num VARCHAR(32))"))
         connection.execute(sa.text("INSERT INTO alembic_version VALUES ('0011')"))
         assert installed_schema_version(connection) == "0011" != SCHEMA_VERSION
-        connection.execute(sa.text("UPDATE alembic_version SET version_num = :v"), {"v": "0012"})
+        connection.execute(
+            sa.text("UPDATE alembic_version SET version_num = :v"), {"v": SCHEMA_VERSION}
+        )
         assert installed_schema_version(connection) == SCHEMA_VERSION
 
 

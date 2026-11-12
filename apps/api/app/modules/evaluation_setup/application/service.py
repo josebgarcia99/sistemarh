@@ -23,6 +23,7 @@ from app.core.ids import new_sequential_uuid
 from app.modules.audit.application.service import AuditLog
 from app.modules.audit.domain.models import AuditAction, AuditResult
 from app.modules.evaluation_setup.domain import assistant, generator
+from app.modules.evaluation_setup.domain.company_format import parse_profile_format
 from app.modules.evaluation_setup.domain.models import (
     EvaluationSetupRepository,
     ProfileContent,
@@ -45,13 +46,18 @@ from app.modules.vacancies.domain.models import AccessLevel, UserInfo
 
 @dataclass(frozen=True)
 class ProfileProposal:
-    """Perfil propuesto por la IA. No está guardado: la persona lo revisa.
-    Si la IA falló, ``error`` lo explica y ``content`` va vacío."""
+    """Perfil propuesto, leído del formato de la empresa o por la IA. No está
+    guardado: la persona lo revisa. Si la IA falló, ``error`` lo explica y
+    ``content`` va vacío."""
 
     content: ProfileContent | None
     truncated: bool
     source_file_id: uuid.UUID | None
     error: str | None = None
+    # Cómo se obtuvo: del formato en Excel (sin IA) o con IA.
+    origin: ProfileOrigin = ProfileOrigin.IA
+    # Avisos para quien revisa (por ejemplo, datos del formato que no se copiaron).
+    notices: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -96,20 +102,24 @@ class EvaluationSetupService:
         *,
         change_note: str | None,
         expected_version: int,
-        from_ai: bool = False,
+        origin: ProfileOrigin = ProfileOrigin.MANUAL,
         source_file_id: uuid.UUID | None = None,
         ip: str | None = None,
     ) -> ProfileVersion:
         """Guarda el perfil como una versión nueva. Las anteriores no cambian.
 
-        ``from_ai`` indica que la persona partió de una propuesta de la IA y la
-        revisó; ``source_file_id`` es el documento del que salió, si lo hubo."""
+        ``origin`` indica de dónde partió la persona: de una propuesta de la IA,
+        de la lectura del formato de la empresa o de nada (captura manual). En
+        todos los casos la revisó antes de guardar. ``source_file_id`` es el
+        documento del que salió la propuesta, si lo hubo."""
         self._access.require(actor, vacancy_id, AccessLevel.COLABORACION)
         if source_file_id is not None and (
             self._sources is None
             or not self._sources.is_profile_document(vacancy_id, source_file_id)
         ):
             raise ValidationFailedError("El documento de origen no es un perfil de esta vacante.")
+        if origin is ProfileOrigin.FORMATO and source_file_id is None:
+            raise ValidationFailedError("Indica de qué documento se leyó el formato del perfil.")
         try:
             content = generator.validate_profile(data)
         except generator.SetupValidationError as error:
@@ -126,7 +136,7 @@ class EvaluationSetupService:
             id=new_sequential_uuid(),
             vacancy_id=vacancy_id,
             version_number=latest + 1,
-            origin=ProfileOrigin.IA if from_ai else ProfileOrigin.MANUAL,
+            origin=origin,
             content=content,
             change_note=" ".join((change_note or "").split())[:300] or None,
             source_file_id=source_file_id,
@@ -176,8 +186,11 @@ class EvaluationSetupService:
         text: str | None = None,
         ip: str | None = None,
     ) -> ProfileProposal:
-        """Pide a la IA que lea un perfil (documento de la vacante o texto pegado)
-        y lo devuelve como propuesta. No guarda ninguna versión."""
+        """Lee un perfil (documento de la vacante o texto pegado) y lo devuelve
+        como propuesta. No guarda ninguna versión.
+
+        Si el documento es el formato de la empresa en Excel, se lee directamente
+        de sus celdas, sin IA. En cualquier otro caso se pide a la IA."""
         self._access.require(actor, vacancy_id, AccessLevel.COLABORACION)
         if (file_id is None) == (text is None):
             raise ValidationFailedError("Elige un documento o pega el texto del perfil.")
@@ -186,6 +199,27 @@ class EvaluationSetupService:
             if self._sources is None:
                 raise ServiceUnavailableError(_NO_ASSISTANT)
             try:
+                sheets = self._sources.read_sheets(vacancy_id, file_id)
+                reading = next(
+                    (found for sheet in sheets or () if (found := parse_profile_format(sheet))),
+                    None,
+                )
+                if reading is not None:
+                    self._audit.record(
+                        AuditAction.PERFIL_LEIDO_DEL_FORMATO,
+                        actor_user_id=actor.id,
+                        resource_type="vacante",
+                        resource_id=vacancy_id,
+                        ip=ip,
+                        details={"documento": str(file_id), "avisos": len(reading.notices)},
+                    )
+                    return ProfileProposal(
+                        reading.content,
+                        truncated=False,
+                        source_file_id=file_id,
+                        origin=ProfileOrigin.FORMATO,
+                        notices=reading.notices,
+                    )
                 source, truncated = self._sources.read_text(vacancy_id, file_id)
             except ProfileSourceError as error:
                 raise ValidationFailedError(str(error)) from error

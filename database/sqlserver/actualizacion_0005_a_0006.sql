@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Actualización 0005 -> 0006
    Versión del esquema: 0005 -> 0006
-   Generado: 2026-11-12 15:47 (UTC) con scripts/generate_sql.py
+   Generado: 2026-11-12 19:37 (UTC) con scripts/generate_sql.py
 
    Aplica solo los cambios de la versión 0006 sobre una base que ya
    está en la versión 0005. Si está en otra versión, no hace nada.

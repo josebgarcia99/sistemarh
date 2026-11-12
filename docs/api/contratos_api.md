@@ -104,7 +104,7 @@ Versión de la API: `0.8.0`. Rutas: 109. Todas cuelgan de `/api/v1`.
 | POST | `/prompts/{version_id}/duplicate` | Copia la versión como borrador nuevo | — | 201 `PromptOut` |
 | POST | `/prompts/{version_id}/return` | Devuelve a borrador para corregir | `RevisionIn` | 200 `PromptOut` |
 | POST | `/prompts/{version_id}/submit` | Envía el borrador a revisión | `RevisionIn` | 200 `PromptOut` |
-| POST | `/vacancies/{vacancy_id}/profile-extractions` | La IA lee un perfil (documento o texto) y lo devuelve como propuesta sin guardar | `ProfileExtractionIn` | 200 `ProfileProposalOut` |
+| POST | `/vacancies/{vacancy_id}/profile-extractions` | Lee un perfil (formato en Excel, documento o texto) y lo devuelve como propuesta | `ProfileExtractionIn` | 200 `ProfileProposalOut` |
 | GET | `/vacancies/{vacancy_id}/profile-versions` | Versiones del perfil de puesto, de la más reciente a la más antigua | — | 200 lista de `ProfileVersionOut` |
 | POST | `/vacancies/{vacancy_id}/profile-versions` | Guarda el perfil como una versión nueva | `ProfileIn` | 201 `ProfileVersionOut` |
 | GET | `/vacancies/{vacancy_id}/prompts` | Versiones del prompt de evaluación | — | 200 lista de `PromptOut` |

@@ -37,6 +37,8 @@ class FieldOut(BaseModel):
     options: list[str]
     minimum: Decimal | None
     maximum: Decimal | None
+    columns: list[str]
+    manual_only: bool
 
 
 class SectionOut(BaseModel):
@@ -61,6 +63,10 @@ class FieldIn(BaseModel):
     options: list[str] = Field(default_factory=list)
     minimum: Decimal | None = None
     maximum: Decimal | None = None
+    # Encabezados de las columnas, si el campo es una tabla.
+    columns: list[str] = Field(default_factory=list)
+    # Solo lo captura una persona: la IA no lo llena al leer un documento.
+    manual_only: bool = False
 
 
 class SectionIn(BaseModel):
@@ -164,6 +170,8 @@ def _sections(version: FormTemplateVersion) -> list[SectionOut]:
                     options=list(item.options),
                     minimum=item.minimum,
                     maximum=item.maximum,
+                    columns=list(item.columns),
+                    manual_only=item.manual_only,
                 )
                 for item in section.fields
             ],

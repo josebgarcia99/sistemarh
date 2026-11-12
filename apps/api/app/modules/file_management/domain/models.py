@@ -45,6 +45,10 @@ GENERATED_CONTENT_TYPES = {
     "zip": "application/zip",
 }
 
+# Tipos que admiten además una hoja de cálculo: los que tienen un formato de la
+# empresa en Excel.
+SPREADSHEET_TYPES = frozenset({DocumentType.PERFIL_PUESTO, DocumentType.ESTUDIO_SOCIOECONOMICO})
+
 # Tipos que exigen un permiso adicional por persona, además del acceso a la vacante.
 SENSITIVE_CLASSES: dict[DocumentType, str] = {
     DocumentType.PSICOMETRIA: "PSICOMETRIA",

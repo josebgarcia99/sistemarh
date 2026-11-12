@@ -46,6 +46,7 @@ export const FIELD_TYPE_LABELS: Record<string, string> = {
   CASILLA: "Casilla",
   DOCUMENTO: "Documento",
   OBSERVACION: "Observación",
+  TABLA: "Tabla",
 };
 
 const fieldSchema = z.object({
@@ -56,6 +57,10 @@ const fieldSchema = z.object({
   options: z.array(z.string()),
   minimum: z.string().nullable(),
   maximum: z.string().nullable(),
+  /** Encabezados de las columnas, si el campo es una tabla. */
+  columns: z.array(z.string()),
+  /** Solo lo captura una persona: la IA no lo llena al leer un documento. */
+  manual_only: z.boolean(),
 });
 export type FormField = z.infer<typeof fieldSchema>;
 const sectionSchema = z.object({ title: z.string(), fields: z.array(fieldSchema) });
@@ -78,6 +83,8 @@ export type FieldInput = {
   options: string[];
   minimum: string | null;
   maximum: string | null;
+  columns: string[];
+  manual_only: boolean;
 };
 export type TemplateInput = {
   name: string;
@@ -116,7 +123,7 @@ const listSchema = z.object({
 export type AssessmentList = z.infer<typeof listSchema>;
 
 const digitizationSchema = z.object({
-  values: z.record(z.string(), z.union([z.string(), z.boolean()])),
+  values: z.record(z.string(), z.union([z.string(), z.boolean(), z.array(z.array(z.string()))])),
   illegible: z.array(z.string()),
   missing: z.array(z.string()),
 });

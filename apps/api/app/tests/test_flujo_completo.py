@@ -252,15 +252,17 @@ def test_flujo_completo_de_principio_a_fin(app, admin, providers, storage):
         rosa,
         vacancy_id,
         "estudio.docx",
-        docx_cv("Estudio socioeconómico ficticio.", "Fecha de la visita: 10 de noviembre de 2026."),
+        docx_cv(
+            "Estudio socioeconómico ficticio.", "Fecha de aplicación: 10 de noviembre de 2026."
+        ),
         document_type="ESTUDIO_SOCIOECONOMICO",
     )
     fake.script = [
         reply(
             {
                 "valores": {
-                    fields["Fecha de la visita"]: "2026-11-10",
-                    fields["Domicilio declarado"]: "Calle Inventada 123",
+                    fields["Fecha de aplicación"]: "2026-11-10",
+                    fields["Domicilio"]: "Calle Inventada 123",
                 },
                 "ilegibles": [],
                 "faltantes": [],
@@ -270,7 +272,7 @@ def test_flujo_completo_de_principio_a_fin(app, admin, providers, storage):
     digitized = ok(
         rosa.post(f"{API}/assessments/{study['id']}/digitization", json={"file_id": scanned["id"]})
     )
-    assert digitized["values"][fields["Fecha de la visita"]] == "2026-11-10"
+    assert digitized["values"][fields["Fecha de aplicación"]] == "2026-11-10"
     saved = ok(
         rosa.put(
             f"{API}/assessments/{study['id']}",

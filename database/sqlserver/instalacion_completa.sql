@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Instalación completa
-   Versión del esquema: (vacía) -> 0012
-   Generado: 2026-11-12 15:47 (UTC) con scripts/generate_sql.py
+   Versión del esquema: (vacía) -> 0013
+   Generado: 2026-11-12 19:37 (UTC) con scripts/generate_sql.py
 
    Crea todos los esquemas y tablas en una base de datos VACÍA.
 
@@ -1129,6 +1129,28 @@ CREATE INDEX ix_executions_vacancy ON ai.executions (vacancy_id, occurred_at);
 GO
 
 UPDATE alembic_version SET version_num='0012' WHERE alembic_version.version_num = '0011';
+
+GO
+
+-- Running upgrade 0012 -> 0013
+
+ALTER TABLE ai.providers DROP CONSTRAINT ck_providers_code;
+
+GO
+
+ALTER TABLE ai.providers ADD CONSTRAINT ck_providers_code CHECK (code IN ('ANTHROPIC', 'OPENAI', 'GEMINI'));
+
+GO
+
+ALTER TABLE vacancy.job_profile_versions DROP CONSTRAINT ck_job_profile_versions_origin;
+
+GO
+
+ALTER TABLE vacancy.job_profile_versions ADD CONSTRAINT ck_job_profile_versions_origin CHECK (origin IN ('MANUAL', 'IA', 'FORMATO'));
+
+GO
+
+UPDATE alembic_version SET version_num='0013' WHERE alembic_version.version_num = '0012';
 
 GO
 

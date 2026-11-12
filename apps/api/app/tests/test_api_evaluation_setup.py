@@ -88,7 +88,7 @@ def test_el_perfil_se_guarda_limpio_y_como_primera_version(profile, vacancy, rec
 @pytest.mark.parametrize(
     ("changes", "fragment"),
     [
-        ({"objective": "   "}, "objetivo"),
+        ({"objective": "   "}, "propósito"),
         ({"must_have": []}, "requisito indispensable"),
         ({"must_have": ["x" * 501]}, "máximo"),
     ],

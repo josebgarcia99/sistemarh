@@ -77,6 +77,42 @@ describe("AiSettingsScreen", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("muestra Google Gemini como un proveedor más y registra su clave", async () => {
+    const gemini = makeProvider({ code: "GEMINI", name: "Google Gemini" });
+    const geminiKey = { ...withKey, code: "GEMINI" as const, name: "Google Gemini" };
+    let stored = false;
+    let sent: unknown = null;
+    mockApi({
+      ...base([makeProvider(), openai, gemini]),
+      "GET /api/v1/ai/providers": () => ({
+        body: {
+          encryption_available: true,
+          providers: [makeProvider(), openai, stored ? geminiKey : gemini],
+        },
+      }),
+      "PUT /api/v1/ai/providers/GEMINI/key": ({ init }) => {
+        stored = true;
+        sent = JSON.parse(String(init.body));
+        return { body: geminiKey };
+      },
+    });
+    const user = userEvent.setup();
+    renderApp(<AiSettingsScreen />, { session: makeUser() });
+    const card = await screen.findByRole("region", { name: "Google Gemini" });
+    expect(screen.getByRole("region", { name: "Anthropic" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "OpenAI" })).toBeTruthy();
+    expect(within(card).getByText("Sin registrar")).toBeTruthy();
+
+    await user.click(within(card).getByRole("button", { name: "Registrar clave" }));
+    const dialog = screen.getByRole("dialog", { name: "Registrar clave de Google Gemini" });
+    await user.type(within(dialog).getByLabelText("API key"), FAKE_KEY);
+    await user.click(within(dialog).getByRole("button", { name: "Guardar clave" }));
+
+    expect(await within(card).findByText("••••ABCD")).toBeTruthy();
+    expect(sent).toEqual({ api_key: FAKE_KEY });
+    expect(document.body.textContent).not.toContain(FAKE_KEY);
+  });
+
   it("registra una clave sin volver a mostrarla", async () => {
     let stored = false;
     const fetchMock = mockApi({

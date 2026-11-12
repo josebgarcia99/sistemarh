@@ -18,11 +18,13 @@ from typing import Any, Protocol
 class ProviderCode(StrEnum):
     ANTHROPIC = "ANTHROPIC"
     OPENAI = "OPENAI"
+    GEMINI = "GEMINI"
 
 
 PROVIDER_NAMES: dict[ProviderCode, str] = {
     ProviderCode.ANTHROPIC: "Anthropic",
     ProviderCode.OPENAI: "OpenAI",
+    ProviderCode.GEMINI: "Google Gemini",
 }
 
 

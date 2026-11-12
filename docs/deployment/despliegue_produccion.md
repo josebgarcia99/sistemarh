@@ -15,7 +15,7 @@ Usuarios ──HTTPS──► proxy (nginx) ──► web  (pantallas, Next.js)
                                        ├──► redis  (cola de tareas; no guarda datos)
                                        ├──► clamav (antivirus local)
                                        ├──► carpeta de documentos del servidor
-                                       └──► proveedores de IA (Anthropic, OpenAI), por HTTPS
+                                       └──► proveedores de IA (Anthropic, OpenAI, Gemini), por HTTPS
 ```
 
 Seis contenedores (`proxy`, `web`, `api`, `worker`, `redis`, `clamav`) definidos en `infrastructure/docker/docker-compose.prod.yml`. SQL Server, la carpeta de documentos, la clave maestra y el certificado quedan **fuera** de los contenedores, bajo control de Sistemas.
@@ -79,7 +79,7 @@ Copiar `infrastructure/env/produccion.env.example` como `infrastructure/env/prod
 | `RECLU_LOG_LEVEL` | `INFO` |
 | `FORWARDED_ALLOW_IPS` | Desde qué direcciones se acepta la IP real del usuario que informa el proxy |
 
-Las claves de Anthropic y OpenAI **no van en este archivo**: el administrador las registra en la pantalla «IA», donde quedan cifradas.
+Las claves de Anthropic, OpenAI y Google Gemini **no van en este archivo**: el administrador las registra en la pantalla «IA», donde quedan cifradas.
 
 ### 3.4 Arranque y primer administrador
 

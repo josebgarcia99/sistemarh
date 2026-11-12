@@ -1,8 +1,9 @@
 """Validación de lo capturado en cada tipo de evaluación y cálculos en Python.
 
-Aquí no hay ninguna puntuación de personas: el único cálculo es el resultado
-de una prueba técnica con rúbrica, que es la suma de puntos obtenidos entre
-los posibles. El estudio socioeconómico no se puntúa de ninguna forma.
+El único cálculo que hace el sistema es el resultado de una prueba técnica con
+rúbrica: la suma de puntos obtenidos entre los posibles. El sistema no puntúa
+el estudio socioeconómico: el dictamen y los niveles que pide el formato de la
+empresa los anota la persona que aplicó el estudio, y el sistema solo los guarda.
 """
 
 from __future__ import annotations
@@ -25,6 +26,9 @@ from app.modules.assessments.domain.models import (
 MAX_TEXT = 6000
 MAX_ROWS = 40
 MAX_FIELDS = 120
+MAX_TABLE_COLUMNS = 8
+MAX_TABLE_ROWS = 20
+MAX_CELL = 300
 
 
 class RuleError(ValueError):
@@ -204,6 +208,11 @@ def template_sections(raw: list[dict[str, Any]]) -> tuple[FormSection, ...]:
             maximum = _number(row.get("maximum"), f"«{label}», máximo")
             if minimum is not None and maximum is not None and minimum > maximum:
                 raise RuleError(f"En «{label}» el mínimo es mayor que el máximo.")
+            columns = tuple(
+                dict.fromkeys(line(c, 60) for c in (row.get("columns") or []) if line(c))
+            )
+            if kind is FieldType.TABLA and not 2 <= len(columns) <= MAX_TABLE_COLUMNS:
+                raise RuleError(f"La tabla «{label}» necesita de 2 a {MAX_TABLE_COLUMNS} columnas.")
             numeric = kind is FieldType.NUMERO
             fields.append(
                 FormField(
@@ -214,6 +223,8 @@ def template_sections(raw: list[dict[str, Any]]) -> tuple[FormSection, ...]:
                     options=options if kind is FieldType.OPCIONES else (),
                     minimum=minimum if numeric else None,
                     maximum=maximum if numeric else None,
+                    columns=columns if kind is FieldType.TABLA else (),
+                    manual_only=row.get("manual_only") is True,
                 )
             )
         if not fields:
@@ -226,6 +237,32 @@ def template_sections(raw: list[dict[str, Any]]) -> tuple[FormSection, ...]:
     return tuple(sections)
 
 
+def table_rows(item: FormField, value: object, *, strict: bool = True) -> list[list[str]] | None:
+    """Filas de una tabla: cada una con un texto por columna. Las filas vacías se
+    descartan. Con ``strict`` un formato inesperado es un error; sin él, se ignora."""
+    if not isinstance(value, list):
+        if strict:
+            raise RuleError(f"«{item.label}»: la tabla no tiene el formato esperado.")
+        return None
+    rows = []
+    for raw in value:
+        if not isinstance(raw, list):
+            if strict:
+                raise RuleError(f"«{item.label}»: la tabla no tiene el formato esperado.")
+            continue
+        cells = [
+            line(cell, MAX_CELL) if isinstance(cell, str | int | float) else "" for cell in raw
+        ]
+        cells = (cells + [""] * len(item.columns))[: len(item.columns)]
+        if any(cells):
+            rows.append(cells)
+    if len(rows) > MAX_TABLE_ROWS:
+        if strict:
+            raise RuleError(f"«{item.label}» admite como máximo {MAX_TABLE_ROWS} filas.")
+        rows = rows[:MAX_TABLE_ROWS]
+    return rows or None
+
+
 def _field_value(item: FormField, value: object) -> object:
     """Valor limpio del campo, o ``None`` si está vacío. Lanza si no es válido."""
     if item.type is FieldType.CASILLA:
@@ -233,6 +270,8 @@ def _field_value(item: FormField, value: object) -> object:
         return True if value is True else None
     if value is None or value == "":
         return None
+    if item.type is FieldType.TABLA:
+        return table_rows(item, value)
     if item.type is FieldType.NUMERO:
         number = _number(value, item.label)
         if number is not None and (
@@ -275,7 +314,8 @@ def study(data: dict[str, Any], status: str, version: FormTemplateVersion) -> di
             # Un dato solo está verificado si una persona lo marcó así.
             "verified": entry.get("verified") is True,
             # De dónde salió el valor: capturado a mano o leído por la IA de un documento.
-            "source": "IA" if entry.get("source") == "IA" else "MANUAL",
+            # Los campos de captura manual nunca cuentan como leídos por la IA.
+            "source": "IA" if entry.get("source") == "IA" and not item.manual_only else "MANUAL",
         }
     if status == "COMPLETADO" and missing:
         raise RuleError("Para completarlo faltan: " + ", ".join(missing[:8]) + ".")
@@ -292,39 +332,3 @@ def document_field_ids(version: FormTemplateVersion, answers: dict[str, Any]) ->
         for item in version.fields
         if item.type is FieldType.DOCUMENTO and item.id in answers
     ]
-
-
-DEFAULT_TEMPLATE: list[dict[str, Any]] = [
-    {
-        "title": "Datos de la visita",
-        "fields": [
-            {"label": "Fecha de la visita", "type": "FECHA", "required": True},
-            {"label": "Persona que atendió", "type": "TEXTO"},
-            {"label": "Domicilio declarado", "type": "PARRAFO", "required": True},
-        ],
-    },
-    {
-        "title": "Verificación documental",
-        "fields": [
-            {"label": "Identificación oficial cotejada", "type": "CASILLA"},
-            {"label": "Comprobante de domicilio cotejado", "type": "CASILLA"},
-            {"label": "Comprobante de estudios cotejado", "type": "CASILLA"},
-            {
-                "label": "Referencias laborales contactadas",
-                "type": "NUMERO",
-                "minimum": 0,
-                "maximum": 20,
-            },
-            {
-                "label": "Resultado de las referencias laborales",
-                "type": "OPCIONES",
-                "options": ["Confirmadas", "Confirmadas en parte", "No se pudieron contactar"],
-            },
-            {"label": "Formulario escaneado", "type": "DOCUMENTO"},
-        ],
-    },
-    {
-        "title": "Observaciones",
-        "fields": [{"label": "Observaciones de quien realizó el estudio", "type": "OBSERVACION"}],
-    },
-]

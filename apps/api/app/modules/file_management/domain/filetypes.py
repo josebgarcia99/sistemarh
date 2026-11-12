@@ -19,6 +19,7 @@ class FileKind(StrEnum):
     DOC = "DOC"
     JPG = "JPG"
     PNG = "PNG"
+    XLSX = "XLSX"
 
 
 EXTENSIONS: dict[str, FileKind] = {
@@ -28,7 +29,11 @@ EXTENSIONS: dict[str, FileKind] = {
     "jpg": FileKind.JPG,
     "jpeg": FileKind.JPG,
     "png": FileKind.PNG,
+    "xlsx": FileKind.XLSX,
 }
+# Las hojas de cálculo solo se aceptan donde existe un formato de la empresa en
+# Excel (perfil de puesto y estudio socioeconómico): no son un formato de CV.
+SPREADSHEET_KINDS = frozenset({FileKind.XLSX})
 
 CONTENT_TYPES: dict[FileKind, str] = {
     FileKind.PDF: "application/pdf",
@@ -36,6 +41,7 @@ CONTENT_TYPES: dict[FileKind, str] = {
     FileKind.DOC: "application/msword",
     FileKind.JPG: "image/jpeg",
     FileKind.PNG: "image/png",
+    FileKind.XLSX: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 
 MAX_NAME_LENGTH = 200
@@ -80,10 +86,20 @@ def extension_of(name: str) -> str:
     return extension.lower() if dot else ""
 
 
-def require_allowed_extension(name: str) -> FileKind:
+def require_allowed_extension(name: str, *, spreadsheets: bool = False) -> FileKind:
+    """Tipo según la extensión. ``spreadsheets`` indica si este tipo de documento
+    admite además hojas de cálculo."""
     kind = EXTENSIONS.get(extension_of(name))
-    if kind is None:
-        allowed = ", ".join(sorted({e.upper() for e in EXTENSIONS if e != "jpeg"}))
+    if kind is None or (kind in SPREADSHEET_KINDS and not spreadsheets):
+        allowed = ", ".join(
+            sorted(
+                {
+                    extension.upper()
+                    for extension, known in EXTENSIONS.items()
+                    if extension != "jpeg" and (spreadsheets or known not in SPREADSHEET_KINDS)
+                }
+            )
+        )
         raise FileRejectedError(
             "extension_no_permitida", f"Formato no permitido. Se aceptan: {allowed}."
         )
@@ -94,9 +110,10 @@ def _utf16(text: str) -> bytes:
     return text.encode("utf-16-le")
 
 
-def _inspect_docx(path: Path) -> None:
+def _inspect_office(path: Path, main_part: str, label: str) -> None:
+    """Documento de Office moderno (un ZIP): estructura esperada, sin macros."""
     mismatch = FileRejectedError(
-        "tipo_no_coincide", "El contenido del archivo no corresponde a un documento Word (DOCX)."
+        "tipo_no_coincide", f"El contenido del archivo no corresponde a {label}."
     )
     if not zipfile.is_zipfile(path):
         raise mismatch
@@ -104,7 +121,7 @@ def _inspect_docx(path: Path) -> None:
         with zipfile.ZipFile(path) as archive:
             entries = archive.infolist()
             names = {entry.filename for entry in entries}
-            if "[Content_Types].xml" not in names or "word/document.xml" not in names:
+            if "[Content_Types].xml" not in names or main_part not in names:
                 raise mismatch
             if len(entries) > _ZIP_MAX_ENTRIES or (
                 sum(entry.file_size for entry in entries) > _ZIP_MAX_UNCOMPRESSED
@@ -134,9 +151,9 @@ def _inspect_doc(data: bytes) -> None:
         raise FileRejectedError("contiene_macros", "El documento contiene macros y no se acepta.")
 
 
-def inspect_file(path: Path, name: str) -> FileKind:
+def inspect_file(path: Path, name: str, *, spreadsheets: bool = False) -> FileKind:
     """Comprueba que el contenido corresponde a la extensión. Devuelve el tipo real."""
-    kind = require_allowed_extension(name)
+    kind = require_allowed_extension(name, spreadsheets=spreadsheets)
     size = path.stat().st_size
     if size == 0:
         raise FileRejectedError("archivo_vacio", "El archivo está vacío.")
@@ -153,7 +170,9 @@ def inspect_file(path: Path, name: str) -> FileKind:
         if b"%%EOF" not in tail:
             raise FileRejectedError("archivo_danado", "El PDF está incompleto o dañado.")
     elif kind is FileKind.DOCX:
-        _inspect_docx(path)
+        _inspect_office(path, "word/document.xml", "un documento Word (DOCX)")
+    elif kind is FileKind.XLSX:
+        _inspect_office(path, "xl/workbook.xml", "una hoja de cálculo de Excel (XLSX)")
     elif kind is FileKind.DOC:
         _inspect_doc(path.read_bytes())
     elif kind is FileKind.JPG:

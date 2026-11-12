@@ -9,9 +9,11 @@ from app.modules.assessments.domain.models import (
     Assessment,
     DossierMaterial,
     FieldType,
+    FormField,
     FormTemplateVersion,
     Kind,
 )
+from app.modules.assessments.domain.rules import table_rows
 
 TEST_SUMMARY = "RESUMEN_PRUEBAS"
 DOCUMENT_READING = "LECTURA_DOCUMENTOS"
@@ -76,7 +78,10 @@ y anótalo en "faltantes". Si aparece pero no se lee, anótalo en "ilegibles".
 - No infieras nivel socioeconómico, confiabilidad, moralidad, religión, salud ni idoneidad \
 laboral. No describas a las personas ni valores su vivienda o su familia.
 - Fechas como AAAA-MM-DD; números sin texto; casillas como true o false; en campos de \
-opciones, exactamente una de las opciones dadas.
+opciones, exactamente una de las opciones dadas; en campos [TABLA], una lista de filas y \
+cada fila una lista con un texto por columna, en el orden de las columnas.
+- No llenes ni propongas dictámenes, niveles, puntuaciones ni si la persona es viable: \
+eso lo anota quien aplicó el estudio.
 - {_NO_INSTRUCTIONS}
 
 Responde solo con este JSON, sin texto adicional:
@@ -207,12 +212,22 @@ def summary_from_answer(kind: Kind, text: str) -> dict[str, object]:
     return result
 
 
+def _readable_fields(version: FormTemplateVersion) -> dict[str, FormField]:
+    """Campos que la IA puede llenar al leer un documento: ni los que apuntan a
+    un archivo ni los de captura manual (dictamen, niveles, puntuación, firmas)."""
+    return {
+        item.id: item
+        for item in version.fields
+        if item.type is not FieldType.DOCUMENTO and not item.manual_only
+    }
+
+
 def digitization_request(version: FormTemplateVersion, text: str, ocr: bool) -> str:
     lines = ["CAMPOS DE LA PLANTILLA"]
-    for item in version.fields:
-        if item.type in (FieldType.DOCUMENTO,):
-            continue
+    for item in _readable_fields(version).values():
         extra = f" (opciones: {' | '.join(item.options)})" if item.options else ""
+        if item.type is FieldType.TABLA:
+            extra = f" (columnas: {' | '.join(item.columns)})"
         lines.append(f"- {item.id}: {item.label} [{item.type.value}]{extra}")
     return "\n".join(lines) + "\n\n" + document_request(text, ocr)
 
@@ -221,7 +236,7 @@ def digitization_from_answer(version: FormTemplateVersion, text: str) -> dict[st
     """Solo acepta valores para campos de la plantilla; lo demás se descarta."""
     payload = _payload(text)
     raw = payload.get("valores")
-    fields = {item.id: item for item in version.fields if item.type is not FieldType.DOCUMENTO}
+    fields = _readable_fields(version)
     values: dict[str, object] = {}
     for field_id, value in (raw if isinstance(raw, dict) else {}).items():
         item = fields.get(str(field_id))
@@ -230,6 +245,10 @@ def digitization_from_answer(version: FormTemplateVersion, text: str) -> dict[st
         if item.type is FieldType.CASILLA:
             if isinstance(value, bool):
                 values[item.id] = value
+        elif item.type is FieldType.TABLA:
+            rows = table_rows(item, value, strict=False)
+            if rows:
+                values[item.id] = rows
         elif isinstance(value, str | int | float) and not isinstance(value, bool):
             values[item.id] = str(value)[:6000]
     illegible, missing = _lines(payload.get("ilegibles")), _lines(payload.get("faltantes"))

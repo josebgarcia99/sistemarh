@@ -500,9 +500,9 @@ def test_prueba_tecnica_con_rubrica_calificacion_y_documento(
 
 def test_formularios_configurables_por_versiones(recruiter, admin):
     templates = recruiter.get(f"{API}/form-templates").json()
-    assert [t["name"] for t in templates] == ["Estudio socioeconómico básico"]
+    assert [t["name"] for t in templates] == ["SGC.F3.RH. Estudio socioeconómico"]
     default = templates[0]
-    assert default["version_number"] == 1 and len(default["sections"]) == 3
+    assert default["version_number"] == 1 and len(default["sections"]) == 19
     body = {
         "name": "Estudio para puestos de confianza",
         "sections": [{"title": "Datos", "fields": [{"label": "Fecha", "type": "FECHA"}]}],
@@ -554,7 +554,7 @@ def test_estudio_socioeconomico_captura_digitalizacion_y_verificacion_humana(
         create(recruiter, ana, "ESTUDIO_SOCIOECONOMICO").status_code == 422
     )  # falta el formulario
     study = create(recruiter, ana, "ESTUDIO_SOCIOECONOMICO", template_id=template["id"]).json()
-    assert study["status"] == "PENDIENTE" and study["score"] is None and len(study["form"]) == 3
+    assert study["status"] == "PENDIENTE" and study["score"] is None and len(study["form"]) == 19
 
     # Digitalización: la IA propone valores a partir del formulario escaneado; no guarda nada.
     scanned = upload(
@@ -563,8 +563,8 @@ def test_estudio_socioeconomico_captura_digitalizacion_y_verificacion_humana(
         "estudio.docx",
         docx_cv(
             "Estudio socioeconómico ficticio.",
-            "Fecha de la visita: 10 de noviembre de 2026.",
-            "Domicilio declarado: Calle Inventada 123.",
+            "Fecha de aplicación: 10 de noviembre de 2026.",
+            "Domicilio: Calle Inventada 123.",
         ),
         document_type="ESTUDIO_SOCIOECONOMICO",
     )
@@ -579,10 +579,10 @@ def test_estudio_socioeconomico_captura_digitalizacion_y_verificacion_humana(
     visit, address, refs, identity = (
         fields[k]["id"]
         for k in (
-            "Fecha de la visita",
-            "Domicilio declarado",
-            "Referencias laborales contactadas",
-            "Identificación oficial cotejada",
+            "Fecha de aplicación",
+            "Domicilio",
+            "Automóviles: cuántos",
+            "INE",
         )
     )
     fake = providers[ProviderCode.ANTHROPIC]
@@ -598,8 +598,8 @@ def test_estudio_socioeconomico_captura_digitalizacion_y_verificacion_humana(
                     "campo_inventado": "x",
                     "nivel_socioeconomico": "medio",
                 },
-                "ilegibles": ["Persona que atendió"],
-                "faltantes": ["Referencias laborales contactadas"],
+                "ilegibles": ["Ocupación"],
+                "faltantes": ["Automóviles: cuántos"],
             }
         )
     ]
@@ -607,8 +607,8 @@ def test_estudio_socioeconomico_captura_digitalizacion_y_verificacion_humana(
     assert proposal.status_code == 200
     assert proposal.json() == {
         "values": {visit: "2026-11-10", address: "Calle Inventada 123", identity: True},
-        "illegible": ["Persona que atendió"],
-        "missing": ["Referencias laborales contactadas"],
+        "illegible": ["Ocupación"],
+        "missing": ["Automóviles: cuántos"],
     }
     _, system, user = fake.prompts[0]
     assert (
@@ -633,13 +633,14 @@ def test_estudio_socioeconomico_captura_digitalizacion_y_verificacion_humana(
     )
     # Verificar es un acto humano, campo por campo.
     answers[visit]["verified"] = True
-    answers[fields["Formulario escaneado"]["id"]] = {"value": scanned["id"]}
+    answers[fields["Formato firmado (escaneado)"]["id"]] = {"value": scanned["id"]}
+    answers[fields["Nombre completo"]["id"]] = {"value": "Persona Ficticia"}
     done = update(recruiter, study, status="COMPLETADO", data={**study["data"], "answers": answers})
     assert done.status_code == 200 and done.json()["data"]["answers"][visit]["verified"] is True
     assert done.json()["data"]["answers"][address]["verified"] is False
     assert done.json()["score"] is None  # el estudio nunca se puntúa
     # Un documento que no es un estudio de la vacante no se acepta en el formulario.
-    answers[fields["Formulario escaneado"]["id"]] = {"value": cv["id"]}
+    answers[fields["Formato firmado (escaneado)"]["id"]] = {"value": cv["id"]}
     assert (
         update(recruiter, done.json(), data={**study["data"], "answers": answers}).status_code
         == 422
@@ -647,7 +648,7 @@ def test_estudio_socioeconomico_captura_digitalizacion_y_verificacion_humana(
     # Completar exige los campos obligatorios.
     empty = create(recruiter, ana, "ESTUDIO_SOCIOECONOMICO", template_id=template["id"]).json()
     refused = update(recruiter, empty, status="COMPLETADO", data={"answers": {}})
-    assert refused.status_code == 422 and "Fecha de la visita" in refused.json()["detail"]
+    assert refused.status_code == 422 and "Fecha de aplicación" in refused.json()["detail"]
     assert recruiter.post(f"{API}/assessments/{study['id']}/summary").status_code == 422
     assert audit(admin, "estudio.digitalizado")[0]["result"] == "PERMITIDO"
 
@@ -718,7 +719,9 @@ def test_sintesis_del_expediente_por_tipo_de_fuente_sin_puntuar(
         data={"instrument": "Prueba X", "result": "Percentil 70 SECRETO-SIN-VALIDAR"},
     ).json()
     template = recruiter.get(f"{API}/form-templates").json()[0]
-    address_field = template["sections"][0]["fields"][2]["id"]
+    address_field = next(
+        f["id"] for s in template["sections"] for f in s["fields"] if f["label"] == "Domicilio"
+    )
     study = create(recruiter, ana, "ESTUDIO_SOCIOECONOMICO", template_id=template["id"]).json()
     update(
         recruiter,

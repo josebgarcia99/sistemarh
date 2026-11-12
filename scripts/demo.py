@@ -86,7 +86,12 @@ SAMPLE_CVS = [
 
 # Lo que el proveedor simulado "lee" de cualquier perfil. No sale del documento.
 SIMULATED_PROFILE = {
-    "objetivo": "Registrar las operaciones contables del mes (respuesta simulada).",
+    "puesto": "Auxiliar Contable",
+    "area": "Contabilidad",
+    "proposito": "Registrar las operaciones contables del mes (respuesta simulada).",
+    "niveles_de_formacion": ["Licenciatura", "TSU"],
+    "especialidad": "Contaduría",
+    "actividades": [{"actividad": "Registrar pólizas del día", "periodicidad": "Diaria"}],
     "experiencia": "Un año en un área contable.",
     "formacion": "Estudios en Contaduría.",
     "funciones": ["Registrar pólizas", "Conciliar cuentas bancarias"],
@@ -156,6 +161,7 @@ class SimulatedProvider:
                 "NUMERO": "2",
                 "PARRAFO": "Texto simulado leído del formulario.",
                 "CASILLA": True,
+                "TABLA": [["Dato simulado"]],
             }
             fields = re.findall(r"^- (\S+): (.+?) \[(\w+)\]", user, re.MULTILINE)
             simulated = {
@@ -443,7 +449,7 @@ def seed(app, password: str) -> None:
             DocumentType.ESTUDIO_SOCIOECONOMICO,
             "Estudio escaneado ficticio.docx",
             docx_cv(
-                "Estudio socioeconómico ficticio.", "Fecha de la visita: 10 de noviembre de 2026."
+                "Estudio socioeconómico ficticio.", "Fecha de aplicación: 10 de noviembre de 2026."
             ),
         )
     )
@@ -486,6 +492,7 @@ def main() -> int:
         ai_clients={
             ProviderCode.ANTHROPIC: SimulatedProvider("anthropic"),
             ProviderCode.OPENAI: SimulatedProvider("openai"),
+            ProviderCode.GEMINI: SimulatedProvider("gemini"),
         },
         # El motor en memoria tiene una sola conexión: los lotes se procesan al momento.
         job_mode="inline",

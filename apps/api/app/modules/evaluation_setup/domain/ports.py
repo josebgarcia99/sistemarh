@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -44,4 +45,11 @@ class ProfileSources(Protocol):
 
     def read_text(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> tuple[str, bool]:
         """Texto del documento de perfil y si se recortó. Lanza ``ProfileSourceError``."""
+        ...
+
+    def read_sheets(
+        self, vacancy_id: uuid.UUID, file_id: uuid.UUID
+    ) -> list[Mapping[tuple[int, int], object]] | None:
+        """Celdas de cada hoja si el documento es una hoja de cálculo; ``None`` si
+        no lo es. Lanza ``ProfileSourceError``."""
         ...

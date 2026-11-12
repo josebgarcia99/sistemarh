@@ -88,6 +88,8 @@ def _to_version(row: FormTemplateVersionRow) -> FormTemplateVersion:
                         options=tuple(item.get("options", ())),
                         minimum=_decimal(item.get("minimum")),
                         maximum=_decimal(item.get("maximum")),
+                        columns=tuple(item.get("columns", ())),
+                        manual_only=item.get("manual_only", False),
                     )
                     for item in section["fields"]
                 ),
@@ -113,6 +115,8 @@ def sections_json(version: FormTemplateVersion) -> str:
                         "options": list(item.options),
                         "minimum": str(item.minimum) if item.minimum is not None else None,
                         "maximum": str(item.maximum) if item.maximum is not None else None,
+                        "columns": list(item.columns),
+                        "manual_only": item.manual_only,
                     }
                     for item in section.fields
                 ],

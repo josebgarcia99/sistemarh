@@ -12,7 +12,7 @@ const BASIC: FormTemplate = {
   description: null,
   status: "ACTIVA",
   version_number: 1,
-  sections: [{ title: "Datos de la visita", fields: [{ id: "visita", label: "Fecha de la visita", type: "FECHA", required: true, options: [], minimum: null, maximum: null }] }],
+  sections: [{ title: "Datos de la visita", fields: [{ id: "visita", label: "Fecha de la visita", type: "FECHA", required: true, options: [], minimum: null, maximum: null, columns: [], manual_only: false }] }],
 };
 
 afterEach(() => {
@@ -48,7 +48,7 @@ describe("FormTemplatesScreen", () => {
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({
       name: "Estudio de confianza",
       description: null,
-      sections: [{ title: "Referencias", fields: [{ id: null, label: "Resultado", type: "OPCIONES", required: true, options: ["Confirmadas", "No contactadas"], minimum: null, maximum: null }] }],
+      sections: [{ title: "Referencias", fields: [{ id: null, label: "Resultado", type: "OPCIONES", required: true, options: ["Confirmadas", "No contactadas"], minimum: null, maximum: null, columns: [], manual_only: false }] }],
       expected_version: 0,
     });
   });
@@ -62,12 +62,21 @@ describe("FormTemplatesScreen", () => {
     renderApp(<FormTemplatesScreen />, { session: makeUser() });
     await user.click(await screen.findByRole("button", { name: "Estudio socioeconómico básico" }));
     await user.click(screen.getByRole("button", { name: "Agregar campo" }));
-    await user.type(screen.getByLabelText("Nombre del campo 2 de la sección 1"), "Observaciones");
+    await user.type(screen.getByLabelText("Nombre del campo 2 de la sección 1"), "Datos familiares");
+    await user.selectOptions(screen.getByLabelText("Tipo del campo 2 de la sección 1"), "TABLA");
+    await user.type(screen.getByLabelText("Columnas del campo 2 de la sección 1"), "Nombre, Edad ,,Parentesco");
+    await user.click(screen.getAllByLabelText("Solo captura manual")[1]);
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect((await screen.findByRole("alert")).textContent).toContain("versión más reciente");
     const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
     const body = JSON.parse(String(put?.[1]?.body));
     expect(body.expected_version).toBe(1);
     expect(body.sections[0].fields.map((field: { id: string | null }) => field.id)).toEqual(["visita", null]);
+    expect(body.sections[0].fields[1]).toMatchObject({
+      type: "TABLA",
+      columns: ["Nombre", "Edad", "Parentesco"],
+      manual_only: true,
+    });
+    expect(body.sections[0].fields[0].manual_only).toBe(false);
   });
 });

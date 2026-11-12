@@ -1,81 +1,156 @@
 import { z } from "zod";
 import { apiFetch } from "./client";
 
-export const PROFILE_TEXT_FIELDS = ["objective", "experience", "education"] as const;
+/** Datos de una línea: identificación del puesto y datos del documento. */
+export const PROFILE_LINE_FIELDS = [
+  "position_name",
+  "area",
+  "location",
+  "reports_to",
+  "supervises",
+  "contract_type",
+  "work_mode",
+  "schedule",
+  "offer",
+  "specialty",
+  "document_version",
+  "document_date",
+] as const;
+export const PROFILE_TEXT_FIELDS = [
+  "objective",
+  "internal_relations",
+  "external_relations",
+  "experience",
+  "education",
+] as const;
+/** Listas que se capturan una por línea. */
 export const PROFILE_LIST_FIELDS = [
   "must_have",
-  "nice_to_have",
-  "functions",
-  "responsibilities",
   "knowledge",
   "skills",
+  "functions",
+  "nice_to_have",
   "certifications",
+  "responsibilities",
   "ambiguities",
 ] as const;
+export type ProfileLineField = (typeof PROFILE_LINE_FIELDS)[number];
 export type ProfileTextField = (typeof PROFILE_TEXT_FIELDS)[number];
 export type ProfileListField = (typeof PROFILE_LIST_FIELDS)[number];
 
-export const PROFILE_LABELS: Record<ProfileTextField | ProfileListField, string> = {
-  objective: "Objetivo del puesto",
-  experience: "Experiencia",
-  education: "Formación",
+/** Niveles de «Formación académica» y periodicidades, como en el formato de la empresa. */
+export const EDUCATION_LEVELS = [
+  "Maestría",
+  "Licenciatura",
+  "Ingeniería",
+  "TSU",
+  "Bachillerato",
+  "Secundaria",
+] as const;
+export const FREQUENCIES = ["Ocasional", "Diaria", "Semanal", "Mensual", "Anual"] as const;
+
+/** Etiquetas del formato «SGC.F15.RH. Perfil de puesto». */
+export const PROFILE_LABELS: Record<
+  ProfileLineField | ProfileTextField | ProfileListField,
+  string
+> = {
+  position_name: "Nombre del puesto",
+  area: "Área o departamento",
+  location: "Ubicación",
+  reports_to: "Reporta a",
+  supervises: "Supervisa a",
+  contract_type: "Tipo de contratación",
+  work_mode: "Modalidad",
+  schedule: "Horario",
+  offer: "Oferta",
+  specialty: "Especialidad",
+  document_version: "Versión del perfil",
+  document_date: "Fecha de actualización",
+  objective: "Propósito del puesto",
+  internal_relations: "Relaciones internas",
+  external_relations: "Relaciones externas",
+  experience: "Experiencia previa",
+  education: "Aclaraciones sobre la formación",
   must_have: "Requisitos indispensables",
+  knowledge: "Conocimientos específicos",
+  skills: "Habilidades blandas",
+  functions: "Funciones del puesto",
   nice_to_have: "Requisitos deseables",
-  functions: "Funciones",
-  responsibilities: "Responsabilidades",
-  knowledge: "Conocimientos",
-  skills: "Habilidades",
   certifications: "Certificaciones",
+  responsibilities: "Responsabilidades",
   ambiguities: "Requisitos que no están claros",
 };
 
 const items = z.array(z.string());
+const activitySchema = z.object({ description: z.string(), frequency: z.string() });
+const kpiSchema = z.object({ name: z.string(), goal: z.string(), formula: z.string() });
+export type ProfileActivity = z.infer<typeof activitySchema>;
+export type ProfileKpi = z.infer<typeof kpiSchema>;
+
+const profileFields = {
+  position_name: z.string(),
+  area: z.string(),
+  location: z.string(),
+  reports_to: z.string(),
+  supervises: z.string(),
+  contract_type: z.string(),
+  work_mode: z.string(),
+  schedule: z.string(),
+  offer: z.string(),
+  specialty: z.string(),
+  document_version: z.string(),
+  document_date: z.string(),
+  objective: z.string(),
+  internal_relations: z.string(),
+  external_relations: z.string(),
+  experience: z.string(),
+  education: z.string(),
+  education_levels: items,
+  must_have: items,
+  knowledge: items,
+  skills: items,
+  functions: items,
+  nice_to_have: items,
+  certifications: items,
+  responsibilities: items,
+  ambiguities: items,
+  activities: z.array(activitySchema),
+  kpis: z.array(kpiSchema),
+};
+const profileOriginSchema = z.enum(["MANUAL", "IA", "FORMATO"]);
+export type ProfileOrigin = z.infer<typeof profileOriginSchema>;
+
 const profileVersionSchema = z.object({
   id: z.string(),
   version_number: z.number(),
-  origin: z.string(),
+  origin: profileOriginSchema,
   change_note: z.string().nullable(),
   created_at: z.string(),
   created_by_name: z.string().nullable(),
-  objective: z.string(),
-  experience: z.string(),
-  education: z.string(),
-  functions: items,
-  responsibilities: items,
-  knowledge: items,
-  skills: items,
-  certifications: items,
-  must_have: items,
-  nice_to_have: items,
-  ambiguities: items,
+  ...profileFields,
 });
 export type ProfileVersion = z.infer<typeof profileVersionSchema>;
-export type ProfileInput = Record<ProfileTextField, string> &
+export type ProfileInput = Record<ProfileLineField | ProfileTextField, string> &
   Record<ProfileListField, string[]> & {
+    education_levels: string[];
+    activities: ProfileActivity[];
+    kpis: ProfileKpi[];
     change_note: string | null;
     expected_version: number;
-    /** La persona partió de una propuesta de la IA y la revisó. */
-    from_ai?: boolean;
+    /** De dónde partió la persona: captura manual, propuesta de la IA o formato de la empresa. */
+    origin: ProfileOrigin;
     /** Documento de la vacante del que salió la propuesta. */
-    source_file_id?: string | null;
+    source_file_id: string | null;
   };
 
 const profileProposalSchema = z.object({
-  objective: z.string(),
-  experience: z.string(),
-  education: z.string(),
-  functions: items,
-  responsibilities: items,
-  knowledge: items,
-  skills: items,
-  certifications: items,
-  must_have: items,
-  nice_to_have: items,
-  ambiguities: items,
+  ...profileFields,
   truncated: z.boolean(),
   source_file_id: z.string().nullable(),
+  origin: profileOriginSchema,
+  notices: z.array(z.string()),
 });
-/** Perfil propuesto por la IA. No está guardado. */
+/** Perfil leído del formato de la empresa o propuesto por la IA. No está guardado. */
 export type ProfileProposal = z.infer<typeof profileProposalSchema>;
 
 const criteriaProposalSchema = z.object({
@@ -198,7 +273,7 @@ export function duplicatePrompt(id: string): Promise<PromptVersion> {
   return apiFetch(`/prompts/${id}/duplicate`, { method: "POST", schema: promptSchema });
 }
 
-/** La IA lee un perfil desde un documento de la vacante o desde un texto pegado. */
+/** Lee un perfil desde un documento de la vacante (el formato en Excel se lee sin IA) o desde un texto. */
 export function extractProfile(
   vacancyId: string,
   source: { fileId: string } | { text: string },

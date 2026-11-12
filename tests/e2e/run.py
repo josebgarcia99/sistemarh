@@ -76,6 +76,8 @@ def run_one(script: Path, api_python: str, shots: Path, logs: Path) -> bool:
         # Contraseña de un solo uso para los usuarios de demostración.
         "DEMO_PASSWORD": f"Demo-{secrets.token_urlsafe(9)}",
         "E2E_SHOTS": str(shots),
+        # Para que un recorrido genere archivos de ejemplo con las utilidades de la API.
+        "E2E_API_PYTHON": api_python,
         "PYTHONPATH": str(HERE),
     }
     demo = start([api_python, "scripts/demo.py"], ROOT, env, logs / f"{script.stem}_api.log")

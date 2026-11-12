@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0012`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0013`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -160,8 +160,8 @@ Versiones del perfil de puesto de cada vacante. Cada corrección crea una fila n
 | `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
 | `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Vacante. |
 | `version_number` | `INT` | Sí | 1, 2, 3… Único por vacante. |
-| `origin` | `VARCHAR(20)` | Sí | `MANUAL` (capturado por una persona) o `IA` (extraído de un archivo; aún no se usa). |
-| `content` | `NVARCHAR(MAX)` | Sí | Perfil estructurado en JSON: objetivo, experiencia, formación, funciones, responsabilidades, conocimientos, habilidades, certificaciones, requisitos indispensables, requisitos deseables y requisitos que no están claros. |
+| `origin` | `VARCHAR(20)` | Sí | `MANUAL` (capturado por una persona), `IA` (propuesto por la IA y revisado) o `FORMATO` (leído del formato de la empresa en Excel y revisado; desde la migración `0013`). |
+| `content` | `NVARCHAR(MAX)` | Sí | Perfil estructurado en JSON, con las secciones del formato «SGC.F15.RH. Perfil de puesto»: identificación del puesto (nombre, área, ubicación, reporta a, supervisa a, tipo de contratación, modalidad, horario, oferta, versión y fecha del documento), propósito, relaciones internas y externas, niveles de formación académica, especialidad, experiencia, requisitos indispensables y deseables, conocimientos, habilidades, certificaciones, funciones, responsabilidades, actividades (con periodicidad), KPI (con meta y fórmula) y requisitos que no están claros. Las versiones anteriores a la `0013` no traen los campos nuevos y se leen con ellos vacíos. No guarda edad ni género. |
 | `change_note` | `NVARCHAR(300)` | No | Qué cambió respecto a la versión anterior. |
 | `source_file_id` | `UNIQUEIDENTIFIER` | No | Documento del que se extrajo (`files.file_assets`). Aún no se usa. |
 | `created_at`, `created_by` | `DATETIME2(3)`, `UNIQUEIDENTIFIER` | Sí | Cuándo se guardó y quién lo hizo. |
@@ -203,7 +203,7 @@ Metadatos de cada documento guardado en el disco privado del servidor. El archiv
 
 ### `ai.providers`
 
-Un proveedor por fila (`ANTHROPIC`, `OPENAI`). La fila se crea la primera vez que se configura.
+Un proveedor por fila (`ANTHROPIC`, `OPENAI` o `GEMINI`; este último desde la migración `0013`). La fila se crea la primera vez que se configura.
 
 | Columna | Tipo | Oblig. | Descripción |
 | --- | --- | --- | --- |
@@ -493,7 +493,7 @@ Formularios configurables del estudio socioeconómico, por versiones.
 | `form_templates` | `name`, `description` | `NVARCHAR(150)`, `NVARCHAR(500)` | Nombre y descripción. |
 | `form_templates` | `status` | `VARCHAR(20)` | `ACTIVA` o `ARCHIVADA`. |
 | `form_template_versions` | `template_id`, `version_number` | | Versión del formulario (única por formulario). No cambia. |
-| `form_template_versions` | `sections` | `NVARCHAR(MAX)` | Secciones y campos en JSON (`ISJSON`): identificador, nombre, tipo, obligatoriedad, opciones, mínimo y máximo. |
+| `form_template_versions` | `sections` | `NVARCHAR(MAX)` | Secciones y campos en JSON (`ISJSON`): identificador, nombre, tipo, obligatoriedad, opciones, mínimo, máximo, columnas (en los campos de tipo tabla) y si es de solo captura manual. |
 | `form_template_versions` | `created_at`, `created_by` | | `created_by` vacío en la plantilla inicial, que crea el sistema. |
 
 ### `recruitment.assessments`

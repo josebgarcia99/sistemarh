@@ -25,7 +25,7 @@ from app.core.exceptions.errors import (
     ValidationFailedError,
 )
 from app.core.ids import new_sequential_uuid
-from app.modules.assessments.domain import assistant, rules
+from app.modules.assessments.domain import assistant, company_study_format, rules
 from app.modules.assessments.domain.models import (
     SENSITIVE_KINDS,
     Actor,
@@ -104,8 +104,8 @@ class AssessmentService:
         now = self._clock()
         template = FormTemplate(
             id=new_sequential_uuid(),
-            name="Estudio socioeconómico básico",
-            description="Plantilla inicial. Un administrador puede cambiarla o crear otras.",
+            name=company_study_format.FORMAT_NAME,
+            description=company_study_format.FORMAT_DESCRIPTION,
             status="ACTIVA",
             created_at=now,
             updated_at=now,
@@ -116,7 +116,7 @@ class AssessmentService:
                 id=new_sequential_uuid(),
                 template_id=template.id,
                 version_number=1,
-                sections=rules.template_sections(rules.DEFAULT_TEMPLATE),
+                sections=rules.template_sections(company_study_format.COMPANY_STUDY_TEMPLATE),
                 created_at=now,
                 created_by=None,
             )

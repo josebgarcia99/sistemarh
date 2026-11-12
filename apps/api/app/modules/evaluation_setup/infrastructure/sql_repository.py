@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import asdict
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.modules.evaluation_setup.domain.models import (
-    PROFILE_LIST_FIELDS,
     Criterion,
     CriterionKind,
     CriterionOrigin,
@@ -48,15 +46,12 @@ _PROMPT_FIELDS = (
 
 
 def _to_profile(row: JobProfileVersionRow) -> ProfileVersion:
-    data = json.loads(row.content)
-    for name in PROFILE_LIST_FIELDS:
-        data[name] = tuple(data.get(name, ()))
     return ProfileVersion(
         id=row.id,
         vacancy_id=row.vacancy_id,
         version_number=row.version_number,
         origin=ProfileOrigin(row.origin),
-        content=ProfileContent(**data),
+        content=ProfileContent.from_stored(json.loads(row.content)),
         change_note=row.change_note,
         source_file_id=row.source_file_id,
         created_at=row.created_at,
@@ -89,7 +84,7 @@ class SqlEvaluationSetupRepository:
                 vacancy_id=version.vacancy_id,
                 version_number=version.version_number,
                 origin=version.origin.value,
-                content=json.dumps(asdict(version.content), ensure_ascii=False),
+                content=json.dumps(version.content.to_dict(), ensure_ascii=False),
                 change_note=version.change_note,
                 source_file_id=version.source_file_id,
                 created_at=version.created_at,

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { apiFetch } from "./client";
 
-export const providerCodeSchema = z.enum(["ANTHROPIC", "OPENAI"]);
+export const providerCodeSchema = z.enum(["ANTHROPIC", "OPENAI", "GEMINI"]);
 export type ProviderCode = z.infer<typeof providerCodeSchema>;
 
 const providerSchema = z.object({

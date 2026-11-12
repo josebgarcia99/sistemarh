@@ -15,8 +15,32 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol
 
-PROFILE_TEXT_FIELDS = ("objective", "experience", "education")
+# El perfil sigue el formato de la empresa «SGC.F15.RH. Perfil de puesto».
+# Datos de una sola línea (identificación del puesto y datos del documento).
+PROFILE_LINE_FIELDS = (
+    "position_name",
+    "area",
+    "location",
+    "reports_to",
+    "supervises",
+    "contract_type",
+    "work_mode",
+    "schedule",
+    "offer",
+    "specialty",
+    "document_version",
+    "document_date",
+)
+# Textos de varias líneas.
+PROFILE_TEXT_FIELDS = (
+    "objective",
+    "internal_relations",
+    "external_relations",
+    "experience",
+    "education",
+)
 PROFILE_LIST_FIELDS = (
+    "education_levels",
     "functions",
     "responsibilities",
     "knowledge",
@@ -26,28 +50,118 @@ PROFILE_LIST_FIELDS = (
     "nice_to_have",
     "ambiguities",
 )
+# Niveles de «Formación académica» del formato, en el orden en que se muestran.
+EDUCATION_LEVELS = (
+    "Maestría",
+    "Licenciatura",
+    "Ingeniería",
+    "TSU",
+    "Bachillerato",
+    "Secundaria",
+)
+# Periodicidad de una actividad, como la pide el formato.
+FREQUENCIES = ("Ocasional", "Diaria", "Semanal", "Mensual", "Anual")
+
+
+@dataclass(frozen=True)
+class Activity:
+    """Actividad del puesto y cada cuánto se hace."""
+
+    description: str
+    frequency: str = ""
+
+
+@dataclass(frozen=True)
+class Kpi:
+    """Indicador de desempeño del puesto, con su meta y su fórmula."""
+
+    name: str
+    goal: str = ""
+    formula: str = ""
 
 
 @dataclass(frozen=True)
 class ProfileContent:
+    # Identificación del puesto.
+    position_name: str = ""
+    area: str = ""
+    location: str = ""
+    reports_to: str = ""
+    supervises: str = ""
+    contract_type: str = ""
+    work_mode: str = ""
+    schedule: str = ""
+    offer: str = ""
+    # «Versión del perfil» y «Fecha de actualización» escritas en el documento.
+    document_version: str = ""
+    document_date: str = ""
+    # Propósito del puesto.
     objective: str = ""
-    experience: str = ""
+    # Alcance y relaciones clave.
+    internal_relations: str = ""
+    external_relations: str = ""
+    # Requisitos del puesto.
+    education_levels: tuple[str, ...] = ()
+    specialty: str = ""
     education: str = ""
-    functions: tuple[str, ...] = ()
-    responsibilities: tuple[str, ...] = ()
+    experience: str = ""
+    # Requisitos indispensables (conocimientos) y deseables: de aquí sale la rúbrica.
+    must_have: tuple[str, ...] = ()
+    nice_to_have: tuple[str, ...] = ()
     knowledge: tuple[str, ...] = ()
     skills: tuple[str, ...] = ()
     certifications: tuple[str, ...] = ()
-    # Requisitos indispensables y deseables: de aquí sale la rúbrica.
-    must_have: tuple[str, ...] = ()
-    nice_to_have: tuple[str, ...] = ()
+    # Funciones y actividades principales.
+    functions: tuple[str, ...] = ()
+    responsibilities: tuple[str, ...] = ()
+    activities: tuple[Activity, ...] = ()
+    # Indicadores y medición de desempeño.
+    kpis: tuple[Kpi, ...] = ()
     # Requisitos del perfil que no están claros y conviene precisar.
     ambiguities: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        """Forma en la que se guarda y se devuelve: textos, listas y filas."""
+        data: dict[str, object] = {}
+        for name in (*PROFILE_LINE_FIELDS, *PROFILE_TEXT_FIELDS):
+            data[name] = getattr(self, name)
+        for name in PROFILE_LIST_FIELDS:
+            data[name] = list(getattr(self, name))
+        data["activities"] = [
+            {"description": a.description, "frequency": a.frequency} for a in self.activities
+        ]
+        data["kpis"] = [{"name": k.name, "goal": k.goal, "formula": k.formula} for k in self.kpis]
+        return data
+
+    @classmethod
+    def from_stored(cls, data: dict[str, object]) -> ProfileContent:
+        """Reconstruye un perfil guardado. Las versiones anteriores al formato
+        de la empresa no traen los campos nuevos: quedan vacíos."""
+        values: dict[str, object] = {}
+        for name in (*PROFILE_LINE_FIELDS, *PROFILE_TEXT_FIELDS):
+            values[name] = str(data.get(name) or "")
+        for name in PROFILE_LIST_FIELDS:
+            values[name] = tuple(str(item) for item in (data.get(name) or ()))  # type: ignore[union-attr]
+        activities = data.get("activities") or ()
+        values["activities"] = tuple(
+            Activity(str(a.get("description") or ""), str(a.get("frequency") or ""))
+            for a in activities  # type: ignore[union-attr]
+            if isinstance(a, dict)
+        )
+        kpis = data.get("kpis") or ()
+        values["kpis"] = tuple(
+            Kpi(str(k.get("name") or ""), str(k.get("goal") or ""), str(k.get("formula") or ""))
+            for k in kpis  # type: ignore[union-attr]
+            if isinstance(k, dict)
+        )
+        return cls(**values)  # type: ignore[arg-type]
 
 
 class ProfileOrigin(StrEnum):
     MANUAL = "MANUAL"
     IA = "IA"
+    # Leído directamente del formato de la empresa en Excel, sin IA.
+    FORMATO = "FORMATO"
 
 
 @dataclass(frozen=True)

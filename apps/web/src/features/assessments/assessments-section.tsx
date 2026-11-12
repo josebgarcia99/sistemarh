@@ -37,7 +37,7 @@ import { downloadUrl, listFiles } from "@/lib/api/files";
 
 type Props = { applicationId: string; vacancyId: string; active: boolean };
 type Row = Record<string, string>;
-type Answer = { value: string | boolean; verified: boolean; source: string };
+type Answer = { value: string | boolean | string[][]; verified: boolean; source: string };
 
 /** Dato obligatorio para dar de alta cada tipo; el resto se captura después. */
 const FIRST_FIELD: Record<Kind, { key: string; label: string } | null> = {
@@ -403,8 +403,9 @@ function AssessmentEditor({
       )}
       {kind === "ESTUDIO_SOCIOECONOMICO" && (
         <p className="text-sm text-ink-muted">
-          Es un dato sensible y no se puntúa de ninguna forma. Un dato solo cuenta como
-          verificado cuando una persona lo marca así.
+          Es un dato sensible. El sistema no lo puntúa ni lo usa para ordenar candidatos: el
+          dictamen y los niveles del formato los anota quien aplicó el estudio. Un dato solo
+          cuenta como verificado cuando una persona lo marca así.
         </p>
       )}
       <div className="grid gap-3 md:grid-cols-3">
@@ -529,7 +530,7 @@ function AssessmentEditor({
             </div>
           )}
           {item.form.map((section) => (
-            <fieldset key={section.title} className="flex flex-col gap-3">
+            <fieldset key={section.title} className="grid min-w-0 gap-3 md:grid-cols-2">
               <legend className="font-medium">{section.title}</legend>
               {section.fields.map((field) => (
                 <StudyField
@@ -622,11 +623,75 @@ function StudyField({
   const id = `study-${field.id}`;
   const value = answer?.value ?? "";
   // Al escribir a mano, el dato deja de contar como leído por la IA.
-  const set = (next: string | boolean) =>
-    onChange(next === "" || next === false ? null : { value: next, verified: answer?.verified ?? false, source: "MANUAL" });
+  const set = (next: string | boolean | string[][]) =>
+    onChange(
+      next === "" || next === false || (Array.isArray(next) && next.length === 0)
+        ? null
+        : { value: next, verified: answer?.verified ?? false, source: "MANUAL" },
+    );
   const label = `${field.label}${field.required ? " (obligatorio)" : ""}`;
+  // Las tablas y los textos largos ocupan todo el ancho; lo demás va en dos columnas.
+  const wide = ["TABLA", "PARRAFO", "OBSERVACION"].includes(field.type);
   let control;
-  if (field.type === "CASILLA") {
+  if (field.type === "TABLA") {
+    const rows = Array.isArray(value) ? value : [];
+    control = (
+      <div className="flex min-w-0 max-w-full flex-col gap-2 overflow-x-auto">
+        <table aria-label={field.label} className="w-full min-w-[560px] border-separate border-spacing-1 text-sm">
+          <thead>
+            <tr>
+              {field.columns.map((column) => (
+                <th key={column} scope="col" className="px-2 text-left font-normal text-ink-muted">
+                  {column}
+                </th>
+              ))}
+              {canEdit && <td />}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              // Las filas no tienen identificador propio: su posición es estable al editar.
+              <tr key={rowIndex}>
+                {field.columns.map((column, columnIndex) => (
+                  <td key={column}>
+                    <input
+                      aria-label={`${field.label}, fila ${rowIndex + 1}: ${column}`}
+                      className="min-h-11 w-full rounded-xl border border-ink/15 bg-surface px-3"
+                      readOnly={!canEdit}
+                      maxLength={300}
+                      value={row[columnIndex] ?? ""}
+                      onChange={(event) =>
+                        set(
+                          rows.map((cells, index) =>
+                            index === rowIndex
+                              ? field.columns.map((_, i) => (i === columnIndex ? event.target.value : (cells[i] ?? "")))
+                              : cells,
+                          ),
+                        )
+                      }
+                    />
+                  </td>
+                ))}
+                {canEdit && (
+                  <td>
+                    <button type="button" className={secondaryButtonClass} aria-label={`Quitar la fila ${rowIndex + 1} de ${field.label}`} onClick={() => set(rows.filter((_, index) => index !== rowIndex))}>
+                      Quitar
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {rows.length === 0 && <p className="text-sm text-ink-muted">Sin filas.</p>}
+        {canEdit && rows.length < 20 && (
+          <button type="button" className={`${secondaryButtonClass} self-start`} aria-label={`Agregar fila a ${field.label}`} onClick={() => set([...rows, field.columns.map(() => "")])}>
+            Agregar fila
+          </button>
+        )}
+      </div>
+    );
+  } else if (field.type === "CASILLA") {
     control = (
       <label className="flex items-center gap-2">
         <input id={id} type="checkbox" className="size-5 accent-ink" disabled={!canEdit} checked={value === true} onChange={(event) => set(event.target.checked)} />
@@ -653,13 +718,20 @@ function StudyField({
     );
   }
   return (
-    <div className="flex flex-col gap-2 rounded-2xl bg-white/60 px-4 py-3">
-      {field.type !== "CASILLA" && (
-        <label htmlFor={id} className="text-sm text-ink-muted">
-          {label}
-        </label>
+    <div className={`flex min-w-0 flex-col gap-2 rounded-2xl bg-white/60 px-4 py-3 ${wide ? "md:col-span-2" : ""}`}>
+      {field.type === "TABLA" ? (
+        <p className="text-sm text-ink-muted">{label}</p>
+      ) : (
+        field.type !== "CASILLA" && (
+          <label htmlFor={id} className="text-sm text-ink-muted">
+            {label}
+          </label>
+        )
       )}
       {control}
+      {field.manual_only && (
+        <p className="text-sm text-ink-muted">Lo anota quien aplicó el estudio. La IA no lo llena.</p>
+      )}
       {answer && (
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <label className="flex items-center gap-2">

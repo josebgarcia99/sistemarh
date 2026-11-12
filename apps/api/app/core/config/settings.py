@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     # Alternativa a registrarlas en la pantalla; nunca van en el repositorio.
     anthropic_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
+    gemini_api_key: SecretStr | None = None
+    # Versión de la API de Gemini que va en la dirección de cada solicitud.
+    gemini_api_version: str = "v1beta"
     # Versión de la API de Anthropic que se envía en cada solicitud.
     anthropic_api_version: str = "2026-10-21"
 

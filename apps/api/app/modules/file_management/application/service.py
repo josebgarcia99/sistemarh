@@ -44,6 +44,7 @@ from app.modules.file_management.domain.models import (
     GENERATED_CONTENT_TYPES,
     GENERATED_TYPES,
     SENSITIVE_CLASSES,
+    SPREADSHEET_TYPES,
     STORAGE_FOLDERS,
     Actor,
     DocumentType,
@@ -147,7 +148,11 @@ class UploadPipeline:
             )
         temp = storage.temp_path(asset.id)
         try:
-            kind = inspect_file(temp, asset.original_name)
+            kind = inspect_file(
+                temp,
+                asset.original_name,
+                spreadsheets=asset.document_type in SPREADSHEET_TYPES,
+            )
         except FileRejectedError as rejected:
             storage.discard_temp(asset.id)
             return StoreOutcome(
@@ -253,7 +258,7 @@ class FileService:
             )
         name = sanitize_filename(original_name)
         try:
-            require_allowed_extension(name)
+            require_allowed_extension(name, spreadsheets=document_type in SPREADSHEET_TYPES)
         except FileRejectedError as rejected:
             raise ValidationFailedError(rejected.message) from rejected
         megabytes = self._max_bytes // (1024 * 1024)

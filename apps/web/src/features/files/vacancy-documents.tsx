@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/styles";
 import { describeError } from "@/lib/api/client";
 import {
-  ACCEPTED_EXTENSIONS,
+  acceptedExtensions,
   deleteFile,
   DOCUMENT_TYPE_LABELS,
   type DocumentType,
@@ -22,6 +22,7 @@ import {
   MAX_UPLOAD_BYTES,
   SENSITIVE_TYPES,
   type StoredFile,
+  SPREADSHEET_TYPES,
   uploadFile,
 } from "@/lib/api/files";
 
@@ -159,9 +160,11 @@ function UploadForm({
     const file = input.current?.files?.[0];
     if (!file) return setError("Elige un archivo.");
     const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
-    if (!ACCEPTED_EXTENSIONS.includes(extension)) {
+    if (!acceptedExtensions(documentType).includes(extension)) {
       return setError(
-        "Formato no permitido. Se aceptan PDF, DOCX, DOC, JPG y PNG.",
+        SPREADSHEET_TYPES.includes(documentType)
+          ? "Formato no permitido. Se aceptan PDF, DOCX, DOC, JPG, PNG y XLSX."
+          : "Formato no permitido. Se aceptan PDF, DOCX, DOC, JPG y PNG.",
       );
     }
     if (file.size > MAX_UPLOAD_BYTES)
@@ -212,13 +215,14 @@ function UploadForm({
         </div>
         <div className="flex flex-[2_1_220px] flex-col gap-2">
           <label htmlFor="document-file" className="text-sm text-ink-muted">
-            Archivo (PDF, DOCX, DOC, JPG o PNG; máximo 20 MB)
+            Archivo (PDF, DOCX, DOC, JPG o PNG
+            {SPREADSHEET_TYPES.includes(documentType) && ", o el formato en Excel"}; máximo 20 MB)
           </label>
           <input
             id="document-file"
             ref={input}
             type="file"
-            accept={ACCEPTED_EXTENSIONS.join(",")}
+            accept={acceptedExtensions(documentType).join(",")}
             className="min-h-12 w-full rounded-full border border-ink/15 bg-surface px-5 py-2.5 file:mr-3 file:rounded-full file:border-0 file:bg-ink file:px-4 file:py-1 file:text-white"
           />
         </div>

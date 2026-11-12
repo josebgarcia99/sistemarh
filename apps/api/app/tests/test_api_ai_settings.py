@@ -130,7 +130,11 @@ def test_la_configuracion_de_ia_es_solo_para_administradores(seeded, recruiter_c
 def test_al_inicio_no_hay_claves_ni_modelos(admin):
     overview = admin.get("/api/v1/ai/providers").json()
     assert overview["encryption_available"] is True
-    assert [item["name"] for item in overview["providers"]] == ["Anthropic", "OpenAI"]
+    assert [item["name"] for item in overview["providers"]] == [
+        "Anthropic",
+        "OpenAI",
+        "Google Gemini",
+    ]
     for item in overview["providers"]:
         assert item["key_configured"] is False and item["enabled"] is False
         assert item["key_mask"] is None and item["models_available"] == 0

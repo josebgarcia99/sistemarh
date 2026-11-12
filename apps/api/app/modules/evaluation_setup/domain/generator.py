@@ -7,25 +7,34 @@ instrucciones extensas.
 
 from __future__ import annotations
 
+import unicodedata
 import uuid
 from collections.abc import Callable
+from datetime import date
 from decimal import Decimal
 
 from app.modules.evaluation_setup.domain.models import (
+    EDUCATION_LEVELS,
+    FREQUENCIES,
     LOCKED_LAYERS,
+    PROFILE_LINE_FIELDS,
     PROFILE_LIST_FIELDS,
     PROFILE_TEXT_FIELDS,
+    Activity,
     Criterion,
     CriterionKind,
     CriterionOrigin,
+    Kpi,
     LayerKey,
     ProfileContent,
     PromptVersion,
 )
 
 MAX_TEXT = 4000
+MAX_LINE = 300
 MAX_ITEM = 500
 MAX_ITEMS = 60
+MAX_ROWS = 30
 MAX_CRITERIA = 30
 MAX_LAYER = 6000
 MAX_PROMPT_CHARS = 24000
@@ -132,8 +141,32 @@ def clean_block(text: object, limit: int) -> str:
     return value
 
 
+def fold(text: str) -> str:
+    """Minúsculas y sin acentos, para comparar opciones escritas de formas distintas."""
+    plain = unicodedata.normalize("NFD", text.casefold())
+    return "".join(ch for ch in plain if unicodedata.category(ch) != "Mn")
+
+
+def option(value: object, options: tuple[str, ...]) -> str | None:
+    """La opción del catálogo que corresponde a ``value``, escrita como en el formato."""
+    folded = fold(" ".join(str(value or "").split()))
+    return next((option for option in options if fold(option) == folded), None)
+
+
+def _rows(raw: object, label: str) -> list[dict[str, object]]:
+    if raw is None:
+        return []
+    if not isinstance(raw, list | tuple) or not all(isinstance(row, dict) for row in raw):
+        raise SetupValidationError(f"{label} no tienen el formato esperado.")
+    if len(raw) > MAX_ROWS:
+        raise SetupValidationError(f"{label} superan el máximo de {MAX_ROWS} filas.")
+    return list(raw)
+
+
 def validate_profile(data: dict[str, object]) -> ProfileContent:
     values: dict[str, object] = {}
+    for name in PROFILE_LINE_FIELDS:
+        values[name] = _clean(data.get(name), MAX_LINE)
     for name in PROFILE_TEXT_FIELDS:
         values[name] = clean_block(data.get(name), MAX_TEXT)
     for name in PROFILE_LIST_FIELDS:
@@ -144,12 +177,70 @@ def validate_profile(data: dict[str, object]) -> ProfileContent:
         if len(items) > MAX_ITEMS:
             raise SetupValidationError(f"Una lista del perfil supera los {MAX_ITEMS} elementos.")
         values[name] = tuple(dict.fromkeys(items))  # sin repetidos, en el mismo orden
+
+    levels = []
+    for item in values["education_levels"]:  # type: ignore[union-attr]
+        level = option(item, EDUCATION_LEVELS)
+        if level is None:
+            raise SetupValidationError(
+                "La formación académica solo admite: " + ", ".join(EDUCATION_LEVELS) + "."
+            )
+        levels.append(level)
+    values["education_levels"] = tuple(level for level in EDUCATION_LEVELS if level in levels)
+
+    if values["document_date"]:
+        try:
+            values["document_date"] = date.fromisoformat(str(values["document_date"])).isoformat()
+        except ValueError as error:
+            raise SetupValidationError(
+                "La fecha de actualización del perfil no es una fecha válida."
+            ) from error
+
+    activities = []
+    for row in _rows(data.get("activities"), "Las actividades"):
+        description = _clean(row.get("description"), MAX_ITEM)
+        frequency = _clean(row.get("frequency"), 40)
+        if not description:
+            if frequency:
+                raise SetupValidationError("Hay una periodicidad sin su actividad.")
+            continue
+        if frequency:
+            known = option(frequency, FREQUENCIES)
+            if known is None:
+                raise SetupValidationError(
+                    "La periodicidad de una actividad solo admite: " + ", ".join(FREQUENCIES) + "."
+                )
+            frequency = known
+        activities.append(Activity(description, frequency))
+    values["activities"] = tuple(activities)
+
+    kpis = []
+    for row in _rows(data.get("kpis"), "Los indicadores"):
+        name = _clean(row.get("name"), MAX_ITEM)
+        goal = _clean(row.get("goal"), MAX_ITEM)
+        formula = _clean(row.get("formula"), MAX_ITEM)
+        if not name:
+            if goal or formula:
+                raise SetupValidationError("Hay una meta o una fórmula sin el nombre de su KPI.")
+            continue
+        kpis.append(Kpi(name, goal, formula))
+    values["kpis"] = tuple(kpis)
+
     content = ProfileContent(**values)  # type: ignore[arg-type]
     if not content.objective:
-        raise SetupValidationError("Escribe el objetivo del puesto.")
+        raise SetupValidationError("Escribe el propósito del puesto.")
     if not content.must_have:
         raise SetupValidationError("Agrega al menos un requisito indispensable.")
     return content
+
+
+def education_text(profile: ProfileContent) -> str:
+    """Formación pedida: niveles marcados, especialidad y aclaraciones."""
+    parts = [" o ".join(profile.education_levels)]
+    if profile.specialty:
+        parts.append(f"especialidad en {profile.specialty}")
+    parts.append(profile.education)
+    return "; ".join(part for part in parts if part)
 
 
 def _bullets(title: str, items: tuple[str, ...]) -> str:
@@ -185,11 +276,14 @@ def build_layers(
     return {
         LayerKey.INSTRUCCIONES: _INSTRUCCIONES,
         LayerKey.PERFIL: _join(
-            f"Objetivo del puesto: {profile.objective}",
+            f"Puesto: {profile.position_name}" if profile.position_name else "",
+            f"Área o departamento: {profile.area}" if profile.area else "",
+            f"Propósito del puesto: {profile.objective}",
             _bullets("Funciones", profile.functions),
+            _bullets("Actividades", tuple(a.description for a in profile.activities)),
             _bullets("Responsabilidades", profile.responsibilities),
             f"Experiencia: {profile.experience}" if profile.experience else "",
-            f"Formación: {profile.education}" if profile.education else "",
+            f"Formación: {education_text(profile)}" if education_text(profile) else "",
         ),
         LayerKey.REQUISITOS: _join(
             _bullets("Requisitos indispensables", profile.must_have),

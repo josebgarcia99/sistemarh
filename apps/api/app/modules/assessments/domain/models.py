@@ -91,6 +91,8 @@ class FieldType(StrEnum):
     CASILLA = "CASILLA"
     DOCUMENTO = "DOCUMENTO"
     OBSERVACION = "OBSERVACION"
+    # Filas con las mismas columnas (por ejemplo, los familiares o los estudios).
+    TABLA = "TABLA"
 
 
 @dataclass(frozen=True)
@@ -102,6 +104,10 @@ class FormField:
     options: tuple[str, ...] = ()
     minimum: Decimal | None = None
     maximum: Decimal | None = None
+    # Encabezados de las columnas de una tabla.
+    columns: tuple[str, ...] = ()
+    # Solo lo captura una persona: la IA no lo llena al leer un documento.
+    manual_only: bool = False
 
 
 @dataclass(frozen=True)

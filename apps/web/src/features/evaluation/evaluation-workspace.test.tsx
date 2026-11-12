@@ -11,6 +11,37 @@ const PROMPTS_URL = `/api/v1/vacancies/${VACANCY_ID}/prompts`;
 const PROMPT_ID = "50000000-0000-0000-0000-000000000001";
 const LEVELS = ["Insuficiente", "Mínima", "Parcial", "Suficiente", "Supera"];
 
+const EMPTY_PROFILE = {
+  position_name: "",
+  area: "",
+  location: "",
+  reports_to: "",
+  supervises: "",
+  contract_type: "",
+  work_mode: "",
+  schedule: "",
+  offer: "",
+  specialty: "",
+  document_version: "",
+  document_date: "",
+  objective: "",
+  internal_relations: "",
+  external_relations: "",
+  experience: "",
+  education: "",
+  education_levels: [] as string[],
+  must_have: [] as string[],
+  knowledge: [] as string[],
+  skills: [] as string[],
+  functions: [] as string[],
+  nice_to_have: [] as string[],
+  certifications: [] as string[],
+  responsibilities: [] as string[],
+  ambiguities: [] as string[],
+  activities: [] as { description: string; frequency: string }[],
+  kpis: [] as { name: string; goal: string; formula: string }[],
+};
+
 function makeProfile(overrides: Partial<ProfileVersion> = {}): ProfileVersion {
   return {
     id: "60000000-0000-0000-0000-000000000001",
@@ -19,18 +50,28 @@ function makeProfile(overrides: Partial<ProfileVersion> = {}): ProfileVersion {
     change_note: null,
     created_at: "2026-11-11T18:00:00Z",
     created_by_name: "Reclutadora de Prueba",
+    ...EMPTY_PROFILE,
     objective: "Calcular la nómina.",
-    experience: "",
-    education: "",
-    functions: [],
-    responsibilities: [],
-    knowledge: [],
-    skills: [],
-    certifications: [],
     must_have: ["Experiencia en nómina"],
-    nice_to_have: [],
-    ambiguities: [],
     ...overrides,
+  };
+}
+
+function makeFile(id: string, name: string) {
+  return {
+    id,
+    vacancy_id: VACANCY_ID,
+    document_type: "PERFIL_PUESTO",
+    sensitive: false,
+    original_name: name,
+    content_type: null,
+    size_bytes: 1200,
+    sha256: null,
+    malware_scan: null,
+    encrypted: false,
+    uploaded_by: "u1",
+    uploaded_by_name: "Reclutadora de Prueba",
+    created_at: "2026-11-11T18:00:00Z",
   };
 }
 
@@ -108,7 +149,7 @@ describe("EvaluationWorkspace", () => {
     const user = userEvent.setup();
     renderWorkspace();
     expect(await screen.findByText(/Todavía no hay perfil/)).toBeTruthy();
-    await user.type(screen.getByLabelText("Objetivo del puesto"), "Calcular la nómina.");
+    await user.type(screen.getByLabelText("Propósito del puesto"), "Calcular la nómina.");
     await user.type(
       screen.getByLabelText("Requisitos indispensables (uno por línea)"),
       "Experiencia en nómina{Enter}{Enter}  Excel intermedio  ",
@@ -130,7 +171,7 @@ describe("EvaluationWorkspace", () => {
     });
     const user = userEvent.setup();
     renderWorkspace();
-    await user.type(await screen.findByLabelText("Experiencia"), "Dos años");
+    await user.type(await screen.findByLabelText("Experiencia previa"), "Dos años");
     await user.click(screen.getByRole("button", { name: "Guardar como versión nueva" }));
     expect((await screen.findByRole("alert")).textContent).toContain("versión más reciente");
   });
@@ -142,7 +183,7 @@ describe("EvaluationWorkspace", () => {
     });
     const user = userEvent.setup();
     renderWorkspace({ canEdit: false, canApprove: false });
-    const objective = (await screen.findByLabelText("Objetivo del puesto")) as HTMLTextAreaElement;
+    const objective = (await screen.findByLabelText("Propósito del puesto")) as HTMLTextAreaElement;
     expect(objective.readOnly).toBe(true);
     expect(screen.queryByRole("button", { name: /Guardar/ })).toBeNull();
 
@@ -260,48 +301,36 @@ describe("EvaluationWorkspace", () => {
       ambiguities: ["«Excel intermedio» no indica qué funciones"],
       truncated: true,
       source_file_id: FILE_ID,
+      origin: "IA",
+      notices: [],
     };
     const fetchMock = mockApi({
       [`GET ${PROFILE_URL}`]: { body: [] },
       [`GET /api/v1/vacancies/${VACANCY_ID}/files`]: {
-        body: [
-          {
-            id: FILE_ID,
-            vacancy_id: VACANCY_ID,
-            document_type: "PERFIL_PUESTO",
-            sensitive: false,
-            original_name: "perfil analista.docx",
-            content_type: null,
-            size_bytes: 1200,
-            sha256: null,
-            malware_scan: null,
-            encrypted: false,
-            uploaded_by: "u1",
-            uploaded_by_name: "Reclutadora de Prueba",
-            created_at: "2026-11-11T18:00:00Z",
-          },
-        ],
+        body: [makeFile(FILE_ID, "perfil analista.docx")],
       },
       [`POST /api/v1/vacancies/${VACANCY_ID}/profile-extractions`]: { body: proposal },
       [`POST ${PROFILE_URL}`]: { status: 201, body: makeProfile({ origin: "IA" }) },
     });
     const user = userEvent.setup();
     renderWorkspace();
-    await user.click(await screen.findByRole("button", { name: "Llenar con IA desde un documento" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Usar un documento ya cargado o pegar texto" }),
+    );
     // Sin documento ni texto no hay nada que leer.
-    expect(screen.getByRole("button", { name: "Leer con IA" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Leer documento" }).hasAttribute("disabled")).toBe(true);
     await user.selectOptions(
       await screen.findByLabelText(/Documento de la vacante/),
       await screen.findByRole("option", { name: "perfil analista.docx" }),
     );
-    await user.click(screen.getByRole("button", { name: "Leer con IA" }));
+    await user.click(screen.getByRole("button", { name: "Leer documento" }));
 
     const status = await screen.findByRole("status");
     expect(status.textContent).toContain("todavía no se ha guardado");
     expect(status.textContent).toContain("solo se leyó el inicio");
     const extraction = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/profile-extractions"));
     expect(JSON.parse(String(extraction?.[1]?.body))).toEqual({ file_id: FILE_ID });
-    expect((screen.getByLabelText("Objetivo del puesto") as HTMLTextAreaElement).value).toBe(
+    expect((screen.getByLabelText("Propósito del puesto") as HTMLTextAreaElement).value).toBe(
       "Pagar la nómina sin errores.",
     );
     expect(
@@ -316,9 +345,96 @@ describe("EvaluationWorkspace", () => {
       ([url, init]) => String(url).endsWith("/profile-versions") && init?.method === "POST",
     );
     const body = JSON.parse(String(saved?.[1]?.body));
-    expect(body.from_ai).toBe(true);
+    expect(body.origin).toBe("IA");
     expect(body.source_file_id).toBe(FILE_ID);
     expect(body.must_have).toEqual(["Dos años en nómina", "Excel"]);
+  });
+
+  it("sube el formato de la empresa, llena los campos y lo guarda marcado como formato", async () => {
+    const FILE_ID = "c0000000-0000-0000-0000-000000000002";
+    const proposal = {
+      ...EMPTY_PROFILE,
+      position_name: "Analista de Nómina",
+      area: "Recursos Humanos",
+      document_date: "2026-10-05",
+      objective: "Calcular y pagar la nómina.",
+      education_levels: ["Licenciatura", "TSU"],
+      must_have: ["Cálculo de nómina", "Cuotas IMSS"],
+      skills: ["Atención al detalle"],
+      functions: ["Calcular la nómina"],
+      activities: [
+        { description: "Registrar incidencias", frequency: "Diaria" },
+        { description: "Calcular la nómina", frequency: "" },
+      ],
+      kpis: [{ name: "Nóminas a tiempo", goal: "100 %", formula: "A tiempo / total" }],
+      truncated: false,
+      source_file_id: FILE_ID,
+      origin: "FORMATO",
+      notices: ["El formato pide edad mínima 25. No se copió al perfil."],
+    };
+    const fetchMock = mockApi({
+      [`GET ${PROFILE_URL}`]: { body: [] },
+      [`POST /api/v1/vacancies/${VACANCY_ID}/files`]: {
+        status: 201,
+        body: { file: makeFile(FILE_ID, "SGC.F15.RH. Perfil de puesto.xlsx"), duplicates: [] },
+      },
+      [`POST /api/v1/vacancies/${VACANCY_ID}/profile-extractions`]: { body: proposal },
+      [`POST ${PROFILE_URL}`]: { status: 201, body: makeProfile({ origin: "FORMATO" }) },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    const picker = await screen.findByLabelText("Formato del perfil");
+    const file = new File(["libro"], "SGC.F15.RH. Perfil de puesto.xlsx");
+    await user.upload(picker, file);
+
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toContain("Se leyó el formato de la empresa");
+    expect(status.textContent).toContain("todavía no se ha guardado");
+    const upload = fetchMock.mock.calls.find(([url]) => String(url).includes("/files?"));
+    expect(String(upload?.[0])).toContain("document_type=PERFIL_PUESTO");
+    expect(within(screen.getByRole("list", { name: "Avisos de la lectura" })).getByText(/edad mínima 25/)).toBeTruthy();
+
+    // Los campos del formato quedan llenos.
+    expect((screen.getByLabelText("Nombre del puesto") as HTMLInputElement).value).toBe("Analista de Nómina");
+    expect((screen.getByLabelText("Fecha de actualización") as HTMLInputElement).value).toBe("2026-10-05");
+    const levels = within(screen.getByRole("group", { name: "Formación académica" }));
+    expect((levels.getByLabelText("Licenciatura") as HTMLInputElement).checked).toBe(true);
+    expect((levels.getByLabelText("Maestría") as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText("Actividad 1") as HTMLInputElement).value).toBe("Registrar incidencias");
+    expect((screen.getByLabelText("Periodicidad de la actividad 1") as HTMLSelectElement).value).toBe("Diaria");
+    expect((screen.getByLabelText("KPI 1") as HTMLInputElement).value).toBe("Nóminas a tiempo");
+
+    // La persona corrige antes de guardar: marca un nivel, completa una periodicidad y quita el KPI.
+    await user.click(levels.getByLabelText("Maestría"));
+    await user.selectOptions(screen.getByLabelText("Periodicidad de la actividad 2"), "Semanal");
+    await user.click(screen.getByRole("button", { name: "Agregar actividad" }));
+    await user.click(screen.getByRole("button", { name: "Quitar fila 1 de indicadores" }));
+    await user.click(screen.getByRole("button", { name: "Guardar perfil" }));
+    await screen.findByText(/Perfil guardado como versión 1/);
+    const saved = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).endsWith("/profile-versions") && init?.method === "POST",
+    );
+    const body = JSON.parse(String(saved?.[1]?.body));
+    expect(body.origin).toBe("FORMATO");
+    expect(body.source_file_id).toBe(FILE_ID);
+    expect(body.position_name).toBe("Analista de Nómina");
+    expect(body.education_levels).toEqual(["Licenciatura", "TSU", "Maestría"]);
+    // La fila vacía que se agregó no viaja.
+    expect(body.activities).toEqual([
+      { description: "Registrar incidencias", frequency: "Diaria" },
+      { description: "Calcular la nómina", frequency: "Semanal" },
+    ]);
+    expect(body.kpis).toEqual([]);
+    expect(body.must_have).toEqual(["Cálculo de nómina", "Cuotas IMSS"]);
+  });
+
+  it("no sube un archivo que no es un formato aceptado para el perfil", async () => {
+    const fetchMock = mockApi({ [`GET ${PROFILE_URL}`]: { body: [] } });
+    const user = userEvent.setup({ applyAccept: false });
+    renderWorkspace();
+    await user.upload(await screen.findByLabelText("Formato del perfil"), new File(["x"], "perfil.zip"));
+    expect((await screen.findByRole("alert")).textContent).toContain("Formato no permitido");
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
   });
 
   it("si la IA no puede leer el perfil, muestra el motivo y no toca el formulario", async () => {
@@ -333,13 +449,15 @@ describe("EvaluationWorkspace", () => {
     });
     const user = userEvent.setup();
     renderWorkspace();
-    await user.click(await screen.findByRole("button", { name: "Llenar con IA desde un documento" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Usar un documento ya cargado o pegar texto" }),
+    );
     await user.type(screen.getByLabelText("Texto del perfil"), "Perfil de analista de nómina");
-    await user.click(screen.getByRole("button", { name: "Leer con IA" }));
+    await user.click(screen.getByRole("button", { name: "Leer documento" }));
     expect((await screen.findByRole("alert")).textContent).toContain("modelo asignado");
     const extraction = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/profile-extractions"));
     expect(JSON.parse(String(extraction?.[1]?.body))).toEqual({ text: "Perfil de analista de nómina" });
-    expect((screen.getByLabelText("Objetivo del puesto") as HTMLTextAreaElement).value).toBe(
+    expect((screen.getByLabelText("Propósito del puesto") as HTMLTextAreaElement).value).toBe(
       "Calcular la nómina.",
     );
   });

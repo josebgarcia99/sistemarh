@@ -20,6 +20,8 @@ REDACTED = "[OCULTO]"
 _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Claves de proveedores de IA (Anthropic, OpenAI y formatos similares).
     re.compile(r"sk-[A-Za-z0-9_\-]{8,}"),
+    # Claves de Google (Gemini).
+    re.compile(r"AIza[A-Za-z0-9_\-]{20,}"),
     # Cabeceras de autorización.
     re.compile(r"(?i)(bearer\s+)[A-Za-z0-9_\-\.=]{8,}"),
     # Pares clave=valor o "clave": "valor" con nombres sensibles.
@@ -34,10 +36,12 @@ _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 def redact(text: str) -> str:
     """Devuelve ``text`` con los secretos reconocibles sustituidos."""
-    text = _SECRET_PATTERNS[0].sub(REDACTED, text)
-    text = _SECRET_PATTERNS[1].sub(lambda m: m.group(1) + REDACTED, text)
-    text = _SECRET_PATTERNS[2].sub(lambda m: m.group(1) + REDACTED, text)
-    text = _SECRET_PATTERNS[3].sub(lambda m: m.group(1) + REDACTED + m.group(3), text)
+    provider_key, google_key, bearer, pair, url_credentials = _SECRET_PATTERNS
+    text = provider_key.sub(REDACTED, text)
+    text = google_key.sub(REDACTED, text)
+    text = bearer.sub(lambda m: m.group(1) + REDACTED, text)
+    text = pair.sub(lambda m: m.group(1) + REDACTED, text)
+    text = url_credentials.sub(lambda m: m.group(1) + REDACTED + m.group(3), text)
     return text
 
 

@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Reversión completa (DESTRUCTIVO)
-   Versión del esquema: 0012 -> (vacía)
-   Generado: 2026-11-12 15:47 (UTC) con scripts/generate_sql.py
+   Versión del esquema: 0013 -> (vacía)
+   Generado: 2026-11-12 19:37 (UTC) con scripts/generate_sql.py
 
    ELIMINA todas las tablas y esquemas del sistema, con todos sus datos.
    Solo para entornos de prueba. Nunca ejecutar en producción sin respaldo.
@@ -24,14 +24,36 @@ SET XACT_ABORT ON;
 GO
 
 -- Protección: si la base no está en la versión esperada, no se ejecuta nada.
-IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0012')
+IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0013')
 BEGIN
-    RAISERROR(N'La base no esta en la version 0012. No se aplico ningun cambio.', 16, 1);
+    RAISERROR(N'La base no esta en la version 0013. No se aplico ningun cambio.', 16, 1);
     SET NOEXEC ON;
 END
 GO
 
 BEGIN TRANSACTION;
+
+-- Running downgrade 0013 -> 0012
+
+ALTER TABLE vacancy.job_profile_versions DROP CONSTRAINT ck_job_profile_versions_origin;
+
+GO
+
+ALTER TABLE vacancy.job_profile_versions ADD CONSTRAINT ck_job_profile_versions_origin CHECK (origin IN ('MANUAL', 'IA'));
+
+GO
+
+ALTER TABLE ai.providers DROP CONSTRAINT ck_providers_code;
+
+GO
+
+ALTER TABLE ai.providers ADD CONSTRAINT ck_providers_code CHECK (code IN ('ANTHROPIC', 'OPENAI'));
+
+GO
+
+UPDATE alembic_version SET version_num='0012' WHERE alembic_version.version_num = '0013';
+
+GO
 
 -- Running downgrade 0012 -> 0011
 

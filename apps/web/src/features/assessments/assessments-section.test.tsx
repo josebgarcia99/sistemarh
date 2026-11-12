@@ -58,6 +58,15 @@ const sent = (fetchMock: ReturnType<typeof mockApi>, method: string, ending: str
 const renderSection = () =>
   renderApp(<AssessmentsSection applicationId="a1" vacancyId="v1" active />, { session: makeUser() });
 
+const FIELD = {
+  required: false,
+  options: [] as string[],
+  minimum: null,
+  maximum: null,
+  columns: [] as string[],
+  manual_only: false,
+};
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -107,8 +116,8 @@ describe("AssessmentsSection", () => {
     const study = make("ESTUDIO_SOCIOECONOMICO", {
       status: "EN_PROCESO",
       form: [{ title: "Datos de la visita", fields: [
-        { id: "visita", label: "Fecha de la visita", type: "FECHA", required: true, options: [], minimum: null, maximum: null },
-        { id: "domicilio", label: "Domicilio declarado", type: "PARRAFO", required: false, options: [], minimum: null, maximum: null },
+        { ...FIELD, id: "visita", label: "Fecha de la visita", type: "FECHA", required: true },
+        { ...FIELD, id: "domicilio", label: "Domicilio declarado", type: "PARRAFO" },
       ] }],
     });
     const fetchMock = mockApi({
@@ -122,7 +131,7 @@ describe("AssessmentsSection", () => {
     const user = userEvent.setup();
     renderSection();
     await user.click(await screen.findByRole("button", { name: /Estudio socioeconómico/ }));
-    expect(screen.getByText(/no se puntúa de ninguna forma/)).toBeTruthy();
+    expect(screen.getByText(/El sistema no lo puntúa/)).toBeTruthy();
     // Solo se ofrecen documentos del tipo que corresponde.
     const picker = await screen.findByLabelText("Formulario escaneado");
     await within(picker).findByRole("option", { name: "estudio escaneado.pdf" });
@@ -142,6 +151,46 @@ describe("AssessmentsSection", () => {
     expect(sent(fetchMock, "PUT", "/e-ESTUDIO_SOCIOECONOMICO").data.answers).toEqual({
       visita: { value: "2026-11-10", verified: true, source: "IA" },
       domicilio: { value: "Calle Inventada 123", verified: false, source: "IA" },
+    });
+  });
+
+  it("captura las tablas del formato y marca lo que solo anota una persona", async () => {
+    const study = make("ESTUDIO_SOCIOECONOMICO", {
+      status: "EN_PROCESO",
+      data: { answers: { familia: { value: [["Familiar Ficticio", "52", "Madre"]], verified: false, source: "IA" } } },
+      form: [
+        { title: "Datos familiares", fields: [
+          { ...FIELD, id: "familia", label: "Datos familiares", type: "TABLA", columns: ["Nombre", "Edad", "Parentesco"] },
+        ] },
+        { title: "Dictamen", fields: [
+          { ...FIELD, id: "dictamen", label: "Dictamen (observaciones)", type: "OBSERVACION", manual_only: true },
+        ] },
+      ],
+    });
+    const fetchMock = mockApi({
+      [`GET ${LIST_URL}`]: { body: list([study]) },
+      [`GET ${FILES_URL}`]: { body: [] },
+      ["PUT /api/v1/assessments/e-ESTUDIO_SOCIOECONOMICO"]: { body: { ...study, version: 2 } },
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: /Estudio socioeconómico/ }));
+    const table = await screen.findByRole("table", { name: "Datos familiares" });
+    expect(within(table).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["Nombre", "Edad", "Parentesco"]);
+    expect((screen.getByLabelText("Datos familiares, fila 1: Nombre") as HTMLInputElement).value).toBe("Familiar Ficticio");
+    expect(screen.getByText("Lo anota quien aplicó el estudio. La IA no lo llena.")).toBeTruthy();
+
+    // Se agrega una fila, se quita la primera y se anota el dictamen.
+    await user.click(screen.getByRole("button", { name: "Agregar fila a Datos familiares" }));
+    await user.type(screen.getByLabelText("Datos familiares, fila 2: Nombre"), "Hermano Ficticio");
+    await user.type(screen.getByLabelText("Datos familiares, fila 2: Parentesco"), "Hermano");
+    await user.click(screen.getByRole("button", { name: "Quitar la fila 1 de Datos familiares" }));
+    await user.type(screen.getByLabelText("Dictamen (observaciones)"), "Dictamen del aplicador.");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByText("Evaluación guardada.");
+    expect(sent(fetchMock, "PUT", "/e-ESTUDIO_SOCIOECONOMICO").data.answers).toEqual({
+      familia: { value: [["Hermano Ficticio", "", "Hermano"]], verified: false, source: "MANUAL" },
+      dictamen: { value: "Dictamen del aplicador.", verified: false, source: "MANUAL" },
     });
   });
 

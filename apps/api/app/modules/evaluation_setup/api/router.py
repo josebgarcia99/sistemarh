@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field, model_validator
@@ -17,6 +18,7 @@ from app.modules.evaluation_setup.domain import generator
 from app.modules.evaluation_setup.domain.models import (
     LOCKED_LAYERS,
     LayerKey,
+    ProfileOrigin,
     ProfileVersion,
     PromptVersion,
 )
@@ -26,22 +28,63 @@ router = APIRouter(tags=["perfil y prompt"])
 _Items = list[str]
 
 
-class ProfileIn(BaseModel):
+class ActivityModel(BaseModel):
+    description: str = ""
+    # Ocasional, Diaria, Semanal, Mensual o Anual; vacía si no se indicó.
+    frequency: str = ""
+
+
+class KpiModel(BaseModel):
+    name: str = ""
+    goal: str = ""
+    formula: str = ""
+
+
+class ProfileFields(BaseModel):
+    """Campos del perfil, en el orden del formato «SGC.F15.RH. Perfil de puesto»."""
+
+    # Identificación del puesto.
+    position_name: str = ""
+    area: str = ""
+    location: str = ""
+    reports_to: str = ""
+    supervises: str = ""
+    contract_type: str = ""
+    work_mode: str = ""
+    schedule: str = ""
+    offer: str = ""
+    document_version: str = ""
+    document_date: str = ""
+    # Propósito, alcance y relaciones.
     objective: str = ""
-    experience: str = ""
+    internal_relations: str = ""
+    external_relations: str = ""
+    # Requisitos del puesto.
+    education_levels: _Items = Field(default_factory=list)
+    specialty: str = ""
     education: str = ""
-    functions: _Items = Field(default_factory=list)
-    responsibilities: _Items = Field(default_factory=list)
+    experience: str = ""
+    must_have: _Items = Field(default_factory=list)
+    nice_to_have: _Items = Field(default_factory=list)
     knowledge: _Items = Field(default_factory=list)
     skills: _Items = Field(default_factory=list)
     certifications: _Items = Field(default_factory=list)
-    must_have: _Items = Field(default_factory=list)
-    nice_to_have: _Items = Field(default_factory=list)
+    # Funciones, actividades e indicadores.
+    functions: _Items = Field(default_factory=list)
+    responsibilities: _Items = Field(default_factory=list)
+    activities: list[ActivityModel] = Field(default_factory=list)
+    kpis: list[KpiModel] = Field(default_factory=list)
     ambiguities: _Items = Field(default_factory=list)
+
+
+class ProfileIn(ProfileFields):
     change_note: str | None = Field(default=None, max_length=300)
     # Número de la versión que la persona tenía a la vista (0 si no había perfil).
     expected_version: int = Field(ge=0)
-    # La persona partió de una propuesta de la IA y la revisó.
+    # De dónde partió la persona antes de revisar: captura manual, propuesta de
+    # la IA o lectura del formato de la empresa.
+    origin: Literal["MANUAL", "IA", "FORMATO"] | None = None
+    # Forma anterior de indicar que partió de una propuesta de la IA.
     from_ai: bool = False
     # Documento de la vacante del que salió la propuesta, si lo hubo.
     source_file_id: uuid.UUID | None = None
@@ -60,22 +103,15 @@ class ProfileExtractionIn(BaseModel):
         return self
 
 
-class ProfileProposalOut(BaseModel):
-    """Propuesta de la IA. No está guardada."""
+class ProfileProposalOut(ProfileFields):
+    """Propuesta leída del formato de la empresa o por la IA. No está guardada."""
 
-    objective: str
-    experience: str
-    education: str
-    functions: _Items
-    responsibilities: _Items
-    knowledge: _Items
-    skills: _Items
-    certifications: _Items
-    must_have: _Items
-    nice_to_have: _Items
-    ambiguities: _Items
     truncated: bool
     source_file_id: uuid.UUID | None
+    # FORMATO: leída de las celdas del formato en Excel, sin IA. IA: propuesta por la IA.
+    origin: str
+    # Avisos para quien revisa (datos del formato que no se copiaron o no se leyeron).
+    notices: list[str]
 
 
 class CriterionSuggestionOut(BaseModel):
@@ -93,24 +129,13 @@ class CriteriaProposalOut(BaseModel):
     observations: list[str]
 
 
-class ProfileVersionOut(BaseModel):
+class ProfileVersionOut(ProfileFields):
     id: uuid.UUID
     version_number: int
     origin: str
     change_note: str | None
     created_at: datetime
     created_by_name: str | None
-    objective: str
-    experience: str
-    education: str
-    functions: _Items
-    responsibilities: _Items
-    knowledge: _Items
-    skills: _Items
-    certifications: _Items
-    must_have: _Items
-    nice_to_have: _Items
-    ambiguities: _Items
 
 
 class CriterionIn(BaseModel):
@@ -181,7 +206,6 @@ def _names(repos: Repositories, ids: set[uuid.UUID | None]) -> dict[uuid.UUID, s
 
 
 def _profile_out(version: ProfileVersion, names: dict[uuid.UUID, str]) -> ProfileVersionOut:
-    content = version.content
     return ProfileVersionOut(
         id=version.id,
         version_number=version.version_number,
@@ -189,17 +213,7 @@ def _profile_out(version: ProfileVersion, names: dict[uuid.UUID, str]) -> Profil
         change_note=version.change_note,
         created_at=version.created_at,
         created_by_name=names.get(version.created_by),
-        objective=content.objective,
-        experience=content.experience,
-        education=content.education,
-        functions=list(content.functions),
-        responsibilities=list(content.responsibilities),
-        knowledge=list(content.knowledge),
-        skills=list(content.skills),
-        certifications=list(content.certifications),
-        must_have=list(content.must_have),
-        nice_to_have=list(content.nice_to_have),
-        ambiguities=list(content.ambiguities),
+        **version.content.to_dict(),
     )
 
 
@@ -279,7 +293,15 @@ def save_profile(
     principal: Principal = Depends(require_user),  # noqa: B008
     context: AppContext = Depends(get_context),  # noqa: B008
 ) -> ProfileVersionOut:
-    data = body.model_dump(exclude={"change_note", "expected_version", "from_ai", "source_file_id"})
+    data = body.model_dump(
+        exclude={"change_note", "expected_version", "origin", "from_ai", "source_file_id"}
+    )
+    if body.origin is not None:
+        origin = ProfileOrigin(body.origin)
+    elif body.from_ai or body.source_file_id is not None:
+        origin = ProfileOrigin.IA
+    else:
+        origin = ProfileOrigin.MANUAL
     with context.require_backend().transaction() as repos:
         version = context.evaluation_setup(repos).save_profile(
             principal.user,
@@ -287,7 +309,7 @@ def save_profile(
             data,
             change_note=body.change_note,
             expected_version=body.expected_version,
-            from_ai=body.from_ai or body.source_file_id is not None,
+            origin=origin,
             source_file_id=body.source_file_id,
             ip=client_ip(request),
         )
@@ -298,7 +320,7 @@ def save_profile(
 @router.post(
     "/vacancies/{vacancy_id}/profile-extractions",
     response_model=ProfileProposalOut,
-    summary="La IA lee un perfil (documento o texto) y lo devuelve como propuesta sin guardar",
+    summary="Lee un perfil (formato en Excel, documento o texto) y lo devuelve como propuesta",
 )
 def extract_profile(
     vacancy_id: uuid.UUID,
@@ -318,21 +340,12 @@ def extract_profile(
     # El consumo de la llamada ya quedó registrado; el fallo se informa después.
     if proposal.content is None:
         raise ServiceUnavailableError(proposal.error)
-    content = proposal.content
     return ProfileProposalOut(
-        objective=content.objective,
-        experience=content.experience,
-        education=content.education,
-        functions=list(content.functions),
-        responsibilities=list(content.responsibilities),
-        knowledge=list(content.knowledge),
-        skills=list(content.skills),
-        certifications=list(content.certifications),
-        must_have=list(content.must_have),
-        nice_to_have=list(content.nice_to_have),
-        ambiguities=list(content.ambiguities),
         truncated=proposal.truncated,
         source_file_id=proposal.source_file_id,
+        origin=proposal.origin.value,
+        notices=list(proposal.notices),
+        **proposal.content.to_dict(),
     )
 
 

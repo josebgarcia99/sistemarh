@@ -201,3 +201,94 @@ class OpenAIClient(_BaseClient):
             raise ProviderHttpError(
                 "proveedor", "El proveedor devolvió una respuesta con un formato inesperado."
             ) from error
+
+
+class GeminiClient(_BaseClient):
+    """API de Gemini (Google AI): ``models.list`` y ``generateContent``.
+
+    La clave viaja en la cabecera ``x-goog-api-key``, nunca en la dirección.
+    No se ha ejecutado contra el servicio real.
+    """
+
+    _GENERATE = "generateContent"
+
+    def __init__(
+        self,
+        base_url: str = "https://generativelanguage.googleapis.com",
+        api_version: str = "v1beta",
+        client_factory: Callable[[], httpx.Client] | None = None,
+    ) -> None:
+        super().__init__(base_url, client_factory)
+        self._api_version = api_version
+
+    def list_models(self, api_key: str) -> list[DiscoveredModel]:
+        headers = {"x-goog-api-key": api_key}
+        models: list[DiscoveredModel] = []
+        params = {"pageSize": "200"}
+        with self._client_factory() as client:
+            for _ in range(_MAX_PAGES):
+                payload = _get(
+                    client, f"{self._base_url}/{self._api_version}/models", headers, params
+                )
+                for item in payload.get("models", []):
+                    methods = item.get("supportedGenerationMethods") or []
+                    # Solo sirven los modelos que generan texto (no los de vectores o imagen).
+                    if self._GENERATE not in methods:
+                        continue
+                    # El nombre llega como «models/<id>»; se guarda solo el identificador.
+                    model_id = str(item["name"]).removeprefix("models/")
+                    models.append(
+                        DiscoveredModel(
+                            model_id=model_id,
+                            display_name=str(item.get("displayName") or model_id),
+                            capabilities={
+                                key: item[key]
+                                for key in ("inputTokenLimit", "outputTokenLimit")
+                                if key in item
+                            }
+                            or None,
+                        )
+                    )
+                token = payload.get("nextPageToken")
+                if not token:
+                    break
+                params = {"pageSize": "200", "pageToken": str(token)}
+        return models
+
+    def generate(
+        self, api_key: str, model: str, *, system: str, user: str, max_output_tokens: int
+    ) -> Generation:
+        headers = {"x-goog-api-key": api_key}
+        body = {
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": user}]}],
+            "generationConfig": {"maxOutputTokens": max_output_tokens},
+        }
+        url = f"{self._base_url}/{self._api_version}/models/{model}:{self._GENERATE}"
+        with self._client_factory() as client:
+            payload = _post(client, url, headers, body)
+        try:
+            candidates = payload.get("candidates") or []
+            if not candidates:
+                # Sin candidatos: el proveedor bloqueó la solicitud o no generó nada.
+                raise ProviderHttpError("proveedor", "El proveedor no pudo generar la respuesta.")
+            candidate = candidates[0]
+            text = "".join(
+                part.get("text", "")
+                for part in (candidate.get("content") or {}).get("parts", [])
+                # Las partes de razonamiento del modelo no son la respuesta.
+                if not part.get("thought")
+            )
+            usage = payload["usageMetadata"]
+            return Generation(
+                text=text,
+                input_tokens=int(usage["promptTokenCount"]),
+                # El razonamiento interno se cobra como salida.
+                output_tokens=int(usage.get("candidatesTokenCount", 0))
+                + int(usage.get("thoughtsTokenCount", 0)),
+                complete=candidate.get("finishReason") != "MAX_TOKENS",
+            )
+        except (KeyError, TypeError, ValueError, AttributeError) as error:
+            raise ProviderHttpError(
+                "proveedor", "El proveedor devolvió una respuesta con un formato inesperado."
+            ) from error

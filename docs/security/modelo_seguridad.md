@@ -123,13 +123,13 @@ Estado al 11 de noviembre de 2026.
 | Pantalla | "Configuración de inteligencia artificial", solo para administradores: registrar, sustituir y revocar la clave; probar la conexión; habilitar o deshabilitar; límite de gasto mensual; modelo de cada operación |
 | Dónde está la clave | Cifrada con la clave maestra en `ai.provider_credentials`. El navegador la envía una sola vez, por HTTPS, y nunca la recibe de vuelta: solo ve `••••` y los últimos cuatro caracteres |
 | Sustituir y revocar | Sustituir crea un registro nuevo y borra el texto cifrado del anterior. Revocar borra el texto cifrado y deshabilita el proveedor |
-| Clave por variable de entorno | `RECLU_ANTHROPIC_API_KEY` y `RECLU_OPENAI_API_KEY`. La pantalla la muestra como "definida por Sistemas" y no permite cambiarla ni revocarla |
+| Clave por variable de entorno | `RECLU_ANTHROPIC_API_KEY`, `RECLU_OPENAI_API_KEY` y `RECLU_GEMINI_API_KEY`. La pantalla la muestra como "definida por Sistemas" y no permite cambiarla ni revocarla |
 | Probar la conexión | Pide al proveedor su lista de modelos. No envía ningún documento ni dato personal |
 | Modelos | No hay identificadores de modelos en el código: la lista sale de lo que cada proveedor informa. Si un proveedor retira un modelo, deja de poder asignarse |
 | Errores | Los mensajes los redacta la aplicación; nunca incluyen la clave ni la respuesta completa del proveedor |
 | Auditoría | Registro, sustitución, revocación, pruebas, cambios de proveedor y asignaciones. Solo se anota la terminación de la clave |
 
-**Sin verificar:** la aplicación nunca se ha conectado a Anthropic ni a OpenAI. Las pruebas usan proveedores simulados y claves ficticias. La dirección, la cabecera de autorización y la versión de la API de Anthropic (`2026-10-21`, configurable) se tomaron de la documentación pública de cada proveedor consultada el 11 de noviembre de 2026.
+**Sin verificar:** la aplicación nunca se ha conectado a Anthropic, a OpenAI ni a Google Gemini. La clave de Gemini viaja en la cabecera `x-goog-api-key` (nunca en la dirección) y la versión de su API (`v1beta`) es configurable. Las pruebas usan proveedores simulados y claves ficticias. La dirección, la cabecera de autorización y la versión de la API de Anthropic (`2026-10-21`, configurable) se tomaron de la documentación pública de cada proveedor consultada el 11 de noviembre de 2026.
 
 **Llamadas a los proveedores (Fase 4, tercera parte).**
 
@@ -200,7 +200,7 @@ Estado al 11 de noviembre de 2026.
 | Documentos | Los reportes psicométricos y los estudios se guardan cifrados. Para resumirlos o digitalizarlos se descifran en memoria dentro del servidor; el texto es lo único que se envía al proveedor |
 | Sin decisiones automáticas | Registrar o cambiar una evaluación nunca mueve de etapa ni cambia el estado de una postulación |
 | Psicometría | El sistema no diagnostica ni declara aptitud. «Validada» exige el nombre del profesional que la interpretó. A la IA se le pide transcribir lo que el reporte documenta; su respuesta se reduce a resumen, resultados documentados, datos ilegibles y avisos |
-| Estudio socioeconómico | No existe ninguna puntuación, ni en la base de datos ni en la pantalla. A la IA se le prohíbe inferir nivel socioeconómico, confiabilidad, moralidad, religión, salud o idoneidad; solo se aceptan valores para campos de la plantilla. Un dato leído por la IA entra sin verificar y solo una persona puede marcarlo como verificado. No se envían fotografías ni imágenes a ningún proveedor |
+| Estudio socioeconómico | El sistema no calcula ninguna puntuación. El formato de la empresa (SGC.F3.RH) pide un dictamen, niveles por indicador, un «score total» y la viabilidad: son campos de captura manual que anota quien aplicó el estudio; la IA no los recibe ni los llena, y no entran en la síntesis ni en los reportes. Los datos de salud, religión y antecedentes que pide el formato quedan bajo el mismo permiso adicional por persona. A la IA se le prohíbe inferir nivel socioeconómico, confiabilidad, moralidad, religión, salud o idoneidad; solo se aceptan valores para campos de la plantilla. Un dato leído por la IA entra sin verificar y solo una persona puede marcarlo como verificado. No se envían fotografías ni imágenes a ningún proveedor |
 | Síntesis del expediente | Seis listas por tipo de fuente; cualquier puntuación, índice o recomendación en la respuesta se descarta en el servidor. No se envían el nombre ni el contacto. La psicometría entra solo si está validada y quien pide la síntesis tiene ese permiso; una síntesis que la incluye solo la ve quien lo tiene. El contenido del estudio socioeconómico nunca entra |
 | Auditoría | Alta y cambios de cada evaluación (tipo y estado, nunca el contenido), resúmenes, digitalizaciones, versiones de formularios y síntesis con sus fuentes |
 

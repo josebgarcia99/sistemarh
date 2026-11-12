@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 
+from app.infrastructure.documents.spreadsheet import SpreadsheetError, read_sheets
 from app.infrastructure.documents.text import Ocr, TextExtractionError, extract_text
 from app.infrastructure.storage.local import LocalFileStorage, StorageError
 from app.modules.ai_settings.application.service import AiSettingsService
@@ -20,7 +22,8 @@ _UNREADABLE = {
     "sin_texto": "No se encontró texto legible en el documento. Pega el texto del perfil "
     "en su lugar.",
     "formato_sin_texto": "Este formato todavía no se puede leer (DOC antiguo, o imagen sin "
-    "el lector de documentos escaneados instalado). Usa un PDF o un DOCX, o pega el texto.",
+    "el lector de documentos escaneados instalado). Usa un PDF, un DOCX o el formato en "
+    "Excel, o pega el texto.",
     "ocr_fallido": "El lector de documentos escaneados no pudo procesar el archivo.",
     "protegido": "El PDF está protegido con contraseña.",
     "ilegible": "El documento está dañado o no se pudo leer.",
@@ -76,12 +79,34 @@ class StoredProfileSources:
     def is_profile_document(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> bool:
         return self._asset(vacancy_id, file_id) is not None
 
-    def read_text(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> tuple[str, bool]:
+    def _require(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> FileAsset:
         asset = self._asset(vacancy_id, file_id)
         if asset is None or self._storage is None:
             raise ProfileSourceError(
                 "Elige un documento de tipo «Perfil de puesto» cargado en esta vacante."
             )
+        return asset
+
+    def read_sheets(
+        self, vacancy_id: uuid.UUID, file_id: uuid.UUID
+    ) -> list[Mapping[tuple[int, int], object]] | None:
+        asset = self._require(vacancy_id, file_id)
+        if asset.extension != "xlsx":
+            return None
+        assert self._storage is not None  # noqa: S101  (lo comprueba _require)
+        try:
+            with self._storage.open(asset.storage_key) as handle:
+                return [sheet.cells for sheet in read_sheets(handle)]
+        except SpreadsheetError as error:
+            raise ProfileSourceError(_UNREADABLE["ilegible"]) from error
+        except (StorageError, OSError) as error:
+            raise ProfileSourceError(
+                "El documento no está disponible en el almacenamiento."
+            ) from error
+
+    def read_text(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> tuple[str, bool]:
+        asset = self._require(vacancy_id, file_id)
+        assert self._storage is not None  # noqa: S101  (lo comprueba _require)
         try:
             with self._storage.open(asset.storage_key) as handle:
                 found = extract_text(handle, asset.extension, self._ocr)
