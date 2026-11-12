@@ -61,7 +61,7 @@ cd apps/web    && npm run typecheck && npm run lint && npm test && npm run build
 ## Reglas del proyecto
 
 - Ningún secreto, documento real ni dato personal entra al repositorio. Revisa `.gitignore` antes de añadir archivos.
-- Las API keys de IA se registran desde la aplicación, nunca en el código ni en `.env.example`.
+- Las API keys de IA van en el `.env` del servidor (`RECLU_ANTHROPIC_API_KEY`, `RECLU_OPENAI_API_KEY`, `RECLU_GEMINI_API_KEY`) o se registran desde la aplicación; nunca en el código ni en los archivos `.env.example`.
 - Solo SQL Server: la aplicación rechaza cualquier otro motor. Las pruebas automáticas usan un motor SQLite en memoria que solo existe dentro de las pruebas y que no sustituye la validación contra SQL Server.
 - Las pruebas usan datos sintéticos.
 - Una funcionalidad no está terminada sin pruebas.

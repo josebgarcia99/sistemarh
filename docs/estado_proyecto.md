@@ -50,7 +50,7 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 | Eliminación controlada | Solo el administrador y con motivo. Borra el archivo, conserva los metadatos y queda auditada |
 | Conciliación | Comando y ruta de administrador que cierran cargas interrumpidas, mandan a cuarentena archivos sin registro, reportan registros sin archivo y verifican hashes |
 | Respaldos | Comandos para generar el manifiesto de documentos y para verificar una copia o una restauración contra él |
-| Configuración de IA | Pantalla de administrador para registrar, sustituir y revocar las API keys de Anthropic, OpenAI y Google Gemini (cifradas con la clave maestra y nunca devueltas), probar la conexión, habilitar proveedores, fijar un límite mensual y asignar un modelo a cada una de las nueve operaciones. También admite claves inyectadas por Sistemas como variables de entorno |
+| Configuración de IA | Pantalla de administrador para registrar, sustituir y revocar las API keys de Anthropic, OpenAI y Google Gemini (cifradas con la clave maestra y nunca devueltas), o tomarlas del archivo `.env` del servidor (variables `RECLU_ANTHROPIC_API_KEY`, `RECLU_OPENAI_API_KEY` y `RECLU_GEMINI_API_KEY`, que el despliegue entrega a la API y al worker), probar la conexión, habilitar proveedores, fijar un límite mensual y asignar un modelo a cada una de las nueve operaciones. También admite claves inyectadas por Sistemas como variables de entorno |
 | Registro de modelos | La lista de modelos sale de lo que informa cada proveedor al probar la conexión; no hay identificadores de modelos en el código |
 | Llamadas a los proveedores de IA | Una sola vía para llamar a Anthropic y a OpenAI: comprueba modelo, clave y autorización para enviar documentos, reintenta los fallos pasajeros y registra tokens, costo estimado, duración y resultado, sin guardar el contenido |
 | Precios y límite mensual | El administrador captura el precio de cada modelo; con él se estima el costo y se detienen las llamadas al alcanzar el límite mensual del proveedor. Pantalla con el consumo del mes y botón para probar cada modelo |
@@ -111,7 +111,7 @@ Ejecutadas el 12 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 374 pruebas, todas pasan |
+| API: `pytest` | 375 pruebas, todas pasan |
 | Worker: `pytest` | 5 pruebas, todas pasan |
 | `ruff check` y `lint-imports` | Sin errores; 13 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |

@@ -78,8 +78,21 @@ Copiar `infrastructure/env/produccion.env.example` como `infrastructure/env/prod
 | `RECLU_DISPLAY_TIMEZONE` | Zona horaria de fechas y reportes |
 | `RECLU_LOG_LEVEL` | `INFO` |
 | `FORWARDED_ALLOW_IPS` | Desde qué direcciones se acepta la IP real del usuario que informa el proxy |
+| `RECLU_ANTHROPIC_API_KEY`, `RECLU_OPENAI_API_KEY`, `RECLU_GEMINI_API_KEY` | API key de cada proveedor de IA que se use. Vacía si ese proveedor no se usa |
 
-Las claves de Anthropic, OpenAI y Google Gemini **no van en este archivo**: el administrador las registra en la pantalla «IA», donde quedan cifradas.
+
+### API keys de los proveedores de IA
+
+Las API keys van en `produccion.env`, en las tres variables de arriba, sin comillas ni espacios. El archivo de Compose se las pasa solo a los contenedores `api` y `worker`.
+
+1. Escribir la clave de cada proveedor que se use y dejar vacías las demás.
+2. Proteger el archivo: `chmod 600 infrastructure/env/produccion.env`, propiedad del usuario que despliega. Contiene secretos en texto plano: quien pueda leer ese archivo, o ejecutar `docker inspect` en el servidor, puede ver las claves.
+3. Aplicar el cambio: `$COMPOSE up -d api worker` (la aplicación lee las claves al arrancar).
+4. En la aplicación, el administrador entra a «IA»: el proveedor aparece con la clave «definida por Sistemas» y sus últimos cuatro caracteres. Ahí pulsa «Probar conexión», habilita el proveedor y asigna un modelo a cada operación.
+
+Para **cambiar o retirar** una clave: editar el archivo y repetir el paso 3. Si una clave se filtra, revocarla primero en el sitio del proveedor y luego sustituirla aquí.
+
+Una clave puesta en el archivo manda sobre la pantalla: desde «IA» no se puede cambiar ni revocar. Si una variable se deja vacía, ese proveedor puede seguir configurándose desde la pantalla, donde la clave queda cifrada en la base de datos.
 
 ### Salida a internet para los proveedores de IA
 

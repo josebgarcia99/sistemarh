@@ -26,6 +26,10 @@ services:
       RECLU_REDIS_URL: redis://redis:6379/0
       RECLU_STORAGE_ROOT: /srv/reclutamiento/storage
       RECLU_AI_ALLOW_REAL_DOCUMENTS: "false"
+      # API keys de IA tomadas de ".env" (vacías = sin clave por entorno).
+      RECLU_ANTHROPIC_API_KEY: ${RECLU_ANTHROPIC_API_KEY:-}
+      RECLU_OPENAI_API_KEY: ${RECLU_OPENAI_API_KEY:-}
+      RECLU_GEMINI_API_KEY: ${RECLU_GEMINI_API_KEY:-}
       # "clamd" exige levantar el antivirus:  --profile antivirus
       RECLU_ANTIVIRUS_MODE: ${RECLU_ANTIVIRUS_MODE:-disabled}
       RECLU_CLAMD_HOST: clamav
@@ -55,6 +59,10 @@ services:
       RECLU_REDIS_URL: redis://redis:6379/0
       RECLU_STORAGE_ROOT: /srv/reclutamiento/storage
       RECLU_AI_ALLOW_REAL_DOCUMENTS: "false"
+      # API keys de IA tomadas de ".env" (vacías = sin clave por entorno).
+      RECLU_ANTHROPIC_API_KEY: ${RECLU_ANTHROPIC_API_KEY:-}
+      RECLU_OPENAI_API_KEY: ${RECLU_OPENAI_API_KEY:-}
+      RECLU_GEMINI_API_KEY: ${RECLU_GEMINI_API_KEY:-}
     volumes:
       - type: bind
         source: ${RECLU_STORAGE_HOST_PATH:?Define RECLU_STORAGE_HOST_PATH en .env}

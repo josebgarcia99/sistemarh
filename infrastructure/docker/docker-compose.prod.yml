@@ -23,6 +23,13 @@ x-python-env: &python-env
   RECLU_ANTIVIRUS_MODE: ${RECLU_ANTIVIRUS_MODE:-clamd}
   RECLU_CLAMD_HOST: clamav
   RECLU_AI_ALLOW_REAL_DOCUMENTS: ${RECLU_AI_ALLOW_REAL_DOCUMENTS:-false}
+  # API keys de los proveedores de IA, tomadas del archivo .env del servidor.
+  # Vacías = sin clave por entorno (se podría registrar desde la pantalla «IA»).
+  RECLU_ANTHROPIC_API_KEY: ${RECLU_ANTHROPIC_API_KEY:-}
+  RECLU_OPENAI_API_KEY: ${RECLU_OPENAI_API_KEY:-}
+  RECLU_GEMINI_API_KEY: ${RECLU_GEMINI_API_KEY:-}
+  RECLU_ANTHROPIC_API_VERSION: ${RECLU_ANTHROPIC_API_VERSION:-2026-10-21}
+  RECLU_GEMINI_API_VERSION: ${RECLU_GEMINI_API_VERSION:-v1beta}
   RECLU_DISPLAY_TIMEZONE: ${RECLU_DISPLAY_TIMEZONE:-America/Mexico_City}
 
 x-python-volumes: &python-volumes

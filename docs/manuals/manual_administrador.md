@@ -46,7 +46,7 @@ Menú «IA». Hasta que configures un proveedor, las funciones de IA no están d
 
 ### Claves de los proveedores
 
-1. Elige el proveedor (Anthropic, OpenAI o Google Gemini) y pulsa «Registrar clave». Pega la clave y «Guardar clave».
+1. Elige el proveedor (Anthropic, OpenAI o Google Gemini) y pulsa «Registrar clave». Pega la clave y «Guardar clave». Si Sistemas ya puso la clave en el archivo `.env` del servidor, el proveedor aparece como «definida por Sistemas» con sus últimos cuatro caracteres: sáltate este paso (desde la pantalla no se puede cambiar; se cambia en el servidor).
 2. «Probar conexión» comprueba que la clave funciona.
 3. «Habilitar» activa el proveedor.
 

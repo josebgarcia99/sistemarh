@@ -130,11 +130,25 @@ def test_el_despliegue_de_produccion_no_publica_servicios_internos_ni_trae_secre
         mounts = {volume["target"]: volume for volume in services[name]["volumes"]}
         assert mounts["/run/secrets/clave_maestra"]["read_only"] is True
         assert "/srv/reclutamiento/storage" in mounts
-    # Los ejemplos de variables no contienen valores reales.
-    for example in sorted((infrastructure / "env").glob("*.env.example")):
+    # Las API keys del .env del servidor llegan a la API y al worker (y solo a ellos).
+    key_names = ("RECLU_ANTHROPIC_API_KEY", "RECLU_OPENAI_API_KEY", "RECLU_GEMINI_API_KEY")
+    for name in ("api", "worker"):
+        for key in key_names:
+            assert services[name]["environment"][key] == "${" + key + ":-}", (name, key)
+    for name in ("web", "proxy", "redis", "clamav"):
+        declared = services[name].get("environment") or {}
+        assert not any(key in declared for key in key_names), name
+    # Los ejemplos de variables traen el sitio para las claves, vacío, y ningún valor real.
+    examples = sorted((infrastructure / "env").glob("*.env.example"))
+    for example in (*examples, REPO_ROOT / ".env.example"):
+        text = example.read_text()
+        for key in key_names:
+            assert re.search(rf"^{key}=$", text, re.MULTILINE), (example.name, key)
+        assert not re.search(r"sk-[A-Za-z0-9]{8,}|AIza[0-9A-Za-z_\-]{20,}", text), example.name
+    for example in examples:
         text = example.read_text()
         assert "<CONTRASENA>" in text and "RECLU_AI_ALLOW_REAL_DOCUMENTS=false" in text
-        assert not re.search(r"sk-[A-Za-z0-9]{8,}", text)
+        assert "chmod 600" in text
     ignored = (REPO_ROOT / ".gitignore").read_text()
     assert "infrastructure/env/*.env" in ignored and ".env" in ignored
     proxy = (infrastructure / "nginx" / "reclutamiento.conf").read_text()

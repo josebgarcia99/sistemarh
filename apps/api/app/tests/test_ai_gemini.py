@@ -194,6 +194,14 @@ def test_gemini_se_configura_como_los_demas_proveedores():
     assert set(build_provider_clients(settings)) == set(ProviderCode)
     assert env_api_keys(settings) == {ProviderCode.GEMINI: GEMINI_KEY}
     assert env_api_keys(Settings(environment=Environment.TEST)) == {}
+    # Como llegan desde un .env: vacías no cuentan, y se limpian espacios y comillas.
+    from_file = Settings(
+        environment=Environment.TEST,
+        anthropic_api_key="",
+        openai_api_key="   ",
+        gemini_api_key=f'  "{GEMINI_KEY}"\n',
+    )
+    assert env_api_keys(from_file) == {ProviderCode.GEMINI: GEMINI_KEY}
     assert PROVIDER_NAMES[ProviderCode.GEMINI] == "Google Gemini"
     # Una clave de Google que llegara a un registro sale oculta.
     assert GEMINI_KEY not in redact(f"fallo con x-goog-api-key: {GEMINI_KEY} en la llamada")
@@ -253,3 +261,43 @@ def test_gemini_se_registra_prueba_habilita_y_usa_desde_la_pantalla(
     assert revoked.status_code == 200 and revoked.json()["key_configured"] is False
     assert revoked.json()["enabled"] is False
     assert all(row.ciphertext is None for row in stored_credentials(backend))
+
+
+def test_con_las_claves_en_el_env_del_servidor_la_ia_funciona_sin_registrarlas_en_pantalla(
+    seeded, backend, hasher, clock, providers
+):
+    """Las API keys llegan como variables de entorno (archivo .env del servidor)."""
+    from app.tests.conftest import ADMIN_EMAIL, ADMIN_PASSWORD, login
+    from app.tests.test_api_ai_settings import _app
+
+    # Sin clave maestra: las claves del .env no se guardan en la base ni se cifran.
+    app = _app(seeded, backend, hasher, clock, providers, None, gemini_api_key=f" {GEMINI_KEY}\n")
+    client = login(app, ADMIN_EMAIL, ADMIN_PASSWORD)
+    listed = {item["code"]: item for item in client.get(f"{API}/ai/providers").json()["providers"]}
+    assert listed["GEMINI"]["key_configured"] is True
+    assert (
+        listed["GEMINI"]["key_source"] == "ENTORNO" and listed["GEMINI"]["key_mask"] == "••••ABCD"
+    )
+    # Los proveedores sin variable siguen sin clave.
+    assert listed["ANTHROPIC"]["key_configured"] is False
+    assert GEMINI_KEY not in client.get(f"{API}/ai/providers").text
+    assert stored_credentials(backend) == []
+
+    # El administrador prueba la conexión, habilita el proveedor y asigna el modelo.
+    assert client.post(f"{API}/ai/providers/GEMINI/test").json()["ok"] is True
+    assert providers[ProviderCode.GEMINI].received_keys == [GEMINI_KEY]  # sin espacios
+    assert client.put(f"{API}/ai/providers/GEMINI", json={"enabled": True}).status_code == 200
+    [model] = [
+        m
+        for m in client.get(f"{API}/ai/models", params={"provider": "GEMINI"}).json()
+        if m["model_id"] == "modelo-grande-1"
+    ]
+    assigned = client.put(
+        f"{API}/ai/assignments/DESCRIPCION_FOTOGRAFIAS", json={"model_id": model["id"]}
+    )
+    assert assigned.status_code == 200, assigned.text
+    probe = client.post(f"{API}/ai/models/{model['id']}/test")
+    assert probe.status_code == 200 and probe.json()["ok"] is True
+    # Desde la pantalla no se puede cambiar ni quitar: la define el servidor.
+    assert client.put(f"{API}/ai/providers/GEMINI/key", json={"api_key": "otra"}).status_code == 409
+    assert client.delete(f"{API}/ai/providers/GEMINI/key").status_code == 409

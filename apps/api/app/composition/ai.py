@@ -66,11 +66,16 @@ def build_provider_clients(settings: Settings) -> dict[ProviderCode, ProviderCli
 
 def env_api_keys(settings: Settings) -> dict[ProviderCode, str]:
     """Claves inyectadas por Sistemas como variables de entorno del servidor."""
+    declared = {
+        ProviderCode.ANTHROPIC: settings.anthropic_api_key,
+        ProviderCode.OPENAI: settings.openai_api_key,
+        ProviderCode.GEMINI: settings.gemini_api_key,
+    }
     keys = {}
-    if settings.anthropic_api_key is not None:
-        keys[ProviderCode.ANTHROPIC] = settings.anthropic_api_key.get_secret_value()
-    if settings.openai_api_key is not None:
-        keys[ProviderCode.OPENAI] = settings.openai_api_key.get_secret_value()
-    if settings.gemini_api_key is not None:
-        keys[ProviderCode.GEMINI] = settings.gemini_api_key.get_secret_value()
+    for code, secret in declared.items():
+        # Una variable vacía (RECLU_..._API_KEY=) equivale a no definirla. Se quitan
+        # los espacios, saltos de línea y comillas que suelen colarse al pegar la clave.
+        value = secret.get_secret_value().strip().strip("\"'").strip() if secret else ""
+        if value:
+            keys[code] = value
     return keys
