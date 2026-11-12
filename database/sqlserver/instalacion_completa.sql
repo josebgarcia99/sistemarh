@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Instalación completa
-   Versión del esquema: (vacía) -> 0014
-   Generado: 2026-11-12 20:00 (UTC) con scripts/generate_sql.py
+   Versión del esquema: (vacía) -> 0015
+   Generado: 2026-11-12 20:21 (UTC) con scripts/generate_sql.py
 
    Crea todos los esquemas y tablas en una base de datos VACÍA.
 
@@ -1165,6 +1165,16 @@ ALTER TABLE ai.operation_assignments ADD CONSTRAINT ck_operation_assignments_ope
 GO
 
 UPDATE alembic_version SET version_num='0014' WHERE alembic_version.version_num = '0013';
+
+GO
+
+-- Running upgrade 0014 -> 0015
+
+ALTER TABLE recruitment.application_syntheses ADD includes_study BIT NOT NULL DEFAULT 0;
+
+GO
+
+UPDATE alembic_version SET version_num='0015' WHERE alembic_version.version_num = '0014';
 
 GO
 

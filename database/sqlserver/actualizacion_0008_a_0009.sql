@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Actualización 0008 -> 0009
    Versión del esquema: 0008 -> 0009
-   Generado: 2026-11-12 20:00 (UTC) con scripts/generate_sql.py
+   Generado: 2026-11-12 20:21 (UTC) con scripts/generate_sql.py
 
    Aplica solo los cambios de la versión 0009 sobre una base que ya
    está en la versión 0008. Si está en otra versión, no hace nada.

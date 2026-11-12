@@ -15,6 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session, aliased
 
 from app.modules.ai_settings.infrastructure.orm import AiExecutionRow
+from app.modules.assessments.infrastructure.orm import AssessmentRow, FormTemplateVersionRow
 from app.modules.cv_processing.infrastructure.orm import CvBatchItemRow, CvBatchRow
 from app.modules.evaluation_setup.infrastructure.orm import PromptVersionRow
 from app.modules.file_management.infrastructure.orm import FileAssetRow
@@ -131,6 +132,36 @@ class SqlReportingSource:
         return {
             s.id: StageFact(s.id, s.pipeline_version_id, s.position, s.name, s.kind) for s in rows
         }
+
+    def study_photos(self, application_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+        if not application_ids:
+            return {}
+        rows = self._session.execute(
+            sa.select(
+                AssessmentRow.application_id, AssessmentRow.data, FormTemplateVersionRow.sections
+            )
+            .join(
+                FormTemplateVersionRow,
+                FormTemplateVersionRow.id == AssessmentRow.template_version_id,
+            )
+            .where(
+                AssessmentRow.kind == "ESTUDIO_SOCIOECONOMICO",
+                AssessmentRow.status != "ANULADO",
+                AssessmentRow.application_id.in_(application_ids),
+            )
+            .order_by(AssessmentRow.updated_at)
+        )
+        found: dict[uuid.UUID, list[str]] = {}
+        for application_id, data, sections in rows:
+            answers = json.loads(data).get("answers") or {}
+            for section in json.loads(sections):
+                for item in section["fields"]:
+                    entry = answers.get(item["id"]) or {}
+                    if item["type"] == "DOCUMENTO" and entry.get("description"):
+                        found.setdefault(application_id, []).append(
+                            f"{item['label']}: {entry['description']}"
+                        )
+        return {application_id: "\n".join(lines) for application_id, lines in found.items()}
 
     @staticmethod
     def _within(column: sa.ColumnElement[datetime], window: Window) -> sa.ColumnElement[bool]:

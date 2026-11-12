@@ -104,5 +104,6 @@ class ApplicationSynthesisRow(Base):
     result: Mapped[str] = mapped_column(long_text())
     sources: Mapped[str] = mapped_column(long_text())
     includes_psychometrics: Mapped[bool] = mapped_column(sa.Boolean)
+    includes_study: Mapped[bool] = mapped_column(sa.Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
     created_by: Mapped[uuid.UUID] = mapped_column(GUID, sa.ForeignKey(_USER_FK))

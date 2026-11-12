@@ -301,11 +301,16 @@ def build_history(
     generated_by: str,
     filters: dict[str, str],
     zone: tzinfo,
+    with_study: bool = False,
 ) -> int:
-    """Escribe el Excel de postulaciones y devuelve cuántas filas incluye."""
+    """Escribe el Excel de postulaciones y devuelve cuántas filas incluye.
+
+    ``with_study`` añade la columna con las descripciones de las fotografías del
+    estudio socioeconómico: solo cuando quien lo genera tiene ese permiso."""
     book = Workbook()
     sheet = book.active
     sheet.title = "Postulaciones"
+    study_header = ["Fotografías del estudio socioeconómico (descripciones)"] if with_study else []
     _table(
         sheet,
         [
@@ -327,6 +332,7 @@ def build_history(
             "Cierre",
             "Registró el cierre",
             "Fecha de incorporación",
+            *study_header,
         ],
         (
             [
@@ -348,6 +354,7 @@ def build_history(
                 r.closed_at,
                 r.closed_by_name,
                 _day(r.start_date),
+                *([r.study_photos] if with_study else []),
             ]
             for r in rows
         ),
@@ -358,6 +365,14 @@ def build_history(
         about, generated_at=generated_at, generated_by=generated_by, filters=filters, zone=zone
     )
     about.append(["Postulaciones", len(rows)])
+    if with_study:
+        about.append(
+            [
+                "Datos sensibles",
+                "Incluye descripciones de fotografías del estudio socioeconómico. "
+                "No lo compartas con quien no tenga ese permiso.",
+            ]
+        )
     about.column_dimensions["A"].width = 30
     about.column_dimensions["B"].width = 40
     book.save(target)

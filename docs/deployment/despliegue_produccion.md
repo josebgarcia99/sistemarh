@@ -81,6 +81,23 @@ Copiar `infrastructure/env/produccion.env.example` como `infrastructure/env/prod
 
 Las claves de Anthropic, OpenAI y Google Gemini **no van en este archivo**: el administrador las registra en la pantalla «IA», donde quedan cifradas.
 
+### Salida a internet para los proveedores de IA
+
+El servidor de la aplicación (los contenedores de la API y del worker) inicia conexiones **salientes** hacia el proveedor de IA que se use. No hace falta abrir ningún puerto de entrada. En el cortafuegos o proxy de salida hay que permitir:
+
+| Proveedor | Destino | Puerto | Protocolo |
+| --- | --- | --- | --- |
+| Google Gemini | `generativelanguage.googleapis.com` | 443 | HTTPS (TLS 1.2 o superior) |
+| Anthropic (solo si se usa) | `api.anthropic.com` | 443 | HTTPS |
+| OpenAI (solo si se usa) | `api.openai.com` | 443 | HTTPS |
+
+- Permitir por **nombre de dominio**, no por dirección IP: las direcciones de estos servicios cambian.
+- Si la salida pasa por un proxy corporativo, definir `HTTPS_PROXY` (y `NO_PROXY` para los servicios internos) en el entorno de la API y del worker. Si el proxy inspecciona TLS, su certificado raíz debe estar instalado en los contenedores.
+- La resolución DNS de esos nombres debe funcionar desde los contenedores.
+- Comprobación desde el servidor: `curl -sS -o /dev/null -w "%{http_code}\n" https://generativelanguage.googleapis.com/v1beta/models` debe responder con un código HTTP (por ejemplo `403`, porque no lleva clave). Si no responde o da error de conexión, la salida está bloqueada.
+- La API key no se configura en el servidor: el administrador la registra en la pantalla «IA».
+
+
 ### 3.4 Arranque y primer administrador
 
 ```bash

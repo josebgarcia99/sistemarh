@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0014`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0015`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -528,6 +528,7 @@ Síntesis del expediente generadas por la IA. Se conservan todas.
 | `result` | `NVARCHAR(MAX)` | Sí | JSON (`ISJSON`) con seis listas: hechos documentados, declaraciones, observaciones humanas, resultados técnicos, información pendiente y discrepancias verificables. Nunca una puntuación. |
 | `sources` | `NVARCHAR(MAX)` | Sí | Fuentes usadas, en JSON (por ejemplo, «2 llamadas»). |
 | `includes_psychometrics` | `BIT` | Sí | Si incluyó psicometría validada; en ese caso solo la ve quien tiene ese permiso. |
+| `includes_study` | `BIT` | Sí | Si incluyó descripciones de fotografías del estudio socioeconómico; en ese caso solo la ve quien tiene el permiso del estudio. Valor por omisión 0. Desde la migración `0015`. |
 | `created_at`, `created_by` | | Sí | Cuándo y quién la pidió. |
 
 ## Esquema `ops`: operación

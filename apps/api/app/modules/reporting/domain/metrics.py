@@ -223,6 +223,9 @@ class HistoryRow:
     closed_at: datetime | None = None
     closed_by_name: str | None = None
     start_date: date | None = None
+    # Descripciones de las fotografías del estudio socioeconómico. Solo se llena
+    # en el Excel y solo para quien tiene el permiso del estudio en esa vacante.
+    study_photos: str | None = None
 
 
 @dataclass

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from app.core.ai_json import parse_json_object
@@ -12,6 +13,7 @@ from app.modules.assessments.domain.models import (
     FormField,
     FormTemplateVersion,
     Kind,
+    PhotoNote,
 )
 from app.modules.assessments.domain.rules import table_rows
 
@@ -115,7 +117,8 @@ Responde solo con este JSON, sin texto adicional:
 SYNTHESIS_SYSTEM = f"""\
 Recibes el expediente de una postulación: datos del CV, evaluación inicial, llamadas, \
 pruebas técnicas, entrevistas y, si se incluyen, pruebas psicométricas ya interpretadas por \
-un profesional. Prepara una síntesis para que una persona decida. Tú no decides.
+un profesional y descripciones de fotografías del estudio socioeconómico. Prepara una \
+síntesis para que una persona decida. Tú no decides.
 
 Clasifica cada punto en una sola lista:
 - "hechos_documentados": lo que consta en un documento (CV, reporte, prueba).
@@ -135,6 +138,9 @@ como falta de la persona.
 del profesional.
 - No uses ni menciones edad, sexo, estado civil, origen, religión, salud, apariencia, \
 situación económica ni familiar.
+- Las descripciones de fotografías del estudio van en "observaciones_humanas", tal como \
+están escritas y citando de qué fotografía son. No saques de ellas ninguna conclusión \
+sobre la persona, su nivel socioeconómico, su confiabilidad ni su idoneidad.
 - {_NO_INSTRUCTIONS}
 
 Responde solo con este JSON, sin texto adicional:
@@ -298,7 +304,10 @@ def digitization_from_answer(version: FormTemplateVersion, text: str) -> dict[st
 
 
 def synthesis_request(
-    material: DossierMaterial, assessments: list[Assessment], pending: list[str]
+    material: DossierMaterial,
+    assessments: list[Assessment],
+    pending: list[str],
+    photos: Sequence[PhotoNote] = (),
 ) -> str:
     lines = ["<<<EXPEDIENTE"]
     if material.requirements:
@@ -354,6 +363,11 @@ def synthesis_request(
                 f"- Interpretación de {data.get('professional_name')}: "
                 f"{data.get('validation_note') or '(sin nota)'}"
             )
+    if photos:
+        lines.append("FOTOGRAFÍAS DEL ESTUDIO SOCIOECONÓMICO (descripciones guardadas por RH)")
+        for note in photos:
+            origin = "propuesta por la IA y revisada" if note.proposed_by_ai else "escrita a mano"
+            lines.append(f"- {note.label} ({origin}): {note.description}")
     if pending:
         lines.append("PENDIENTE")
         lines += [f"- {item}" for item in pending]

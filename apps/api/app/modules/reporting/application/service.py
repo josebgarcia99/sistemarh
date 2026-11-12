@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, tzinfo
 from typing import BinaryIO
 
@@ -72,7 +72,12 @@ class ReportingService:
         audit: AuditLog,
         clock: Callable[[], datetime],
         zone: tzinfo,
+        *,
+        can_read_study: Callable[[Viewer, uuid.UUID], bool] | None = None,
     ) -> None:
+        # Dice si quien consulta tiene el permiso del estudio socioeconómico en
+        # una vacante. Sin él, las fotografías del estudio no salen en ningún reporte.
+        self._can_read_study = can_read_study
         self._source = source
         self._store = store
         self._audit = audit
@@ -266,9 +271,26 @@ class ReportingService:
             # Contiene datos de todas las vacantes consultadas, tengan o no filas.
             vacancy_ids = [vacancy.id for vacancy in facts.vacancies]
             row_count = len(rows)
+            # Las descripciones de las fotografías del estudio solo salen para las
+            # vacantes en las que quien genera el reporte tiene ese permiso.
+            allowed = {
+                vacancy_id
+                for vacancy_id in {row.vacancy_id for row in rows}
+                if self._can_read_study is not None and self._can_read_study(viewer, vacancy_id)
+            }
+            photos = self._source.study_photos(
+                {row.application_id for row in rows if row.vacancy_id in allowed}
+            )
+            rows = [
+                replace(row, study_photos=photos[row.application_id])
+                if row.application_id in photos
+                else row
+                for row in rows
+            ]
+            with_study = bool(allowed)
 
             def write(target: BinaryIO) -> None:
-                workbooks.build_history(target, rows, **common)
+                workbooks.build_history(target, rows, with_study=with_study, **common)
 
             prefix = "Postulaciones"
         export_id = new_sequential_uuid()

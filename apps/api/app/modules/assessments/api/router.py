@@ -162,6 +162,7 @@ class SynthesisOut(BaseModel):
     result: dict[str, list[str]]
     sources: list[str]
     includes_psychometrics: bool
+    includes_study: bool
 
 
 class SynthesisViewOut(BaseModel):
@@ -242,6 +243,7 @@ def _synthesis_out(repos: Repositories, item: Synthesis) -> SynthesisOut:
         result=item.result,
         sources=list(item.sources),
         includes_psychometrics=item.includes_psychometrics,
+        includes_study=item.includes_study,
     )
 
 

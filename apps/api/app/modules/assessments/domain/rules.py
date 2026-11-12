@@ -21,6 +21,7 @@ from app.modules.assessments.domain.models import (
     FormSection,
     FormTemplateVersion,
     Kind,
+    PhotoNote,
 )
 
 MAX_TEXT = 6000
@@ -338,6 +339,23 @@ def study(data: dict[str, Any], status: str, version: FormTemplateVersion) -> di
         "notes": block(data.get("notes")),
         "answers": answers,
     }
+
+
+def photo_notes(version: FormTemplateVersion, answers: dict[str, Any]) -> list[PhotoNote]:
+    """Descripciones guardadas junto a las fotografías del estudio, en el orden
+    del formulario. Es lo único del estudio que puede salir de él."""
+    notes = []
+    for item in version.fields:
+        entry = answers.get(item.id) if isinstance(answers.get(item.id), dict) else None
+        if item.type is FieldType.DOCUMENTO and entry and entry.get("description"):
+            notes.append(
+                PhotoNote(
+                    item.label,
+                    str(entry["description"]),
+                    entry.get("description_source") == "IA",
+                )
+            )
+    return notes
 
 
 def document_field_ids(version: FormTemplateVersion, answers: dict[str, Any]) -> list[str]:

@@ -40,6 +40,7 @@ from app.modules.assessments.domain.models import (
     FormTemplateVersion,
     Kind,
     Photo,
+    PhotoNote,
     Synthesis,
 )
 from app.modules.audit.application.service import AuditLog
@@ -581,7 +582,8 @@ class AssessmentService:
         visible = [
             item
             for item in found
-            if not item.includes_psychometrics or Kind.PSICOMETRIA in readable
+            if (not item.includes_psychometrics or Kind.PSICOMETRIA in readable)
+            and (not item.includes_study or Kind.ESTUDIO_SOCIOECONOMICO in readable)
         ]
         return SynthesisView(
             latest=visible[0] if visible else None,
@@ -596,8 +598,10 @@ class AssessmentService:
 
         Entra: CV, evaluación inicial, llamadas, pruebas técnicas, entrevistas y
         psicometría solo si está validada por un profesional y quien la pide
-        tiene ese permiso. El estudio socioeconómico nunca entra: solo se anota
-        si está pendiente. No produce puntuaciones ni recomendaciones."""
+        tiene ese permiso. Del estudio socioeconómico entran únicamente las
+        descripciones guardadas junto a sus fotografías, y solo si quien la pide
+        tiene el permiso del estudio; el resto del estudio (economía, salud,
+        dictamen, niveles) nunca entra. No produce puntuaciones ni recomendaciones."""
         application = self._application(application_id)
         readable = self._access.readable(actor, application.vacancy_id)
         self._access.require(actor, application.vacancy_id, Kind.ENTREVISTA, write=True)
@@ -620,6 +624,13 @@ class AssessmentService:
             for label in [_PENDING_LABELS.get((item.kind, item.status))]
             if label
         ]
+        photos: list[PhotoNote] = []
+        if Kind.ESTUDIO_SOCIOECONOMICO in readable:
+            for item in assessments:
+                if item.kind is Kind.ESTUDIO_SOCIOECONOMICO and item.status != "ANULADO":
+                    version = self._repo.template_version(item.template_version_id)  # type: ignore[arg-type]
+                    if version is not None:
+                        photos += rules.photo_notes(version, item.data.get("answers") or {})
         sources = []
         if material.cv or material.evaluation:
             sources.append("CV")
@@ -633,6 +644,8 @@ class AssessmentService:
             count = sum(1 for item in usable if item.kind is kind)
             if count:
                 sources.append(f"{count} {label}")
+        if photos:
+            sources.append(f"{len(photos)} fotografías del estudio")
         if not sources:
             raise ValidationFailedError(
                 "El expediente todavía no tiene información que sintetizar."
@@ -642,7 +655,7 @@ class AssessmentService:
             application.vacancy_id,
             assistant.DOSSIER_SYNTHESIS,
             assistant.SYNTHESIS_SYSTEM,
-            assistant.synthesis_request(material, usable, pending),
+            assistant.synthesis_request(material, usable, pending, photos),
         )
         outcome = self._outcome(answer, assistant.synthesis_from_answer)
         if outcome.content is not None:
@@ -654,6 +667,7 @@ class AssessmentService:
                 created_by=actor.id,
                 result=outcome.content,
                 includes_psychometrics=any(item.kind is Kind.PSICOMETRIA for item in usable),
+                includes_study=bool(photos),
                 sources=tuple(sources),
             )
             self._repo.add_synthesis(synthesis)

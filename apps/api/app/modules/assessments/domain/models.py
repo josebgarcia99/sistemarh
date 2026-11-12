@@ -150,6 +150,9 @@ class Synthesis:
     result: dict[str, Any]
     # Incluyó resultados psicométricos validados: verla exige el permiso adicional.
     includes_psychometrics: bool = False
+    # Incluyó descripciones de fotografías del estudio socioeconómico: verla
+    # exige el permiso adicional del estudio.
+    includes_study: bool = False
     # Qué fuentes se usaron (por ejemplo, "2 llamadas").
     sources: tuple[str, ...] = ()
 
@@ -195,6 +198,16 @@ class AssessmentAccess(Protocol):
     def readable(self, actor: Actor, vacancy_id: uuid.UUID) -> frozenset[Kind]:
         """Tipos que puede consultar. Lanza si no tiene acceso a la vacante."""
         ...
+
+
+@dataclass(frozen=True)
+class PhotoNote:
+    """Descripción guardada junto a una fotografía del estudio."""
+
+    label: str
+    description: str
+    # La propuso la IA y una persona la guardó, o la escribió una persona.
+    proposed_by_ai: bool
 
 
 @dataclass(frozen=True)

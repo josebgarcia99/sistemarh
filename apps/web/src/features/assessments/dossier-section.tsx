@@ -137,7 +137,7 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
         <FeedbackLine feedback={feedback} />
         {syntheses.data?.hidden && (
           <p className="rounded-2xl bg-surface px-4 py-3">
-            Hay una síntesis más reciente que incluye psicometría; verla requiere un permiso
+            Hay una síntesis más reciente que incluye psicometría o fotografías del estudio; verla requiere un permiso
             adicional sobre la vacante.
           </p>
         )}

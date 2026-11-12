@@ -282,6 +282,11 @@ class ReportingSource(Protocol):
 
     def stages(self) -> dict[uuid.UUID, StageFact]: ...
 
+    def study_photos(self, application_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+        """Descripciones guardadas junto a las fotografías del estudio
+        socioeconómico de cada postulación, como texto. Sin el resto del estudio."""
+        ...
+
     def applications(
         self, selection: VacancySelection, window: Window | None = None
     ) -> list[ApplicationFact]:

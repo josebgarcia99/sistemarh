@@ -299,6 +299,7 @@ describe("DossierSection", () => {
       result: { hechos_documentados: ["Analista en Uno SA (CV)"], discrepancias_verificables: ["CV: 2 años; llamada: 3 años"], informacion_pendiente: [] },
       sources: ["CV", "1 entrevistas"],
       includes_psychometrics: false,
+      includes_study: false,
     };
     const fetchMock = mockApi({
       ["GET /api/v1/applications/a1/calls"]: { body: [] },

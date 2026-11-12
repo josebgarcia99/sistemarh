@@ -239,6 +239,7 @@ class SqlAssessmentRepository:
                 result=_dumps(synthesis.result),
                 sources=_dumps(list(synthesis.sources)),
                 includes_psychometrics=synthesis.includes_psychometrics,
+                includes_study=synthesis.includes_study,
                 created_at=synthesis.created_at,
                 created_by=synthesis.created_by,
             )
@@ -260,6 +261,7 @@ class SqlAssessmentRepository:
                 created_by=row.created_by,
                 result=json.loads(row.result),
                 includes_psychometrics=row.includes_psychometrics,
+                includes_study=row.includes_study,
                 sources=tuple(json.loads(row.sources)),
             )
             for row in rows

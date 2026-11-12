@@ -144,6 +144,8 @@ const synthesisSchema = z.object({
   result: z.record(z.string(), z.array(z.string())),
   sources: z.array(z.string()),
   includes_psychometrics: z.boolean(),
+  /** Usó descripciones de fotografías del estudio: verla exige ese permiso. */
+  includes_study: z.boolean(),
 });
 export type Synthesis = z.infer<typeof synthesisSchema>;
 const synthesisViewSchema = z.object({

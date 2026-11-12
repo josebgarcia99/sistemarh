@@ -32,7 +32,7 @@ from app.composition.recruitment import (
     CallAssistant,
     VacancyProfiles,
 )
-from app.composition.reporting import StoredReports
+from app.composition.reporting import StoredReports, can_read_study
 from app.core.clock import Clock
 from app.core.config.settings import Environment, Settings
 from app.core.exceptions.errors import ServiceUnavailableError
@@ -185,6 +185,9 @@ class AppContext:
             self.audit(repos),
             self.clock,
             ZoneInfo(self.settings.display_timezone),
+            can_read_study=lambda viewer, vacancy_id: can_read_study(
+                repos.vacancies, viewer.user_id, viewer.is_admin, vacancy_id
+            ),
         )
 
     def dispatch_cv_batch(self, batch_id: uuid.UUID) -> None:

@@ -5,13 +5,36 @@ from __future__ import annotations
 import hashlib
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import BinaryIO
 
+from app.composition.file_access import VacancyFileAccessPolicy
+from app.core.exceptions.errors import AppError
 from app.infrastructure.storage.local import LocalFileStorage
 from app.modules.reporting.domain.models import StoredFile
+from app.modules.vacancies.domain.models import VacancyRepository
 
 _FOLDER = "reports"
 _CHUNK = 1024 * 1024
+
+
+@dataclass(frozen=True)
+class _Reader:
+    id: uuid.UUID
+    is_admin: bool
+
+
+def can_read_study(
+    vacancies: VacancyRepository, user_id: uuid.UUID, is_admin: bool, vacancy_id: uuid.UUID
+) -> bool:
+    """Quien consulta tiene el permiso adicional del estudio socioeconómico en la vacante."""
+    try:
+        granted = VacancyFileAccessPolicy(vacancies).readable_sensitive_classes(
+            _Reader(user_id, is_admin), vacancy_id
+        )
+    except AppError:
+        return False
+    return "ESTUDIO_SOCIOECONOMICO" in granted
 
 
 class StoredReports:

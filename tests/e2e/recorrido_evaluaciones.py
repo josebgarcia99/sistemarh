@@ -108,7 +108,7 @@ with sync_playwright() as p:
     expect(s2.get_by_role("list", name="Evaluaciones").get_by_role("listitem")).to_have_count(2)
     expect(s2.get_by_role("button", name="Registrar evaluación")).to_have_count(0)
     d2 = p2.get_by_role("region", name="Expediente por etapas")
-    expect(d2.get_by_text("síntesis más reciente que incluye psicometría")).to_be_visible()
+    expect(d2.get_by_text("síntesis más reciente que incluye psicometría o fotografías del estudio")).to_be_visible()
     expect(d2.get_by_role("region", name="Síntesis")).to_have_count(0); print("6 sin el permiso adicional no se ven psicometría, estudio ni la síntesis que los incluye")
     # 7. Admin: formularios
     ctx3 = browser.new_context(viewport={"width": 1440, "height": 1000}); p3 = ctx3.new_page(); watch(p3, "A ")

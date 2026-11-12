@@ -229,12 +229,14 @@ def test_la_ia_describe_una_fotografia_del_estudio_y_la_persona_decide(
     again = update(recruiter, saved.json(), data={"answers": corrected})
     assert again.json()["data"]["answers"][facade]["description_source"] == "MANUAL"
 
-    # La descripción no llega a la síntesis del expediente.
+    # La descripción guardada sí llega a la síntesis del expediente (quien la pide
+    # tiene el permiso del estudio).
     assign(admin, "SINTESIS_EXPEDIENTES")
     fake.prompts = []
-    fake.script = [reply({"hechos_documentados": ["Tiene experiencia en nómina"]})]
-    assert recruiter.post(f"{API}/applications/{ana}/syntheses").status_code in (200, 201)
-    assert "Fachada" not in fake.prompts[0][2]
+    fake.script = [reply({"observaciones_humanas": ["Fachada de un nivel (fotografía)"]})]
+    synthesis = recruiter.post(f"{API}/applications/{ana}/syntheses")
+    assert synthesis.status_code in (200, 201) and synthesis.json()["includes_study"] is True
+    assert "(escrita a mano): Fachada de un nivel." in fake.prompts[0][2]
 
 
 def test_solo_se_describen_imagenes_del_estudio_y_con_permiso(
@@ -283,3 +285,136 @@ def test_solo_se_describen_imagenes_del_estudio_y_con_permiso(
     assert useless.status_code == 503
     assert [e["result"] for e in audit(admin, "estudio.fotografia_descrita")] == ["FALLIDO"]
     assert len(fake.images) == 1
+
+
+# --- Las descripciones en la síntesis y en el reporte ---------------------------------------
+
+
+def _study_with_photo(recruiter, vacancy_id, application_id):
+    """Un estudio con una fotografía descrita y datos que no deben salir de él."""
+    [template] = recruiter.get(f"{API}/form-templates").json()
+    ids = {f["label"]: f["id"] for section in template["sections"] for f in section["fields"]}
+    study = create(
+        recruiter, application_id, "ESTUDIO_SOCIOECONOMICO", template_id=template["id"]
+    ).json()
+    picture = upload(
+        recruiter, vacancy_id, "fachada.jpg", photo(), document_type="ESTUDIO_SOCIOECONOMICO"
+    )
+    answers = {
+        ids["Fotografía: fachada de la vivienda"]: {
+            "value": picture["id"],
+            "description": "Fachada de dos niveles con portón metálico.",
+            "description_source": "IA",
+        },
+        ids["Fotografía: localización"]: {
+            "value": picture["id"],
+            "description": "Calle pavimentada con alumbrado.",
+        },
+        ids["Religión"]: {"value": "RELIGION-SECRETA"},
+        ids["Total ingreso mensual"]: {"value": "12345"},
+        ids["Dictamen (observaciones)"]: {"value": "DICTAMEN-SECRETO"},
+        ids["¿Se considera candidato?"]: {"value": "No es viable (0-6)"},
+    }
+    saved = update(recruiter, study, status="EN_PROCESO", data={"answers": answers})
+    assert saved.status_code == 200, saved.text
+    return saved.json()
+
+
+def test_las_descripciones_de_las_fotos_entran_en_la_sintesis_solo_con_permiso(
+    ana, recruiter, admin, other, vacancy_id, providers
+):
+    _study_with_photo(recruiter, vacancy_id, ana)
+    assign(admin, "SINTESIS_EXPEDIENTES")
+    fake = providers[ProviderCode.ANTHROPIC]
+    fake.prompts = []
+    fake.script = [
+        reply({"observaciones_humanas": ["Fachada de dos niveles (fotografía del estudio)"]})
+    ]
+    url = f"{API}/applications/{ana}/syntheses"
+    created = recruiter.post(url)
+    assert created.status_code in (200, 201), created.text
+    synthesis = created.json()
+    assert synthesis["includes_study"] is True
+    assert "2 fotografías del estudio" in synthesis["sources"]
+    _, system, sent = fake.prompts[0]
+    assert (
+        system == assistant.SYNTHESIS_SYSTEM and "No saques de ellas ninguna conclusión" in system
+    )
+    assert "FOTOGRAFÍAS DEL ESTUDIO SOCIOECONÓMICO" in sent
+    assert (
+        "- Fotografía: fachada de la vivienda (propuesta por la IA y revisada): "
+        "Fachada de dos niveles con portón metálico." in sent
+    )
+    assert "- Fotografía: localización (escrita a mano): Calle pavimentada" in sent
+    # Del estudio solo salen las descripciones: nada de economía, religión, dictamen ni viabilidad.
+    for secret in ("RELIGION-SECRETA", "12345", "DICTAMEN-SECRETO", "No es viable"):
+        assert secret not in sent
+
+    # Con la vacante compartida pero sin el permiso del estudio, esa síntesis no se ve…
+    stranger, stranger_id = other
+    from app.tests.conftest import share
+
+    share(recruiter, vacancy_id, stranger_id, "COLABORACION")
+    hidden = stranger.get(url).json()
+    assert hidden["latest"] is None and hidden["hidden"] is True
+    # …y la que esa persona pida no lleva las fotografías.
+    fake.prompts = []
+    fake.script = [reply({"hechos_documentados": ["Tiene experiencia en nómina"]})]
+    own = stranger.post(url)
+    assert own.status_code in (200, 201), own.text
+    assert own.json()["includes_study"] is False
+    assert "FOTOGRAFÍAS" not in fake.prompts[0][2] and "Fachada" not in fake.prompts[0][2]
+    # Un estudio anulado tampoco aporta fotografías.
+    study = next(
+        item
+        for item in recruiter.get(f"{API}/applications/{ana}/assessments").json()["items"]
+        if item["kind"] == "ESTUDIO_SOCIOECONOMICO"
+    )
+    assert update(recruiter, study, status="ANULADO").status_code == 200
+    fake.prompts = []
+    fake.script = [reply({"hechos_documentados": ["Tiene experiencia en nómina"]})]
+    assert recruiter.post(url).json()["includes_study"] is False
+
+
+def test_el_reporte_de_postulaciones_lleva_las_fotos_solo_para_quien_tiene_el_permiso(
+    ana, recruiter, admin, other, vacancy_id, providers
+):
+    from openpyxl import load_workbook
+
+    from app.tests.conftest import share
+
+    _study_with_photo(recruiter, vacancy_id, ana)
+
+    def export(client) -> tuple[list[str], dict[str, object], str]:
+        made = client.post(f"{API}/reports/exports", json={"kind": "POSTULACIONES"})
+        assert made.status_code == 201, made.text
+        content = client.get(f"{API}/reports/exports/{made.json()['id']}/download").content
+        book = load_workbook(io.BytesIO(content))
+        sheet = book["Postulaciones"]
+        header = [cell.value for cell in sheet[1]]
+        rows = {row[0]: row for row in sheet.iter_rows(min_row=2, values_only=True)}
+        about = " ".join(str(c.value) for row in book["Acerca del reporte"] for c in row if c.value)
+        return header, rows, about
+
+    column = "Fotografías del estudio socioeconómico (descripciones)"
+    header, rows, about = export(recruiter)
+    assert header[-1] == column and "Datos sensibles" in about
+    text = rows["Ana Pérez Ficticia"][-1]
+    assert text == (
+        "Fotografía: localización: Calle pavimentada con alumbrado.\n"
+        "Fotografía: fachada de la vivienda: Fachada de dos niveles con portón metálico."
+    )
+    # Las demás postulaciones no tienen fotografías; y del estudio no sale nada más.
+    assert sum(1 for row in rows.values() if row[-1]) == 1
+    flat = " ".join(str(value) for row in rows.values() for value in row)
+    for secret in ("RELIGION-SECRETA", "12345", "DICTAMEN-SECRETO", "No es viable"):
+        assert secret not in flat
+    # El administrador también la ve.
+    assert export(admin)[0][-1] == column
+
+    # Con la vacante compartida pero sin el permiso del estudio, la columna no existe.
+    stranger, stranger_id = other
+    share(recruiter, vacancy_id, stranger_id, "LECTURA")
+    header, rows, about = export(stranger)
+    assert column not in header and "Datos sensibles" not in about
+    assert "Fachada" not in " ".join(str(v) for row in rows.values() for v in row)
