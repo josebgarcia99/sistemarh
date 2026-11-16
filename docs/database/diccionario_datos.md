@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0016`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0017`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -461,7 +461,7 @@ La migración `0011` crea el resultado final de las postulaciones que ya estaban
 | --- | --- | --- | --- |
 | `question_banks` | `name`, `description` | `NVARCHAR(150)`, `NVARCHAR(500)` | Nombre y descripción. |
 | `question_banks` | `owner_user_id` | `UNIQUEIDENTIFIER` | Propietario. |
-| `question_banks` | `scope` | `VARCHAR(20)` | `PRIVADO` o `COMPARTIDO`. |
+| `question_banks` | `scope` | `VARCHAR(20)` | `PRIVADO`, `COMPARTIDO` o `GENERAL` (desde la versión `0017`). Un banco `GENERAL` tiene las preguntas que se hacen a todas las personas: se agregan solas a cada llamada y solo lo crea o modifica un administrador. |
 | `question_banks` | `status` | `VARCHAR(20)` | `ACTIVO` o `ARCHIVADO`. |
 | `question_banks` | `duplicated_from` | `UNIQUEIDENTIFIER` | Banco del que se copió, si es una copia. |
 | `question_bank_versions` | `bank_id`, `version_number` | | Versión del banco (única por banco). No cambia. |
@@ -477,11 +477,12 @@ Una llamada telefónica de una postulación.
 | `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
 | `application_id`, `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Postulación y su vacante. |
 | `bank_version_id` | `UNIQUEIDENTIFIER` | Sí | Versión exacta del banco con la que se hizo la llamada. |
+| `general_version_ids` | `VARCHAR(800)` | Sí | Desde la versión `0017`. Lista JSON con las versiones de los bancos generales que se incluyeron al abrir la llamada (`[]` si no había). Así la llamada conserva sus preguntas aunque después cambien las generales. |
 | `status` | `VARCHAR(20)` | Sí | `BORRADOR` o `CERRADA`. Cerrada ya no se modifica. |
 | `called_at` | `DATETIME2(3)` | Sí | Fecha de la llamada. |
 | `notes` | `NVARCHAR(MAX)` | Sí | Observaciones generales. |
 | `answers` | `NVARCHAR(MAX)` | Sí | Respuestas en JSON (`ISJSON`): pregunta, respuesta, observación y si no se realizó. |
-| `analysis`, `analysis_at`, `analysis_by` | | No | Último análisis de IA, en JSON, con su fecha y quién lo pidió. |
+| `analysis`, `analysis_at`, `analysis_by` | | No | Último análisis de IA, en JSON, con su fecha y quién lo pidió. Incluye `medicion`: la cobertura de la llamada (de 0 a 100) y el nivel de cada pregunta contestada que tenía anotado «qué se espera de la respuesta». La IA propone el nivel; el número lo calcula el sistema. |
 | `created_at`, `created_by`, `updated_at`, `closed_at` | | | Registro y cierre. |
 
 ### `recruitment.form_templates` y `recruitment.form_template_versions`
@@ -504,7 +505,7 @@ Una evaluación de una postulación. Lo capturado va en JSON y se valida en la a
 | --- | --- | --- | --- |
 | `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
 | `application_id`, `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Postulación y su vacante. |
-| `kind` | `VARCHAR(30)` | Sí | `PSICOMETRIA`, `ENTREVISTA`, `PRUEBA_TECNICA` o `ESTUDIO_SOCIOECONOMICO`. Los tipos `PSICOMETRIA` y `ESTUDIO_SOCIOECONOMICO` son datos sensibles: la aplicación exige el permiso adicional para leerlos. |
+| `kind` | `VARCHAR(30)` | Sí | `PSICOMETRIA`, `ENTREVISTA`, `PRUEBA_TECNICA`, `ESTUDIO_SOCIOECONOMICO` o `REFERENCIAS` (referencias laborales y personales, desde la versión `0017`; usa los mismos estados que el estudio). Los tipos `PSICOMETRIA` y `ESTUDIO_SOCIOECONOMICO` son datos sensibles: la aplicación exige el permiso adicional para leerlos. |
 | `status` | `VARCHAR(20)` | Sí | Según el tipo. Psicometría: `PENDIENTE`, `PRESENTADA`, `NO_PRESENTADA`, `INCOMPLETA`, `NO_APLICA`, `ANULADA`, `VALIDADA`. Prueba técnica: `PENDIENTE`, `REALIZADA`, `NO_PRESENTADA`, `INCOMPLETA`, `NO_APLICA`, `ANULADA`. Entrevista: `PROGRAMADA`, `REALIZADA`, `NO_REALIZADA`, `CANCELADA`. Estudio: `PENDIENTE`, `EN_PROCESO`, `COMPLETADO`, `NO_APLICA`, `ANULADO`. |
 | `event_date` | `DATETIME2(3)` | No | Fecha de la prueba, entrevista o visita. |
 | `file_id` | `UNIQUEIDENTIFIER` | No | Documento de la vacante (`files.file_assets`). |

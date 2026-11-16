@@ -112,6 +112,87 @@ describe("AssessmentsSection", () => {
     expect(body.data.rubric).toEqual([{ criterion: "Fórmulas", max_points: "4", points: "3" }]);
   });
 
+  it("registra referencias, anota lo que dijo cada una y muestra el análisis de la IA", async () => {
+    let items: Assessment[] = [];
+    const statuses = ["PENDIENTE", "EN_PROCESO", "COMPLETADO", "NO_APLICA", "ANULADO"];
+    const created = make("REFERENCIAS", { statuses, data: { references: [], notes: "" } });
+    const reference = {
+      type: "PERSONAL",
+      name: "Vecina Ficticia",
+      relation: "Vecina",
+      position: "",
+      phone: "",
+      period: "",
+      contacted_by: "",
+      contacted_on: "",
+      result: "CONTACTADA",
+      comments: "La conoce desde hace diez años.",
+    };
+    const saved = { ...created, version: 2, status: "EN_PROCESO", data: { references: [reference], notes: "" } };
+    const analyzed = {
+      ...saved,
+      version: 3,
+      ai_summary: {
+        resumen: "Una referencia personal contactada.",
+        referencias_laborales: [],
+        referencias_personales: ["Vecina Ficticia indicó que la conoce desde hace diez años."],
+        coincidencias_con_cv: [],
+        discrepancias_verificables: [],
+        sin_confirmar: ["Ninguna referencia confirma el último empleo del CV."],
+      },
+      ai_summary_at: "2026-11-15T18:00:00Z",
+    };
+    const fetchMock = mockApi({
+      [`GET ${LIST_URL}`]: () => ({ body: list(items, { writable: ["ESTUDIO_SOCIOECONOMICO", "REFERENCIAS"] }) }),
+      [`GET ${FILES_URL}`]: { body: [] },
+      ["GET /api/v1/form-templates"]: { body: [] },
+      [`POST ${LIST_URL}`]: () => {
+        items = [created];
+        return { status: 201, body: created };
+      },
+      ["PUT /api/v1/assessments/e-REFERENCIAS"]: () => {
+        items = [saved];
+        return { body: saved };
+      },
+      ["POST /api/v1/assessments/e-REFERENCIAS/summary"]: () => {
+        items = [analyzed];
+        return { body: analyzed };
+      },
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: "Registrar evaluación" }));
+    await user.selectOptions(screen.getByLabelText("Tipo de evaluación"), "REFERENCIAS");
+    expect(screen.getByText(/antes o después del estudio socioeconómico/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Registrar" }));
+    expect(sent(fetchMock, "POST", LIST_URL)).toEqual({ kind: "REFERENCIAS", data: {}, template_id: null });
+
+    // No lleva documento adjunto y avisa que lo dicho es una opinión.
+    expect(await screen.findByText("Todavía no hay referencias registradas.")).toBeTruthy();
+    expect(screen.queryByLabelText("Documento")).toBeNull();
+    expect(screen.getByText(/Es la opinión de un tercero/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Agregar referencia" }));
+    await user.selectOptions(screen.getByLabelText("Tipo de la referencia 1"), "PERSONAL");
+    await user.type(screen.getByLabelText("Nombre de la referencia 1"), "Vecina Ficticia");
+    await user.type(screen.getByLabelText("Empresa o relación con la persona 1"), "Vecina");
+    await user.selectOptions(screen.getByLabelText("Resultado del contacto 1"), "CONTACTADA");
+    await user.type(screen.getByLabelText("Lo que dijo la referencia 1"), "La conoce desde hace diez años.");
+    await user.selectOptions(screen.getByLabelText("Estado"), "EN_PROCESO");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    expect((await screen.findByRole("status")).textContent).toContain("Evaluación guardada");
+    const body = sent(fetchMock, "PUT", "/e-REFERENCIAS");
+    expect(body.status).toBe("EN_PROCESO");
+    expect(body.file_id).toBeNull();
+    expect(body.data).toEqual({ notes: "", references: [reference] });
+
+    await user.click(screen.getByRole("button", { name: "Analizar con IA" }));
+    const panel = within(await screen.findByRole("region", { name: "Resumen de la IA" }));
+    expect(panel.getByText("Lo que dijeron las referencias personales")).toBeTruthy();
+    expect(panel.getByText("Sin confirmar")).toBeTruthy();
+    expect(panel.queryByText("Lo que dijeron las referencias laborales")).toBeNull();
+    expect(panel.getByText(/es su opinión, no un hecho comprobado/)).toBeTruthy();
+  });
+
   it("en el estudio, lo que lee la IA entra sin verificar y la persona lo marca", async () => {
     const study = make("ESTUDIO_SOCIOECONOMICO", {
       status: "EN_PROCESO",

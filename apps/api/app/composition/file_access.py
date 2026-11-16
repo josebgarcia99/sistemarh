@@ -16,7 +16,7 @@ from app.modules.vacancies.domain.models import AccessLevel, SensitiveClass, Vac
 
 _ALL_CLASSES = frozenset(item.value for item in SensitiveClass)
 STUDY_CLASS = SensitiveClass.ESTUDIO_SOCIOECONOMICO.value
-_ANALYST_ONLY = "Tu puesto solo da acceso a los estudios socioeconómicos."
+_ANALYST_ONLY = "Tu puesto solo da acceso a los estudios socioeconómicos y a las referencias."
 
 
 def is_study_analyst(actor: object) -> bool:

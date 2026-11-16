@@ -124,6 +124,68 @@ def interview(data: dict[str, Any], status: str) -> dict[str, Any]:
     return clean
 
 
+# --- Referencias laborales y personales --------------------------------------------------
+
+REFERENCE_TYPES = ("LABORAL", "PERSONAL")
+REFERENCE_RESULTS = ("PENDIENTE", "CONTACTADA", "NO_LOCALIZADA", "SE_NEGO")
+MAX_REFERENCES = 12
+
+
+def references(data: dict[str, Any], status: str) -> dict[str, Any]:
+    """Referencias que dio la persona y lo que cada una dijo al contactarla.
+
+    Lo que dice una referencia es la opinión de un tercero: se guarda tal como
+    la anotó quien llamó y nunca se convierte en un hecho comprobado."""
+    rows = _rows(data.get("references"))
+    if len(rows) > MAX_REFERENCES:
+        raise RuleError(f"Se admiten como máximo {MAX_REFERENCES} referencias.")
+    clean_rows = []
+    for number, row in enumerate(rows, start=1):
+        name = line(row.get("name"), 200)
+        kind = str(row.get("type") or "").upper()
+        result = str(row.get("result") or "PENDIENTE").upper()
+        entry = {
+            "type": kind,
+            "name": name,
+            # Empresa (laboral) o relación con la persona (personal).
+            "relation": line(row.get("relation"), 200),
+            "position": line(row.get("position"), 200),
+            "phone": line(row.get("phone"), 40),
+            "period": line(row.get("period"), 100),
+            "contacted_by": line(row.get("contacted_by"), 200),
+            "contacted_on": line(row.get("contacted_on"), 10),
+            "result": result,
+            "comments": block(row.get("comments"), 3000),
+        }
+        if not any(value for key, value in entry.items() if key not in ("type", "result")):
+            continue  # fila vacía
+        if not name:
+            raise RuleError(f"Referencia {number}: escribe el nombre de la referencia.")
+        if kind not in REFERENCE_TYPES:
+            raise RuleError(f"Referencia {number}: indica si es laboral o personal.")
+        if result not in REFERENCE_RESULTS:
+            raise RuleError(f"Referencia {number}: el resultado del contacto no es válido.")
+        if entry["contacted_on"]:
+            try:
+                date.fromisoformat(entry["contacted_on"])
+            except ValueError as error:
+                raise RuleError(
+                    f"Referencia {number}: la fecha de contacto no es válida."
+                ) from error
+        if result == "CONTACTADA" and not entry["comments"]:
+            raise RuleError(f"Referencia {number}: anota lo que dijo la referencia contactada.")
+        clean_rows.append(entry)
+    if status == "COMPLETADO":
+        if not clean_rows:
+            raise RuleError("Para completarlas, registra al menos una referencia.")
+        if any(row["result"] == "PENDIENTE" for row in clean_rows):
+            raise RuleError(
+                "Para completarlas, cada referencia debe quedar contactada, no localizada "
+                "o con la anotación de que se negó."
+            )
+    return {"references": clean_rows, "notes": block(data.get("notes"))}
+
+
 # --- Prueba técnica ----------------------------------------------------------------------
 
 

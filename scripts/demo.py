@@ -154,6 +154,15 @@ class SimulatedProvider:
                 "informacion_faltante": [],
                 "preguntas_de_seguimiento": ["Pregunta de seguimiento simulada."],
             }
+        elif system.startswith("Recibes las referencias"):
+            simulated = {
+                "resumen": note,
+                "referencias_laborales": ["Lo que indicó una referencia laboral (simulado)."],
+                "referencias_personales": [],
+                "coincidencias_con_cv": ["Coincidencia simulada con un empleo del CV."],
+                "discrepancias_verificables": [],
+                "sin_confirmar": ["Empleo del CV que ninguna referencia confirma (simulado)."],
+            }
         elif system.startswith("Recibes el texto de un formulario"):
             # "Lectura" inventada: un valor de ejemplo por campo, según su tipo.
             examples = {
@@ -240,6 +249,21 @@ class SimulatedProvider:
                 "coincidencias_con_cv": [],
                 "discrepancias_verificables": [],
                 "preguntas_de_seguimiento": ["Pregunta de seguimiento simulada."],
+                # Nivel inventado para cada pregunta que traía «qué se espera de la respuesta».
+                "cobertura": [
+                    {
+                        "pregunta": int(number),
+                        "nivel": ("CUMPLE", "PARCIAL")[index % 2],
+                        "evidencia": "Evidencia simulada.",
+                    }
+                    for index, number in enumerate(
+                        re.findall(
+                            r"^Pregunta (\d+): .*\n(?:  Competencia: .*\n)?  Qué se espera",
+                            user,
+                            re.MULTILINE,
+                        )
+                    )
+                ],
             }
         if simulated is not None:
             text = json.dumps(simulated, ensure_ascii=False)
@@ -434,9 +458,36 @@ def seed(app, password: str) -> None:
             description="Banco ficticio del modo demostración.",
             shared=True,
             questions=[
-                {"text": "¿Qué nóminas has calculado y de qué tamaño?", "competency": "Nómina"},
-                {"text": "¿Cómo validas el cálculo de IMSS e ISR?", "competency": "Cumplimiento"},
+                {
+                    "text": "¿Qué nóminas has calculado y de qué tamaño?",
+                    "competency": "Nómina",
+                    "guidance": "Número de personas, periodicidad y sistema que usó.",
+                },
+                {
+                    "text": "¿Cómo validas el cálculo de IMSS e ISR?",
+                    "competency": "Cumplimiento",
+                    "guidance": "Un método de revisión concreto, no solo «lo reviso».",
+                },
                 {"text": "¿Qué disponibilidad tienes para iniciar?"},
+            ],
+        )
+        # Las preguntas que se hacen a todas las personas: se agregan solas a cada llamada.
+        context.phone_calls(repos).create_bank(
+            admin,
+            name="Preguntas generales de la empresa",
+            description="Se hacen en todas las llamadas (modo demostración).",
+            shared=True,
+            general=True,
+            questions=[
+                {
+                    "text": "¿Por qué te interesa esta vacante?",
+                    "competency": "Motivación",
+                    "guidance": "Motivos ligados al puesto o a la empresa.",
+                },
+                {
+                    "text": "¿Cuál es tu expectativa de sueldo?",
+                    "guidance": "Una cifra o un rango.",
+                },
             ],
         )
 

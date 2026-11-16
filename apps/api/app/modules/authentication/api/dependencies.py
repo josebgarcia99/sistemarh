@@ -42,6 +42,8 @@ STUDY_ANALYST_ROUTES = frozenset(
         ("GET", "/assessments/{assessment_id}"),
         ("PUT", "/assessments/{assessment_id}"),
         ("POST", "/assessments/{assessment_id}/digitization"),
+        # Solo le sirve para analizar referencias: el servicio rechaza cualquier otro tipo.
+        ("POST", "/assessments/{assessment_id}/summary"),
         ("POST", "/assessments/{assessment_id}/photo-descriptions"),
         ("GET", "/form-templates"),
         ("GET", "/vacancies/{vacancy_id}/files"),
@@ -69,7 +71,9 @@ def require_user(
         route = (request.method, route_template(request.scope).removeprefix(API_PREFIX))
         if route not in STUDY_ANALYST_ROUTES:
             # Todo lo que no está en la lista queda cerrado para este puesto.
-            raise PermissionDeniedError("Tu puesto solo da acceso a los estudios socioeconómicos.")
+            raise PermissionDeniedError(
+                "Tu puesto solo da acceso a los estudios socioeconómicos y a las referencias."
+            )
     return Principal(user=user, session=session)
 
 

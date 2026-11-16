@@ -81,6 +81,8 @@ class CallSessionRow(Base):
     notes: Mapped[str] = mapped_column(long_text())
     # Respuestas en JSON: pregunta, respuesta, observación y si no se realizó.
     answers: Mapped[str] = mapped_column(long_text())
+    # Lista JSON con las versiones de los bancos generales incluidos en la llamada.
+    general_version_ids: Mapped[str] = mapped_column(sa.String(800), default="[]")
     analysis: Mapped[str | None] = mapped_column(long_text(), nullable=True)
     analysis_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     analysis_by: Mapped[uuid.UUID | None] = mapped_column(

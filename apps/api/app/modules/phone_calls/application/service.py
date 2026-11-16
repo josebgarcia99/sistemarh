@@ -67,6 +67,11 @@ class CallView:
     call: CallSession
     version: BankVersion
     bank: Bank
+    # Todas las preguntas de la llamada: primero las generales de la empresa y
+    # después las del banco elegido.
+    questions: tuple[Question, ...] = ()
+    # Cuáles de esas preguntas son generales.
+    general_ids: frozenset[uuid.UUID] = frozenset()
 
 
 def _clean(text: object, limit: int) -> str:
@@ -102,12 +107,27 @@ class PhoneCallService:
     @staticmethod
     def _can_see(actor: UserInfo, bank: Bank) -> bool:
         return (
-            actor.is_admin or bank.owner_user_id == actor.id or bank.scope is BankScope.COMPARTIDO
+            actor.is_admin
+            or bank.owner_user_id == actor.id
+            or bank.scope in (BankScope.COMPARTIDO, BankScope.GENERAL)
         )
 
     @staticmethod
     def _can_edit(actor: UserInfo, bank: Bank) -> bool:
+        if bank.scope is BankScope.GENERAL:
+            # Cambian lo que se pregunta en todas las llamadas de la empresa.
+            return actor.is_admin
         return actor.is_admin or bank.owner_user_id == actor.id
+
+    @staticmethod
+    def _scope(actor: UserInfo, shared: bool, general: bool) -> BankScope:
+        if general:
+            if not actor.is_admin:
+                raise PermissionDeniedError(
+                    "Solo un administrador puede definir preguntas generales de la empresa."
+                )
+            return BankScope.GENERAL
+        return BankScope.COMPARTIDO if shared else BankScope.PRIVADO
 
     def banks(self, actor: UserInfo) -> list[BankView]:
         visible = [bank for bank in self._repo.banks() if self._can_see(actor, bank)]
@@ -185,6 +205,7 @@ class PhoneCallService:
         description: str | None,
         shared: bool,
         questions: list[dict[str, object]],
+        general: bool = False,
         ip: str | None = None,
         duplicated_from: uuid.UUID | None = None,
     ) -> BankView:
@@ -195,7 +216,7 @@ class PhoneCallService:
             name=name,
             description=description,
             owner_user_id=actor.id,
-            scope=BankScope.COMPARTIDO if shared else BankScope.PRIVADO,
+            scope=self._scope(actor, shared, general),
             status=BankStatus.ACTIVO,
             created_at=now,
             updated_at=now,
@@ -225,6 +246,7 @@ class PhoneCallService:
         questions: list[dict[str, object]],
         change_note: str | None,
         expected_version: int,
+        general: bool = False,
         ip: str | None = None,
     ) -> BankView:
         """Guarda los datos del banco. Si cambian las preguntas, crea una versión
@@ -236,7 +258,7 @@ class PhoneCallService:
         if expected_version != latest.version_number:
             raise ConflictError("Otra persona guardó una versión más reciente. Vuelve a cargarlo.")
         bank.name, bank.description = self._header(name, description)
-        bank.scope = BankScope.COMPARTIDO if shared else BankScope.PRIVADO
+        bank.scope = self._scope(actor, shared, general)
         bank.updated_at = self._clock()
         self._repo.save_bank(bank)
         new_questions = self._questions(questions, latest.questions)
@@ -347,7 +369,18 @@ class PhoneCallService:
         bank = self._repo.bank(version.bank_id) if version else None
         if version is None or bank is None:
             raise NotFoundError("El banco de preguntas de la llamada ya no existe.")
-        return CallView(call, version, bank)
+        general: list[Question] = []
+        for version_id in call.general_version_ids:
+            extra = self._repo.version(version_id)
+            if extra is not None:
+                general += extra.questions
+        return CallView(
+            call,
+            version,
+            bank,
+            questions=(*general, *version.questions),
+            general_ids=frozenset(question.id for question in general),
+        )
 
     def calls(self, actor: UserInfo, application_id: uuid.UUID) -> list[CallView]:
         application = self._applications.get(application_id)
@@ -377,6 +410,18 @@ class PhoneCallService:
         if bank.status is BankStatus.ARCHIVADO:
             raise ConflictError("El banco está archivado; elige otro.")
         version = self._repo.versions(bank_id)[0]
+        # Las preguntas generales de la empresa vigentes hoy se suman a la llamada.
+        general = sorted(
+            (
+                item
+                for item in self._repo.banks()
+                if item.scope is BankScope.GENERAL
+                and item.status is BankStatus.ACTIVO
+                and item.id != bank.id
+            ),
+            key=lambda item: (item.created_at, item.name),
+        )
+        general_versions = self._repo.latest_versions([item.id for item in general])
         now = self._clock()
         call = CallSession(
             id=new_sequential_uuid(),
@@ -388,6 +433,7 @@ class PhoneCallService:
             created_at=now,
             created_by=actor.id,
             updated_at=now,
+            general_version_ids=tuple(general_versions[item.id].id for item in general),
         )
         self._repo.add_call(call)
         self._audit.record(
@@ -401,9 +447,10 @@ class PhoneCallService:
                 "postulacion": str(application.id),
                 "banco": str(bank.id),
                 "version": version.version_number,
+                "preguntas_generales": len(call.general_version_ids),
             },
         )
-        return CallView(call, version, bank)
+        return self._view(call)
 
     def save_call(
         self,
@@ -421,7 +468,7 @@ class PhoneCallService:
         if call.status is CallStatus.CERRADA:
             raise ConflictError("La llamada está cerrada y ya no se modifica.")
         view = self._view(call)
-        valid = {question.id for question in view.version.questions}
+        valid = {question.id for question in view.questions}
         cleaned: dict[uuid.UUID, Answer] = {}
         for item in answers:
             question_id = item.get("question_id")
@@ -436,7 +483,7 @@ class PhoneCallService:
         if close:
             pending = [
                 number
-                for number, question in enumerate(view.version.questions, start=1)
+                for number, question in enumerate(view.questions, start=1)
                 if not (
                     (answer := cleaned.get(question.id)) and (answer.not_asked or answer.answer)
                 )
@@ -451,7 +498,7 @@ class PhoneCallService:
             if called_at > now:
                 raise ValidationFailedError("La fecha de la llamada no puede ser futura.")
             call.called_at = called_at
-        call.answers = tuple(cleaned[q.id] for q in view.version.questions if q.id in cleaned)
+        call.answers = tuple(cleaned[q.id] for q in view.questions if q.id in cleaned)
         call.notes = _block(notes, 6000)
         call.updated_at = now
         if close:
@@ -487,15 +534,16 @@ class PhoneCallService:
         answer = self._ai.ask(
             assistant.CALL_ANALYSIS,
             system=assistant.ANALYSIS_SYSTEM,
-            user=assistant.analysis_request(
-                view.version.questions, call.answers, call.notes, application
-            ),
+            user=assistant.analysis_request(view.questions, call.answers, call.notes, application),
             vacancy_id=call.vacancy_id,
             actor_user_id=actor.id,
             # Lleva lo dicho por una persona candidata: misma regla que un documento.
             carries_document=True,
         )
-        proposal = self._proposal(answer, assistant.analysis_from_answer)
+        proposal = self._proposal(
+            answer,
+            lambda text: assistant.analysis_from_answer(text, view.questions, call.answers),
+        )
         if proposal.content is not None:
             call.analysis = proposal.content  # type: ignore[assignment]
             call.analysis_at = self._clock()

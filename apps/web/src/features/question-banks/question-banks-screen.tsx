@@ -101,7 +101,13 @@ export function QuestionBanksScreen() {
                     {bank.questions.length} preguntas · versión {bank.version_number}
                   </span>
                   <span className={`${pillClass} bg-neutral-soft text-neutral-ink`}>
-                    {bank.mine ? (bank.shared ? "Mío, compartido" : "Mío, privado") : `De ${bank.owner_name ?? "otra persona"}`}
+                    {bank.general
+                      ? "Generales de la empresa"
+                      : bank.mine
+                        ? bank.shared
+                          ? "Mío, compartido"
+                          : "Mío, privado"
+                        : `De ${bank.owner_name ?? "otra persona"}`}
                   </span>
                   {bank.status === "ARCHIVADO" && (
                     <span className={`${pillClass} bg-accent-red-soft text-accent-red-ink`}>Archivado</span>
@@ -138,6 +144,9 @@ function BankEditor({
   const [name, setName] = useState(bank?.name ?? "");
   const [description, setDescription] = useState(bank?.description ?? "");
   const [shared, setShared] = useState(bank?.shared ?? false);
+  const [general, setGeneral] = useState(bank?.general ?? false);
+  const { user } = useSession();
+  const isAdmin = user?.role === "ADMINISTRADOR";
   const [questions, setQuestions] = useState<QuestionInput[]>(() =>
     bank ? bank.questions.map((question) => ({ ...question })) : [emptyQuestion()],
   );
@@ -170,7 +179,7 @@ function BankEditor({
       setBusy(false);
     }
   }
-  const input = { name, description: description.trim() || null, shared, questions };
+  const input = { name, description: description.trim() || null, shared, general, questions };
 
   return (
     <div className="flex flex-wrap items-start gap-6">
@@ -213,6 +222,19 @@ function BankEditor({
           />
           Compartir con todo el equipo (los demás lo usan y lo duplican, pero no lo modifican)
         </label>
+        {(isAdmin || general) && (
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="size-5 accent-ink"
+              disabled={!editable || !isAdmin}
+              checked={general}
+              onChange={(event) => setGeneral(event.target.checked)}
+            />
+            Preguntas generales de la empresa: se agregan solas a todas las llamadas, antes de las
+            del banco elegido (solo administradores)
+          </label>
+        )}
         <ol aria-label="Preguntas" className="flex flex-col gap-3">
           {questions.map((question, index) => (
             <li key={question.id ?? `nueva-${index}`} className="flex flex-col gap-2 rounded-3xl bg-surface p-4">
@@ -237,8 +259,8 @@ function BankEditor({
                   onChange={(event) => change(index, { competency: event.target.value })}
                 />
                 <input
-                  aria-label={`Qué escuchar en la pregunta ${index + 1}`}
-                  placeholder="Qué escuchar en la respuesta (opcional)"
+                  aria-label={`Qué se espera de la respuesta ${index + 1}`}
+                  placeholder="Qué se espera de la respuesta (opcional; con esto la IA mide la llamada)"
                   className={fieldClass}
                   readOnly={!editable}
                   value={question.guidance}

@@ -20,6 +20,8 @@ from app.modules.assessments.domain.rules import table_rows
 TEST_SUMMARY = "RESUMEN_PRUEBAS"
 DOCUMENT_READING = "LECTURA_DOCUMENTOS"
 INTERVIEW_ANALYSIS = "ANALISIS_LLAMADAS"
+# Las referencias usan el mismo modelo que el análisis de llamadas y entrevistas.
+REFERENCES_ANALYSIS = "ANALISIS_LLAMADAS"
 DOSSIER_SYNTHESIS = "SINTESIS_EXPEDIENTES"
 PHOTO_DESCRIPTION = "DESCRIPCION_FOTOGRAFIAS"
 MAX_PHOTO_DESCRIPTION = 1500
@@ -139,6 +141,8 @@ como falta de la persona.
 del profesional.
 - No uses ni menciones edad, sexo, estado civil, origen, religión, salud, apariencia, \
 situación económica ni familiar.
+- Lo que dijeron las referencias va en "declaraciones", indicando que lo dijo una \
+referencia y su número. No lo presentes como hecho comprobado.
 - Las descripciones de fotografías del estudio van en "observaciones_humanas", tal como \
 están escritas y citando de qué fotografía son. No saques de ellas ninguna conclusión \
 sobre la persona, su nivel socioeconómico, su confiabilidad ni su idoneidad.
@@ -176,6 +180,13 @@ _SUMMARY_LISTS = {
         "informacion_faltante",
         "preguntas_de_seguimiento",
     ),
+    Kind.REFERENCIAS: (
+        "referencias_laborales",
+        "referencias_personales",
+        "coincidencias_con_cv",
+        "discrepancias_verificables",
+        "sin_confirmar",
+    ),
 }
 
 
@@ -206,6 +217,77 @@ def document_request(text: str, ocr: bool) -> str:
         else ""
     )
     return f"Documento.{note}\n\n<<<DOCUMENTO\n{text}\nDOCUMENTO>>>"
+
+
+REFERENCES_SYSTEM = f"""\
+Recibes las referencias laborales y personales que dio una persona candidata, con lo que \
+cada referencia dijo cuando se le contactó, y los empleos que la persona declara en su CV. \
+Ordena esa información para que una persona de Recursos Humanos decida. Tú no decides.
+
+Reglas:
+- Usa solo lo que está escrito. No inventes ni supongas.
+- Lo que dice una referencia es la opinión de un tercero, no un hecho comprobado: escríbelo \
+siempre como «la referencia 2 indicó…», citándola por su número.
+- En "referencias_laborales" y "referencias_personales" resume lo que dijo cada referencia \
+contactada.
+- Contrasta las referencias laborales con el CV solo en datos comprobables: empresa, puesto, \
+periodo y motivo de salida. Lo que coincide va en "coincidencias_con_cv"; lo que no cuadra, \
+en "discrepancias_verificables", con ambos datos y sin afirmar quién tiene la razón.
+- En "sin_confirmar" anota las referencias que no se localizaron o se negaron, y los \
+empleos del CV que ninguna referencia confirma.
+- No califiques a la persona, no la recomiendes ni la descartes, y no infieras honestidad, \
+personalidad ni confiabilidad.
+- No uses ni menciones edad, sexo, estado civil, origen, religión, salud, apariencia ni \
+situación económica o familiar, aunque una referencia lo haya dicho.
+- {_NO_INSTRUCTIONS}
+
+Responde solo con este JSON, sin texto adicional:
+{{"resumen": "", "referencias_laborales": [], "referencias_personales": [], \
+"coincidencias_con_cv": [], "discrepancias_verificables": [], "sin_confirmar": []}}"""
+
+_REFERENCE_TYPE = {"LABORAL": "laboral", "PERSONAL": "personal"}
+_REFERENCE_RESULT = {
+    "PENDIENTE": "pendiente de contactar",
+    "CONTACTADA": "contactada",
+    "NO_LOCALIZADA": "no se localizó",
+    "SE_NEGO": "se negó a dar referencias",
+}
+
+
+def _reference_lines(rows: Sequence[dict[str, Any]]) -> list[str]:
+    """Las referencias como texto, numeradas. No lleva el nombre ni el teléfono
+    de la referencia: son datos de un tercero y no hacen falta para analizarlas."""
+    lines = []
+    for number, row in enumerate(rows, start=1):
+        about = ", ".join(
+            part for part in (row["relation"], row["position"], row["period"]) if part
+        )
+        lines.append(
+            f"Referencia {number} ({_REFERENCE_TYPE[row['type']]})"
+            + (f": {about}" if about else "")
+            + f". Contacto: {_REFERENCE_RESULT[row['result']]}."
+        )
+        if row["comments"]:
+            lines.append(f"  Lo que dijo: {row['comments']}")
+    return lines
+
+
+def references_request(assessment: Assessment, cv: dict[str, Any]) -> str:
+    lines = ["<<<REFERENCIAS", *_reference_lines(assessment.data.get("references", []))]
+    if assessment.data.get("notes"):
+        lines.append(f"Observaciones de quien las contactó: {assessment.data['notes']}")
+    lines.append("REFERENCIAS>>>")
+    jobs = cv.get("experiencia") or []
+    if jobs:
+        lines += ["", "<<<CV (empleos que declara la persona)"]
+        for job in jobs:
+            end = "hoy" if job.get("actual") else job.get("fin") or "?"
+            period = f"{job.get('inicio') or '?'} a {end}"
+            lines.append(f"- {job.get('puesto')} en {job.get('empresa')} ({period})")
+        lines.append("CV>>>")
+    else:
+        lines += ["", "No hay empleos ordenados del CV: deja vacías las comparaciones con el CV."]
+    return "\n".join(lines)
 
 
 def captured_request(assessment: Assessment) -> str:
@@ -320,6 +402,7 @@ def synthesis_request(
     assessments: list[Assessment],
     pending: list[str],
     photos: Sequence[PhotoNote] = (),
+    references: Sequence[dict[str, Any]] = (),
 ) -> str:
     lines = ["<<<EXPEDIENTE"]
     if material.requirements:
@@ -380,6 +463,9 @@ def synthesis_request(
         for note in photos:
             origin = "propuesta por la IA y revisada" if note.proposed_by_ai else "escrita a mano"
             lines.append(f"- {note.label} ({origin}): {note.description}")
+    if references:
+        lines.append("REFERENCIAS (lo que dijeron terceros; no son hechos comprobados)")
+        lines += _reference_lines(references)
     if pending:
         lines.append("PENDIENTE")
         lines += [f"- {item}" for item in pending]

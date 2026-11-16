@@ -86,6 +86,7 @@ def _call_values(call: CallSession) -> dict[str, object]:
         ],
         ensure_ascii=False,
     )
+    values["general_version_ids"] = json.dumps([str(item) for item in call.general_version_ids])
     values["analysis"] = (
         json.dumps(call.analysis, ensure_ascii=False) if call.analysis is not None else None
     )
@@ -107,6 +108,9 @@ def _to_call(row: CallSessionRow) -> CallSession:
             for item in json.loads(row.answers)
         ),
         analysis=json.loads(row.analysis) if row.analysis else None,
+        general_version_ids=tuple(
+            uuid.UUID(item) for item in json.loads(row.general_version_ids or "[]")
+        ),
         **values,
     )
 

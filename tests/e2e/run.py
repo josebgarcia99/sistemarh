@@ -93,6 +93,8 @@ def run_one(script: Path, api_python: str, shots: Path, logs: Path) -> bool:
         stop(demo)
     print(result.stdout.rstrip())
     if result.returncode != 0:
+        print(result.stderr.rstrip()[:1500])
+        print("   […]")
         print(result.stderr.rstrip()[-3000:])
     return result.returncode == 0
 

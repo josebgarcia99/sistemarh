@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Instalación completa
-   Versión del esquema: (vacía) -> 0016
-   Generado: 2026-11-12 20:41 (UTC) con scripts/generate_sql.py
+   Versión del esquema: (vacía) -> 0017
+   Generado: 2026-11-16 04:00 (UTC) con scripts/generate_sql.py
 
    Crea todos los esquemas y tablas en una base de datos VACÍA.
 
@@ -1185,6 +1185,32 @@ INSERT INTO auth.roles (code, name) VALUES (N'ANALISTA_ESTUDIOS', N'Analista de 
 GO
 
 UPDATE alembic_version SET version_num='0016' WHERE alembic_version.version_num = '0015';
+
+GO
+
+-- Running upgrade 0016 -> 0017
+
+ALTER TABLE recruitment.assessments DROP CONSTRAINT ck_assessments_kind;
+
+GO
+
+ALTER TABLE recruitment.assessments ADD CONSTRAINT ck_assessments_kind CHECK (kind IN ('PSICOMETRIA', 'ENTREVISTA', 'PRUEBA_TECNICA', 'ESTUDIO_SOCIOECONOMICO', 'REFERENCIAS'));
+
+GO
+
+ALTER TABLE recruitment.question_banks DROP CONSTRAINT ck_question_banks_scope;
+
+GO
+
+ALTER TABLE recruitment.question_banks ADD CONSTRAINT ck_question_banks_scope CHECK (scope IN ('PRIVADO', 'COMPARTIDO', 'GENERAL'));
+
+GO
+
+ALTER TABLE recruitment.call_sessions ADD general_version_ids VARCHAR(800) NOT NULL DEFAULT '[]';
+
+GO
+
+UPDATE alembic_version SET version_num='0017' WHERE alembic_version.version_num = '0016';
 
 GO
 

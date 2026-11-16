@@ -1,7 +1,8 @@
 """Lista de trabajo del analista de estudios socioeconómicos.
 
-Consulta de solo lectura que cruza postulaciones, candidatos, vacantes y
-estudios. Devuelve lo mínimo para ubicar a la persona y abrir su estudio: no
+Consulta de solo lectura que cruza postulaciones, candidatos, vacantes,
+estudios y referencias. Devuelve lo mínimo para ubicar a la persona y abrir su
+estudio o sus referencias: no
 incluye el CV, la evaluación de la IA ni ningún otro dato del expediente.
 """
 
@@ -20,6 +21,26 @@ from app.modules.vacancies.infrastructure.orm import VacancyRow
 
 MAX_ITEMS = 300
 _STUDY = "ESTUDIO_SOCIOECONOMICO"
+_REFERENCES = "REFERENCIAS"
+
+
+def _latest(kind: str, name: str) -> sa.Subquery:
+    """La evaluación más reciente de ese tipo que no esté anulada, por postulación."""
+    return (
+        sa.select(
+            AssessmentRow.application_id,
+            AssessmentRow.status,
+            AssessmentRow.updated_at,
+            sa.func.row_number()
+            .over(
+                partition_by=AssessmentRow.application_id,
+                order_by=AssessmentRow.updated_at.desc(),
+            )
+            .label("position"),
+        )
+        .where(AssessmentRow.kind == kind, AssessmentRow.status != "ANULADO")
+        .subquery(name)
+    )
 
 
 @dataclass(frozen=True)
@@ -33,6 +54,8 @@ class StudyQueueItem:
     # Estado del estudio más reciente que no esté anulado, si lo hay.
     study_status: str | None
     study_updated_at: datetime | None
+    # Estado de las referencias más recientes que no estén anuladas, si las hay.
+    references_status: str | None = None
 
 
 class SqlStudyQueue:
@@ -42,21 +65,8 @@ class SqlStudyQueue:
     def items(self, search: str | None = None) -> list[StudyQueueItem]:
         """Postulaciones en proceso y las que ya tienen un estudio, de cualquier
         vacante. Primero las de estudio más reciente; después, las que no tienen."""
-        study = (
-            sa.select(
-                AssessmentRow.application_id,
-                AssessmentRow.status,
-                AssessmentRow.updated_at,
-                sa.func.row_number()
-                .over(
-                    partition_by=AssessmentRow.application_id,
-                    order_by=AssessmentRow.updated_at.desc(),
-                )
-                .label("position"),
-            )
-            .where(AssessmentRow.kind == _STUDY, AssessmentRow.status != "ANULADO")
-            .subquery()
-        )
+        study = _latest(_STUDY, "study")
+        references = _latest(_REFERENCES, "refs")
         query = (
             sa.select(
                 ApplicationRow.id,
@@ -66,13 +76,26 @@ class SqlStudyQueue:
                 ApplicationRow.status,
                 study.c.status,
                 study.c.updated_at,
+                references.c.status,
             )
             .join(CandidateRow, CandidateRow.id == ApplicationRow.candidate_id)
             .join(VacancyRow, VacancyRow.id == ApplicationRow.vacancy_id)
             .outerjoin(
                 study, sa.and_(study.c.application_id == ApplicationRow.id, study.c.position == 1)
             )
-            .where(sa.or_(ApplicationRow.status == "ACTIVA", study.c.status.is_not(None)))
+            .outerjoin(
+                references,
+                sa.and_(
+                    references.c.application_id == ApplicationRow.id, references.c.position == 1
+                ),
+            )
+            .where(
+                sa.or_(
+                    ApplicationRow.status == "ACTIVA",
+                    study.c.status.is_not(None),
+                    references.c.status.is_not(None),
+                )
+            )
         )
         text = " ".join((search or "").split())[:100]
         if text:
@@ -100,6 +123,7 @@ class SqlStudyQueue:
                 active=row[4] == "ACTIVA",
                 study_status=row[5],
                 study_updated_at=row[6],
+                references_status=row[7],
             )
             for row in rows
         ]

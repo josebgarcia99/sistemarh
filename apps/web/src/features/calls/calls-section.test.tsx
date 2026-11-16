@@ -14,6 +14,7 @@ const BANK: Bank = {
   mine: true,
   can_edit: true,
   shared: false,
+  general: false,
   status: "ACTIVO",
   version_number: 1,
   questions: [],
@@ -31,8 +32,8 @@ function makeCall(overrides: Partial<Call> = {}): Call {
     created_by_name: "Reclutadora de Prueba",
     notes: "",
     questions: [
-      { id: "q1", text: "¿Qué nóminas has calculado?", competency: "Nómina", guidance: "", origin: "MANUAL", answer: "", notes: "", not_asked: false },
-      { id: "q2", text: "¿Cómo validas el IMSS?", competency: "", guidance: "", origin: "MANUAL", answer: "", notes: "", not_asked: false },
+      { id: "q1", text: "¿Qué nóminas has calculado?", competency: "Nómina", guidance: "Tamaño y periodicidad", origin: "MANUAL", general: true, answer: "", notes: "", not_asked: false },
+      { id: "q2", text: "¿Cómo validas el IMSS?", competency: "", guidance: "", origin: "MANUAL", general: false, answer: "", notes: "", not_asked: false },
     ],
     analysis: null,
     analysis_at: null,
@@ -94,6 +95,12 @@ describe("CallsSection", () => {
       evidencias: ["Nómina de 200 personas"],
       discrepancias_verificables: ["El CV indica 2020 a 2022; en la llamada dijo tres años"],
       preguntas_de_seguimiento: [],
+      medicion: {
+        score: 50,
+        valoradas: 1,
+        sin_valorar: 0,
+        items: [{ question_id: "q1", numero: 1, nivel: "PARCIAL", evidencia: "Nómina de 200 personas" }],
+      },
     };
     const closed = makeCall({ status: "CERRADA" });
     let analyzed = false;
@@ -113,6 +120,13 @@ describe("CallsSection", () => {
     expect(within(panel).getByText("Diferencias por aclarar con el CV")).toBeTruthy();
     expect(within(panel).queryByText("Preguntas de seguimiento")).toBeNull();
     expect(within(panel).getByText(/esa decisión es tuya/)).toBeTruthy();
+    // La cobertura: el número lo calcula el sistema y no califica a la persona.
+    const coverage = within(within(panel).getByRole("group", { name: "Cobertura de la llamada" }));
+    expect(coverage.getByText("Cobertura de la llamada: 50 de 100")).toBeTruthy();
+    expect(coverage.getByText(/Pregunta 1: Lo cubre en parte — «Nómina de 200 personas»/)).toBeTruthy();
+    expect(coverage.getByText(/No califica a la persona/)).toBeTruthy();
+    // Las preguntas generales de la empresa se distinguen de las del banco.
+    expect(screen.getAllByText("General")).toHaveLength(1);
   });
 
   it("con acceso de lectura se consultan las llamadas sin poder abrir ni analizar", async () => {

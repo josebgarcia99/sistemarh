@@ -6,7 +6,7 @@ import { makeUser, mockApi, renderApp } from "@/test/helpers";
 import { StudyQueueScreen } from "./study-queue-screen";
 
 const QUEUE = "/api/v1/study-queue";
-const row = (id: string, name: string, status: string | null, active = true) => ({
+const row = (id: string, name: string, status: string | null, active = true, references: string | null = null) => ({
   application_id: id,
   vacancy_id: "v1",
   candidate_name: name,
@@ -14,6 +14,7 @@ const row = (id: string, name: string, status: string | null, active = true) => 
   active,
   study_status: status,
   study_updated_at: status ? "2026-11-12T18:00:00Z" : null,
+  references_status: references,
 });
 const analyst = () => makeUser({ role: "ANALISTA_ESTUDIOS", full_name: "Analista Ficticia" });
 
@@ -33,7 +34,7 @@ describe("StudyQueueScreen", () => {
   it("lista a las personas con el estado de su estudio y abre el estudio de una", async () => {
     const fetchMock = mockApi({
       [`GET ${QUEUE}`]: {
-        body: [row("a1", "Ana Pérez Ficticia", "EN_PROCESO"), row("a2", "Beto López Ficticio", null, false)],
+        body: [row("a1", "Ana Pérez Ficticia", "EN_PROCESO", true, "COMPLETADO"), row("a2", "Beto López Ficticio", null, false)],
       },
       ["GET /api/v1/applications/a1/assessments"]: {
         body: { items: [], restricted: [], writable: ["ESTUDIO_SOCIOECONOMICO"] },
@@ -46,7 +47,10 @@ describe("StudyQueueScreen", () => {
       "Estudio: En proceso",
     );
     expect(people.getByRole("button", { name: "Abrir el estudio de Beto López Ficticio" }).textContent).toContain(
-      "Sin estudio · Proceso cerrado",
+      "Sin estudio · Sin referencias · Proceso cerrado",
+    );
+    expect(people.getByRole("button", { name: "Abrir el estudio de Ana Pérez Ficticia" }).textContent).toContain(
+      "Referencias: Completado",
     );
 
     await user.click(people.getByRole("button", { name: "Abrir el estudio de Ana Pérez Ficticia" }));

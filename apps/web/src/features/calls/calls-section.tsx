@@ -12,6 +12,7 @@ import {
 } from "@/features/recruitment/shared";
 import {
   ANALYSIS_SECTIONS,
+  COVERAGE_LABELS,
   analyzeCall,
   type AnswerInput,
   type Call,
@@ -205,6 +206,9 @@ function CallEditor({
           <li key={question.id} className="flex flex-col gap-2">
             <p className="font-medium">
               {index + 1}. {question.text}
+              {question.general && (
+                <span className={`${pillClass} ml-2 bg-neutral-soft text-neutral-ink`}>General</span>
+              )}
             </p>
             {(question.competency || question.guidance) && (
               <p className="text-sm text-ink-muted">
@@ -310,6 +314,31 @@ function CallEditor({
             avanzar o descartar: esa decisión es tuya.
           </p>
           {call.analysis.resumen && <p>{call.analysis.resumen}</p>}
+          {call.analysis.medicion && (
+            <div aria-label="Cobertura de la llamada" role="group" className="flex flex-col gap-2 rounded-2xl bg-surface p-4">
+              <p className="font-medium">
+                Cobertura de la llamada:{" "}
+                {call.analysis.medicion.score === null
+                  ? "sin calcular"
+                  : `${call.analysis.medicion.score} de 100`}
+              </p>
+              <p className="text-sm text-ink-muted">
+                Mide qué tanto cubrieron las respuestas lo que se esperaba en{" "}
+                {call.analysis.medicion.valoradas} preguntas. La IA propone el nivel de cada una y
+                el sistema calcula el número. No califica a la persona.
+                {call.analysis.medicion.sin_valorar > 0 &&
+                  ` ${call.analysis.medicion.sin_valorar} quedaron sin valorar.`}
+              </p>
+              <ul className="flex flex-col gap-1 text-sm">
+                {call.analysis.medicion.items.map((item) => (
+                  <li key={item.question_id}>
+                    Pregunta {item.numero}: {COVERAGE_LABELS[item.nivel] ?? item.nivel}
+                    {item.evidencia && ` — «${item.evidencia}»`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {ANALYSIS_SECTIONS.map(([key, label]) => {
             const items = call.analysis?.[key];
             if (!Array.isArray(items) || items.length === 0) return null;

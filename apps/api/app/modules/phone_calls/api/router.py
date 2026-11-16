@@ -41,6 +41,8 @@ class BankIn(BaseModel):
     name: str = Field(max_length=150)
     description: str | None = Field(default=None, max_length=500)
     shared: bool = False
+    # Preguntas generales de la empresa: se agregan a toda llamada. Solo administradores.
+    general: bool = False
     questions: list[QuestionIn]
 
 
@@ -57,6 +59,7 @@ class BankOut(BaseModel):
     mine: bool
     can_edit: bool
     shared: bool
+    general: bool
     status: str
     version_number: int
     questions: list[QuestionOut]
@@ -107,6 +110,8 @@ class NewCallIn(BaseModel):
 
 
 class CallQuestionOut(QuestionOut):
+    # Pregunta general de la empresa (no viene del banco elegido).
+    general: bool
     answer: str
     notes: str
     not_asked: bool
@@ -151,6 +156,7 @@ def _bank_out(view: BankView, principal: Principal, names: dict[uuid.UUID, str])
         mine=bank.owner_user_id == principal.user.id,
         can_edit=view.can_edit,
         shared=bank.scope.value == "COMPARTIDO",
+        general=bank.scope.value == "GENERAL",
         status=bank.status.value,
         version_number=view.latest.version_number,
         questions=_questions(view.latest),
@@ -177,11 +183,12 @@ def _call_out(view: CallView, names: dict[uuid.UUID, str]) -> CallOut:
                 competency=q.competency,
                 guidance=q.guidance,
                 origin=q.origin,
+                general=q.id in view.general_ids,
                 answer=answers[q.id].answer if q.id in answers else "",
                 notes=answers[q.id].notes if q.id in answers else "",
                 not_asked=answers[q.id].not_asked if q.id in answers else False,
             )
-            for q in view.version.questions
+            for q in view.questions
         ],
         analysis=call.analysis,
         analysis_at=call.analysis_at,
@@ -215,6 +222,7 @@ def create_bank(
             name=body.name,
             description=body.description,
             shared=body.shared,
+            general=body.general,
             questions=[q.model_dump() for q in body.questions],
             ip=client_ip(request),
         )
@@ -283,6 +291,7 @@ def update_bank(
             name=body.name,
             description=body.description,
             shared=body.shared,
+            general=body.general,
             questions=[q.model_dump() for q in body.questions],
             change_note=body.change_note,
             expected_version=body.expected_version,

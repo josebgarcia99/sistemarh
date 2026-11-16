@@ -60,7 +60,7 @@ export const OPERATION_LABELS: Record<string, string> = {
   GENERACION_PROMPTS: "Generación de prompts",
   EXTRACCION_CV: "Extracción de datos de CV",
   EVALUACION_DOCUMENTAL: "Evaluación de CV",
-  ANALISIS_LLAMADAS: "Análisis de llamadas",
+  ANALISIS_LLAMADAS: "Análisis de llamadas, entrevistas y referencias",
   LECTURA_DOCUMENTOS: "Lectura de documentos",
   RESUMEN_PRUEBAS: "Resumen de pruebas",
   SINTESIS_EXPEDIENTES: "Síntesis de expedientes",

@@ -17,13 +17,14 @@ Su acceso es por puesto, no por vacante: no necesita que nadie le comparta nada 
 | Registrar, capturar y completar el estudio socioeconómico de cualquier postulación | Sí |
 | Cargar, ver y descargar documentos y fotografías de tipo «Estudio socioeconómico» | Sí |
 | Leer el formato con IA y pedir la descripción de una fotografía | Sí |
+| Registrar, capturar y completar las referencias laborales y personales, y pedir su análisis con IA | Sí |
 | Consultar las plantillas del estudio | Sí (sin editarlas) |
 | Ver vacantes, CV, evaluación de la IA, perfil, prompt, llamadas o candidatos | No |
-| Ver o registrar psicometría, entrevistas o pruebas técnicas | No |
+| Ver o registrar psicometría, entrevistas o pruebas técnicas (ni pedir su resumen con IA) | No |
 | Ver o pedir la síntesis del expediente | No |
 | Indicadores, reportes, bancos, etapas, usuarios, IA, auditoría | No |
 
-Cómo se aplica: (1) la política de documentos y evaluaciones solo le concede la clase «estudio socioeconómico»; (2) además, una lista cerrada de rutas (`STUDY_ANALYST_ROUTES`): cualquier ruta que no esté en ella responde 403 para este rol, incluidas las que se añadan en el futuro. Cada rechazo queda en la auditoría.
+Cómo se aplica: (1) la política de documentos y evaluaciones solo le concede la clase «estudio socioeconómico» y, en evaluaciones, también las referencias; (2) además, una lista cerrada de rutas (`STUDY_ANALYST_ROUTES`): cualquier ruta que no esté en ella responde 403 para este rol, incluidas las que se añadan en el futuro. Cada rechazo queda en la auditoría.
 
 **Permisos sobre una vacante**
 
@@ -51,6 +52,7 @@ Cómo se aplica: (1) la política de documentos y evaluaciones solo le concede l
 | --- | --- | --- |
 | Crear sus propias vacantes | Sí | Sí |
 | Crear bancos de preguntas y compartirlos | Sí | Sí, los propios |
+| Definir o modificar las preguntas generales de la empresa (se agregan a todas las llamadas) | Sí | No (las ve y las usa) |
 | Dashboard y reportes | Globales | Solo vacantes propias y compartidas |
 | Usuarios, permisos y transferencias masivas | Sí | No |
 | Configuración de IA, claves y presupuestos | Sí | No |

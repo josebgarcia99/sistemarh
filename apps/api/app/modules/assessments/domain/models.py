@@ -27,6 +27,9 @@ class Kind(StrEnum):
     ENTREVISTA = "ENTREVISTA"
     PRUEBA_TECNICA = "PRUEBA_TECNICA"
     ESTUDIO_SOCIOECONOMICO = "ESTUDIO_SOCIOECONOMICO"
+    # Referencias laborales y personales. No tiene etapa propia: se registra
+    # antes o después del estudio. La capturan RH o el analista de estudios.
+    REFERENCIAS = "REFERENCIAS"
 
 
 # Tipos que exigen el permiso adicional sobre la vacante, además del acceso.
@@ -52,6 +55,7 @@ STATUSES: dict[Kind, tuple[str, ...]] = {
         "ANULADA",
     ),
     Kind.ESTUDIO_SOCIOECONOMICO: ("PENDIENTE", "EN_PROCESO", "COMPLETADO", "NO_APLICA", "ANULADO"),
+    Kind.REFERENCIAS: ("PENDIENTE", "EN_PROCESO", "COMPLETADO", "NO_APLICA", "ANULADO"),
 }
 ALL_STATUSES = tuple(dict.fromkeys(status for group in STATUSES.values() for status in group))
 

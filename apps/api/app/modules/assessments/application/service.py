@@ -52,6 +52,7 @@ _INITIAL_STATUS = {
     Kind.ENTREVISTA: "PROGRAMADA",
     Kind.PRUEBA_TECNICA: "PENDIENTE",
     Kind.ESTUDIO_SOCIOECONOMICO: "PENDIENTE",
+    Kind.REFERENCIAS: "PENDIENTE",
 }
 
 
@@ -281,6 +282,8 @@ class AssessmentService:
                 clean = rules.interview(data, status)
             elif kind is Kind.PRUEBA_TECNICA:
                 clean, score = rules.technical(data, status)
+            elif kind is Kind.REFERENCIAS:
+                clean = rules.references(data, status)
             else:
                 version = self._repo.template_version(assessment.template_version_id)  # type: ignore[arg-type]
                 if version is None:
@@ -296,6 +299,8 @@ class AssessmentService:
                         )
         except rules.RuleError as error:
             raise ValidationFailedError(str(error)) from error
+        if kind is Kind.REFERENCIAS and file_id is not None:
+            raise ValidationFailedError("Las referencias no llevan documento adjunto.")
         if file_id is not None and not self._documents.belongs(
             assessment.vacancy_id, file_id, kind
         ):
@@ -459,6 +464,15 @@ class AssessmentService:
         if kind is Kind.PSICOMETRIA:
             system, operation = assistant.PSYCHOMETRIC_SYSTEM, assistant.TEST_SUMMARY
             user = assistant.document_request(*self._document_text(assessment))
+        elif kind is Kind.REFERENCIAS:
+            system, operation = assistant.REFERENCES_SYSTEM, assistant.REFERENCES_ANALYSIS
+            if not any(row["comments"] for row in assessment.data.get("references", [])):
+                raise ValidationFailedError(
+                    "Anota y guarda lo que dijo al menos una referencia antes de analizarlas."
+                )
+            # Para contrastar las referencias laborales con lo que dice el CV.
+            cv = self._applications.material(assessment.application_id).cv
+            user = assistant.references_request(assessment, cv)
         elif kind is Kind.PRUEBA_TECNICA:
             system, operation = assistant.TECHNICAL_SYSTEM, assistant.TEST_SUMMARY
             user = (
@@ -643,6 +657,14 @@ class AssessmentService:
                     version = self._repo.template_version(item.template_version_id)  # type: ignore[arg-type]
                     if version is not None:
                         photos += rules.photo_notes(version, item.data.get("answers") or {})
+        # Referencias contactadas: lo que dijeron terceros sobre la persona.
+        told = [
+            row
+            for item in assessments
+            if item.kind is Kind.REFERENCIAS and item.status not in ("ANULADO", "NO_APLICA")
+            for row in item.data.get("references", [])
+            if row["result"] == "CONTACTADA" and row["comments"]
+        ]
         sources = []
         if material.cv or material.evaluation:
             sources.append("CV")
@@ -658,6 +680,8 @@ class AssessmentService:
                 sources.append(f"{count} {label}")
         if photos:
             sources.append(f"{len(photos)} fotografías del estudio")
+        if told:
+            sources.append(f"{len(told)} referencias")
         if not sources:
             raise ValidationFailedError(
                 "El expediente todavía no tiene información que sintetizar."
@@ -667,7 +691,7 @@ class AssessmentService:
             application.vacancy_id,
             assistant.DOSSIER_SYNTHESIS,
             assistant.SYNTHESIS_SYSTEM,
-            assistant.synthesis_request(material, usable, pending, photos),
+            assistant.synthesis_request(material, usable, pending, photos, told),
         )
         outcome = self._outcome(answer, assistant.synthesis_from_answer)
         if outcome.content is not None:
@@ -704,6 +728,8 @@ _PENDING_LABELS = {
     (Kind.PRUEBA_TECNICA, "PENDIENTE"): "Prueba técnica",
     (Kind.ESTUDIO_SOCIOECONOMICO, "PENDIENTE"): "Estudio socioeconómico",
     (Kind.ESTUDIO_SOCIOECONOMICO, "EN_PROCESO"): "Estudio socioeconómico",
+    (Kind.REFERENCIAS, "PENDIENTE"): "Referencias laborales y personales",
+    (Kind.REFERENCIAS, "EN_PROCESO"): "Referencias laborales y personales",
 }
 
 __all__ = ["SENSITIVE_KINDS", "AssessmentService"]

@@ -34,6 +34,7 @@ _DOCUMENT_TYPES = {
     Kind.PRUEBA_TECNICA: DocumentType.PRUEBA_TECNICA,
     Kind.ESTUDIO_SOCIOECONOMICO: DocumentType.ESTUDIO_SOCIOECONOMICO,
     Kind.ENTREVISTA: DocumentType.ADJUNTO,
+    Kind.REFERENCIAS: DocumentType.ADJUNTO,
 }
 _UNREADABLE = {
     "sin_texto": "No se encontró texto legible en el documento.",
@@ -53,6 +54,11 @@ class VacancyAssessmentAccess:
         self._policy = VacancyFileAccessPolicy(vacancies)
 
     def require(self, actor: Actor, vacancy_id: uuid.UUID, kind: Kind, *, write: bool) -> None:
+        if kind is Kind.REFERENCIAS and is_study_analyst(actor):
+            # Las referencias las trabajan RH y el analista de estudios. Al
+            # analista le basta su puesto; solo se comprueba que la vacante exista.
+            self._policy.readable_sensitive_classes(actor, vacancy_id)
+            return
         sensitive = kind.value if kind in SENSITIVE_KINDS else None
         check = self._policy.require_write if write else self._policy.require_read
         check(actor, vacancy_id, sensitive)
@@ -60,8 +66,8 @@ class VacancyAssessmentAccess:
     def readable(self, actor: Actor, vacancy_id: uuid.UUID) -> frozenset[Kind]:
         granted = self._policy.readable_sensitive_classes(actor, vacancy_id)
         if is_study_analyst(actor):
-            # Ni entrevistas ni pruebas técnicas: solo el estudio.
-            return frozenset({Kind.ESTUDIO_SOCIOECONOMICO})
+            # Ni entrevistas ni pruebas técnicas: solo el estudio y las referencias.
+            return frozenset({Kind.ESTUDIO_SOCIOECONOMICO, Kind.REFERENCIAS})
         return frozenset(k for k in Kind if k not in SENSITIVE_KINDS or k.value in granted)
 
 

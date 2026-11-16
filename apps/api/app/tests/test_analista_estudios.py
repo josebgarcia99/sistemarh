@@ -28,7 +28,7 @@ from app.tests.test_api_cv_batches import (
 )
 from app.tests.test_api_recruitment import assign, by_name, evaluated, new_bank, reply
 
-DENIED = "Tu puesto solo da acceso a los estudios socioeconómicos."
+DENIED = "Tu puesto solo da acceso a los estudios socioeconómicos y a las referencias."
 
 
 @pytest.fixture
@@ -63,6 +63,7 @@ def test_la_analista_hace_todo_el_estudio_de_cualquier_vacante(
         "active": True,
         "study_status": None,
         "study_updated_at": None,
+        "references_status": None,
     }
     assert [i["candidate_name"] for i in analyst.get(f"{API}/study-queue?search=ana p").json()] == [
         "Ana Pérez Ficticia"
@@ -71,7 +72,10 @@ def test_la_analista_hace_todo_el_estudio_de_cualquier_vacante(
 
     # Registra el estudio, carga la fotografía y el formato, y usa las ayudas de IA.
     listing = analyst.get(f"{API}/applications/{ana}/assessments").json()
-    assert listing["items"] == [] and listing["writable"] == ["ESTUDIO_SOCIOECONOMICO"]
+    assert listing["items"] == [] and listing["writable"] == [
+        "ESTUDIO_SOCIOECONOMICO",
+        "REFERENCIAS",
+    ]
     [template] = analyst.get(f"{API}/form-templates").json()
     ids = {f["label"]: f["id"] for section in template["sections"] for f in section["fields"]}
     study = create(analyst, ana, "ESTUDIO_SOCIOECONOMICO", template_id=template["id"])
@@ -140,7 +144,10 @@ def test_la_analista_no_ve_nada_que_no_sea_el_estudio(
     # Otras evaluaciones de la misma persona: ni las ve ni las puede registrar.
     technical = create(recruiter, ana, "PRUEBA_TECNICA", data={"test_type": "Excel"}).json()
     listing = analyst.get(f"{API}/applications/{ana}/assessments").json()
-    assert listing["items"] == [] and listing["writable"] == ["ESTUDIO_SOCIOECONOMICO"]
+    assert listing["items"] == [] and listing["writable"] == [
+        "ESTUDIO_SOCIOECONOMICO",
+        "REFERENCIAS",
+    ]
     assert analyst.get(f"{API}/assessments/{technical['id']}").status_code == 403
     assert create(analyst, ana, "PRUEBA_TECNICA", data={"test_type": "Excel"}).status_code == 403
     assert create(analyst, ana, "PSICOMETRIA", data={"instrument": "X"}).status_code == 403

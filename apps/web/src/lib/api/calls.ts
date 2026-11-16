@@ -25,6 +25,8 @@ const bankSchema = z.object({
   mine: z.boolean(),
   can_edit: z.boolean(),
   shared: z.boolean(),
+  /** Preguntas generales de la empresa: se agregan a toda llamada. */
+  general: z.boolean().default(false),
   status: z.enum(["ACTIVO", "ARCHIVADO"]),
   version_number: z.number(),
   questions: z.array(questionSchema),
@@ -50,6 +52,7 @@ export type BankInput = {
   name: string;
   description: string | null;
   shared: boolean;
+  general: boolean;
   questions: QuestionInput[];
 };
 
@@ -98,6 +101,27 @@ export const ANALYSIS_SECTIONS: [string, string][] = [
   ["preguntas_de_seguimiento", "Preguntas de seguimiento"],
 ];
 
+/** Cobertura de la llamada: qué tanto cubrió cada respuesta lo que se esperaba. */
+const measurementSchema = z.object({
+  score: z.number().nullable(),
+  valoradas: z.number(),
+  sin_valorar: z.number(),
+  items: z.array(
+    z.object({
+      question_id: z.string(),
+      numero: z.number(),
+      nivel: z.string(),
+      evidencia: z.string(),
+    }),
+  ),
+});
+export const COVERAGE_LABELS: Record<string, string> = {
+  CUMPLE: "Cubre lo esperado",
+  PARCIAL: "Lo cubre en parte",
+  NO_CUMPLE: "No lo cubre",
+  SIN_VALORAR: "Sin valorar",
+};
+
 const callSchema = z.object({
   id: z.string(),
   application_id: z.string(),
@@ -108,10 +132,16 @@ const callSchema = z.object({
   created_by_name: z.string().nullable(),
   notes: z.string(),
   questions: z.array(
-    questionSchema.extend({ answer: z.string(), notes: z.string(), not_asked: z.boolean() }),
+    questionSchema.extend({
+      /** Pregunta general de la empresa (no viene del banco elegido). */
+      general: z.boolean().default(false),
+      answer: z.string(),
+      notes: z.string(),
+      not_asked: z.boolean(),
+    }),
   ),
   analysis: z
-    .object({ resumen: z.string() })
+    .object({ resumen: z.string(), medicion: measurementSchema.nullable().optional() })
     .catchall(z.union([z.string(), z.array(z.string())]))
     .nullable(),
   analysis_at: z.string().nullable(),

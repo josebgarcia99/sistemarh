@@ -172,6 +172,7 @@ Si Sistemas prefiere ejecutar T-SQL en lugar de Alembic, los scripts equivalente
 | `actualizacion_0013_a_0014.sql` | Base que ya tiene la versión `0013` |
 | `actualizacion_0014_a_0015.sql` | Base que ya tiene la versión `0014` |
 | `actualizacion_0015_a_0016.sql` | Base que ya tiene la versión `0015` |
+| `actualizacion_0016_a_0017.sql` | Base que ya tiene la versión `0016` |
 | `permisos_usuario_aplicacion.sql` | Plantilla de permisos mínimos para el usuario de la aplicación |
 | `validaciones_integridad.sql` | Solo lectura. Comprueba la coherencia de los datos tras instalar, actualizar o restaurar: todas las filas deben dar 0 |
 | `reversion_completa.sql` | Elimina todo. Solo para bases de prueba |

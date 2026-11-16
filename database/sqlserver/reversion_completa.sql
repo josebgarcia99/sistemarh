@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Reversión completa (DESTRUCTIVO)
-   Versión del esquema: 0016 -> (vacía)
-   Generado: 2026-11-12 20:41 (UTC) con scripts/generate_sql.py
+   Versión del esquema: 0017 -> (vacía)
+   Generado: 2026-11-16 04:00 (UTC) con scripts/generate_sql.py
 
    ELIMINA todas las tablas y esquemas del sistema, con todos sus datos.
    Solo para entornos de prueba. Nunca ejecutar en producción sin respaldo.
@@ -24,14 +24,48 @@ SET XACT_ABORT ON;
 GO
 
 -- Protección: si la base no está en la versión esperada, no se ejecuta nada.
-IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0016')
+IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0017')
 BEGIN
-    RAISERROR(N'La base no esta en la version 0016. No se aplico ningun cambio.', 16, 1);
+    RAISERROR(N'La base no esta en la version 0017. No se aplico ningun cambio.', 16, 1);
     SET NOEXEC ON;
 END
 GO
 
 BEGIN TRANSACTION;
+
+-- Running downgrade 0017 -> 0016
+
+declare @const_name varchar(256)
+select @const_name = QUOTENAME([name]) from sys.default_constraints
+where parent_object_id = object_id('recruitment.call_sessions')
+and col_name(parent_object_id, parent_column_id) = 'general_version_ids'
+exec('alter table recruitment.call_sessions drop constraint ' + @const_name);
+
+GO
+
+ALTER TABLE recruitment.call_sessions DROP COLUMN general_version_ids;
+
+GO
+
+ALTER TABLE recruitment.question_banks DROP CONSTRAINT ck_question_banks_scope;
+
+GO
+
+ALTER TABLE recruitment.question_banks ADD CONSTRAINT ck_question_banks_scope CHECK (scope IN ('PRIVADO', 'COMPARTIDO'));
+
+GO
+
+ALTER TABLE recruitment.assessments DROP CONSTRAINT ck_assessments_kind;
+
+GO
+
+ALTER TABLE recruitment.assessments ADD CONSTRAINT ck_assessments_kind CHECK (kind IN ('PSICOMETRIA', 'ENTREVISTA', 'PRUEBA_TECNICA', 'ESTUDIO_SOCIOECONOMICO'));
+
+GO
+
+UPDATE alembic_version SET version_num='0016' WHERE alembic_version.version_num = '0017';
+
+GO
 
 -- Running downgrade 0016 -> 0015
 

@@ -44,8 +44,9 @@ export function StudyQueueScreen() {
             <p className="text-sm text-ink-muted">{open.vacancy_name}</p>
             <h1 className="text-4xl font-medium tracking-tight sm:text-5xl">{open.candidate_name}</h1>
             <p className="mt-2 max-w-3xl text-ink-muted">
-              Estudio socioeconómico. Aquí cargas el formato y las fotografías, capturas el
-              estudio y usas las ayudas de IA.
+              Estudio socioeconómico y referencias laborales y personales. Aquí cargas el
+              formato y las fotografías, capturas el estudio, registras lo que dijo cada
+              referencia y usas las ayudas de IA.
             </p>
           </div>
           <button type="button" className={secondaryButtonClass} onClick={() => setOpen(null)}>
@@ -65,8 +66,8 @@ export function StudyQueueScreen() {
       <div>
         <h1 className="text-4xl font-medium tracking-tight sm:text-5xl">Estudios socioeconómicos</h1>
         <p className="mt-2 max-w-3xl text-ink-muted">
-          Personas en proceso en todas las vacantes y el estado de su estudio. Abre a una persona
-          para registrar o continuar su estudio.
+          Personas en proceso en todas las vacantes, con el estado de su estudio y de sus
+          referencias. Abre a una persona para registrar o continuar cualquiera de los dos.
         </p>
       </div>
       <section className={`${cardClass} flex flex-col gap-4`}>
@@ -115,6 +116,10 @@ export function StudyQueueScreen() {
                           ? ` · ${dateFormat.format(new Date(item.study_updated_at))}`
                           : "")
                       : "Sin estudio"}
+                    {" · "}
+                    {item.references_status
+                      ? `Referencias: ${STATUS_LABELS[item.references_status] ?? item.references_status}`
+                      : "Sin referencias"}
                     {!item.active && " · Proceso cerrado"}
                   </span>
                 </button>

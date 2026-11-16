@@ -26,6 +26,8 @@ import {
   type FormField,
   KIND_DOCUMENT,
   KIND_LABELS,
+  REFERENCE_RESULTS,
+  REFERENCE_TYPES,
   type Kind,
   listAssessments,
   listTemplates,
@@ -61,6 +63,7 @@ const FIRST_FIELD: Record<Kind, { key: string; label: string } | null> = {
   ENTREVISTA: { key: "interviewer", label: "Quién entrevista" },
   PRUEBA_TECNICA: { key: "test_type", label: "Tipo de prueba" },
   ESTUDIO_SOCIOECONOMICO: null,
+  REFERENCIAS: null,
 };
 const TEXT_FIELDS: Record<Kind, { key: string; label: string; area?: boolean }[]> = {
   PSICOMETRIA: [
@@ -92,6 +95,29 @@ const TEXT_FIELDS: Record<Kind, { key: string; label: string; area?: boolean }[]
     { key: "performed_by", label: "Quién realizó el estudio" },
     { key: "notes", label: "Observaciones generales", area: true },
   ],
+  REFERENCIAS: [{ key: "notes", label: "Observaciones generales", area: true }],
+};
+/** Datos de cada referencia, además del tipo, el resultado y lo que dijo. */
+const REFERENCE_FIELDS: { key: string; label: string; type?: string }[] = [
+  { key: "name", label: "Nombre de la referencia" },
+  { key: "relation", label: "Empresa o relación con la persona" },
+  { key: "position", label: "Puesto de la referencia" },
+  { key: "phone", label: "Teléfono" },
+  { key: "period", label: "Periodo en que la conoció o trabajaron juntos" },
+  { key: "contacted_by", label: "Quién la contactó" },
+  { key: "contacted_on", label: "Fecha de contacto", type: "date" },
+];
+const EMPTY_REFERENCE: Row = {
+  type: "LABORAL",
+  name: "",
+  relation: "",
+  position: "",
+  phone: "",
+  period: "",
+  contacted_by: "",
+  contacted_on: "",
+  result: "PENDIENTE",
+  comments: "",
 };
 const SUMMARY_LABELS: Record<string, string> = {
   resultados_documentados: "Resultados que constan en el documento",
@@ -101,6 +127,11 @@ const SUMMARY_LABELS: Record<string, string> = {
   evidencias: "Evidencias",
   informacion_faltante: "Información que faltó",
   preguntas_de_seguimiento: "Preguntas de seguimiento",
+  referencias_laborales: "Lo que dijeron las referencias laborales",
+  referencias_personales: "Lo que dijeron las referencias personales",
+  coincidencias_con_cv: "Coincide con el CV",
+  discrepancias_verificables: "Diferencias por aclarar con el CV",
+  sin_confirmar: "Sin confirmar",
 };
 const text = (value: unknown) => (typeof value === "string" ? value : "");
 
@@ -132,7 +163,7 @@ export function AssessmentsSection({ applicationId, vacancyId, active }: Props) 
         )}
       </div>
       <p className="text-sm text-ink-muted">
-        Psicometría, entrevista con gerente, prueba técnica y estudio socioeconómico. Registrar
+        Psicometría, entrevista con gerente, prueba técnica, estudio socioeconómico y referencias. Registrar
         una evaluación no mueve de etapa a nadie: avanzar sigue siendo tu decisión.
       </p>
       {error && (
@@ -225,6 +256,7 @@ function NewAssessment({
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
   const isStudy = kind === "ESTUDIO_SOCIOECONOMICO";
+  const isReferences = kind === "REFERENCIAS";
   const templates = useQuery({
     queryKey: ["form-templates"],
     queryFn: ({ signal }) => listTemplates(signal),
@@ -265,7 +297,11 @@ function NewAssessment({
             ))}
           </select>
         </div>
-        {field ? (
+        {isReferences ? (
+          <p className="self-end text-sm text-ink-muted">
+            Se registran en cualquier momento, antes o después del estudio socioeconómico.
+          </p>
+        ) : field ? (
           <div className="flex flex-col gap-2">
             <label htmlFor="new-first" className="text-sm text-ink-muted">
               {field.label}
@@ -331,6 +367,9 @@ function AssessmentEditor({
       points: row.points ?? "",
     })),
   );
+  const [references, setReferences] = useState<Row[]>(() =>
+    ((item.data.references as Row[]) ?? []).map((row) => ({ ...EMPTY_REFERENCE, ...row })),
+  );
   const [passMark, setPassMark] = useState(text(item.data.pass_mark));
   const [answers, setAnswers] = useState<Record<string, Answer>>(
     () => (item.data.answers as Record<string, Answer>) ?? {},
@@ -358,6 +397,7 @@ function AssessmentEditor({
       };
     }
     if (kind === "ESTUDIO_SOCIOECONOMICO") return { ...values, answers };
+    if (kind === "REFERENCIAS") return { ...values, references };
     return values;
   }
   async function run(action: () => Promise<unknown>, message: string) {
@@ -425,6 +465,12 @@ function AssessmentEditor({
           cuenta como verificado cuando una persona lo marca así.
         </p>
       )}
+      {kind === "REFERENCIAS" && (
+        <p className="text-sm text-ink-muted">
+          Anota lo que dijo cada referencia tal como lo dijo. Es la opinión de un tercero, no un
+          hecho comprobado, y el sistema no la convierte en calificación.
+        </p>
+      )}
       <div className="grid gap-3 md:grid-cols-3">
         <Labeled id={`status-${item.id}`} label="Estado">
           <select id={`status-${item.id}`} className={fieldClass} disabled={!canEdit} value={status} onChange={(event) => setStatus(event.target.value)}>
@@ -438,7 +484,7 @@ function AssessmentEditor({
         <Labeled id={`date-${item.id}`} label="Fecha">
           <input id={`date-${item.id}`} type="date" className={fieldClass} readOnly={!canEdit} value={date} onChange={(event) => setDate(event.target.value)} />
         </Labeled>
-        {kind !== "ENTREVISTA" && (
+        {kind !== "ENTREVISTA" && kind !== "REFERENCIAS" && (
           <Labeled id={`file-${item.id}`} label={kind === "ESTUDIO_SOCIOECONOMICO" ? "Formulario escaneado" : "Documento"}>
             <select id={`file-${item.id}`} className={fieldClass} disabled={!canEdit} value={fileId} onChange={(event) => setFileId(event.target.value)}>
               <option value="">Sin documento</option>
@@ -488,6 +534,61 @@ function AssessmentEditor({
           <Labeled id={`competencies-${item.id}`} label="Competencias observadas (una por línea)">
             <textarea id={`competencies-${item.id}`} rows={3} className={areaClass} readOnly={!canEdit} value={competencies} onChange={(event) => setCompetencies(event.target.value)} />
           </Labeled>
+        </>
+      )}
+
+      {kind === "REFERENCIAS" && (
+        <>
+          <ol aria-label="Referencias" className="flex flex-col gap-3">
+            {references.map((row, index) => (
+              <li key={index} className="flex min-w-0 flex-col gap-3 rounded-3xl bg-surface p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="font-medium">Referencia {index + 1}</p>
+                  {canEdit && (
+                    <button type="button" className={dangerButtonClass} aria-label={`Quitar la referencia ${index + 1}`} onClick={() => setReferences(references.filter((_, i) => i !== index))}>
+                      Quitar
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Labeled id={`ref-type-${item.id}-${index}`} label={`Tipo de la referencia ${index + 1}`}>
+                    <select id={`ref-type-${item.id}-${index}`} className={fieldClass} disabled={!canEdit} value={row.type} onChange={(event) => setRow(references, setReferences, index, { type: event.target.value })}>
+                      {REFERENCE_TYPES.map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </Labeled>
+                  <Labeled id={`ref-result-${item.id}-${index}`} label={`Resultado del contacto ${index + 1}`}>
+                    <select id={`ref-result-${item.id}-${index}`} className={fieldClass} disabled={!canEdit} value={row.result} onChange={(event) => setRow(references, setReferences, index, { result: event.target.value })}>
+                      {REFERENCE_RESULTS.map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </Labeled>
+                  {REFERENCE_FIELDS.map((field) => (
+                    <Labeled key={field.key} id={`ref-${field.key}-${item.id}-${index}`} label={`${field.label} ${index + 1}`}>
+                      <input id={`ref-${field.key}-${item.id}-${index}`} type={field.type ?? "text"} className={fieldClass} readOnly={!canEdit} value={row[field.key] ?? ""} onChange={(event) => setRow(references, setReferences, index, { [field.key]: event.target.value })} />
+                    </Labeled>
+                  ))}
+                  <div className="md:col-span-2">
+                    <Labeled id={`ref-comments-${item.id}-${index}`} label={`Lo que dijo la referencia ${index + 1}`}>
+                      <textarea id={`ref-comments-${item.id}-${index}`} rows={3} className={areaClass} readOnly={!canEdit} value={row.comments ?? ""} onChange={(event) => setRow(references, setReferences, index, { comments: event.target.value })} />
+                    </Labeled>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ol>
+          {references.length === 0 && <p className="text-ink-muted">Todavía no hay referencias registradas.</p>}
+          {canEdit && references.length < 12 && (
+            <button type="button" className={`${secondaryButtonClass} self-start`} onClick={() => setReferences([...references, { ...EMPTY_REFERENCE }])}>
+              Agregar referencia
+            </button>
+          )}
         </>
       )}
 
@@ -582,7 +683,11 @@ function AssessmentEditor({
           </button>
           {kind !== "ESTUDIO_SOCIOECONOMICO" && (
             <button type="button" className={secondaryButtonClass} disabled={busy} onClick={() => run(() => summarizeAssessment(item.id), "Resumen listo.")}>
-              {kind === "ENTREVISTA" ? "Organizar con IA" : "Resumir con IA"}
+              {kind === "ENTREVISTA"
+                ? "Organizar con IA"
+                : kind === "REFERENCIAS"
+                  ? "Analizar con IA"
+                  : "Resumir con IA"}
             </button>
           )}
         </div>
@@ -598,6 +703,8 @@ function AssessmentEditor({
           <p className="text-sm text-ink-muted">
             Resume lo documentado{item.ai_summary_at ? ` (${dateTimeFormat.format(new Date(item.ai_summary_at))})` : ""}. No
             es un diagnóstico ni una recomendación.
+            {kind === "REFERENCIAS" &&
+              " Lo que dijo una referencia es su opinión, no un hecho comprobado."}
           </p>
           {text(item.ai_summary.resumen) && <p>{text(item.ai_summary.resumen)}</p>}
           {Object.entries(item.ai_summary).map(([key, list]) =>

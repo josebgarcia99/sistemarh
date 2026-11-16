@@ -6,6 +6,7 @@ export const kindSchema = z.enum([
   "ENTREVISTA",
   "PRUEBA_TECNICA",
   "ESTUDIO_SOCIOECONOMICO",
+  "REFERENCIAS",
 ]);
 export type Kind = z.infer<typeof kindSchema>;
 export const KIND_LABELS: Record<Kind, string> = {
@@ -13,6 +14,7 @@ export const KIND_LABELS: Record<Kind, string> = {
   ENTREVISTA: "Entrevista con gerente",
   PRUEBA_TECNICA: "Prueba técnica",
   ESTUDIO_SOCIOECONOMICO: "Estudio socioeconómico",
+  REFERENCIAS: "Referencias laborales y personales",
 };
 /** Tipo de documento de la vacante que se adjunta a cada evaluación. */
 export const KIND_DOCUMENT: Record<Kind, string> = {
@@ -20,7 +22,18 @@ export const KIND_DOCUMENT: Record<Kind, string> = {
   ENTREVISTA: "ADJUNTO",
   PRUEBA_TECNICA: "PRUEBA_TECNICA",
   ESTUDIO_SOCIOECONOMICO: "ESTUDIO_SOCIOECONOMICO",
+  REFERENCIAS: "ADJUNTO",
 };
+export const REFERENCE_TYPES: [string, string][] = [
+  ["LABORAL", "Laboral"],
+  ["PERSONAL", "Personal"],
+];
+export const REFERENCE_RESULTS: [string, string][] = [
+  ["PENDIENTE", "Pendiente de contactar"],
+  ["CONTACTADA", "Contactada"],
+  ["NO_LOCALIZADA", "No se localizó"],
+  ["SE_NEGO", "Se negó a dar referencias"],
+];
 export const STATUS_LABELS: Record<string, string> = {
   PENDIENTE: "Pendiente",
   PRESENTADA: "Presentada",
@@ -224,6 +237,7 @@ const studyQueueItemSchema = z.object({
   active: z.boolean(),
   study_status: z.string().nullable(),
   study_updated_at: z.string().nullable(),
+  references_status: z.string().nullable().default(null),
 });
 export type StudyQueueItem = z.infer<typeof studyQueueItemSchema>;
 

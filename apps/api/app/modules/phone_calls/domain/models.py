@@ -20,6 +20,9 @@ from typing import Any, Protocol
 class BankScope(StrEnum):
     PRIVADO = "PRIVADO"
     COMPARTIDO = "COMPARTIDO"
+    # Preguntas generales de la empresa: se agregan solas a toda llamada, antes
+    # de las del banco elegido. Solo las administran los administradores.
+    GENERAL = "GENERAL"
 
 
 class BankStatus(StrEnum):
@@ -89,6 +92,8 @@ class CallSession:
     notes: str = ""
     answers: tuple[Answer, ...] = ()
     closed_at: datetime | None = None
+    # Versiones de los bancos generales vigentes cuando se abrió la llamada.
+    general_version_ids: tuple[uuid.UUID, ...] = ()
     # Último análisis de IA de la llamada, con su fecha y quién lo pidió.
     analysis: dict[str, Any] | None = None
     analysis_at: datetime | None = None

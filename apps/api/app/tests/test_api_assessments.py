@@ -346,7 +346,7 @@ def test_la_psicometria_y_el_estudio_exigen_el_permiso_adicional(ana, recruiter,
     seen = listing(other_client, ana)
     assert [item["kind"] for item in seen["items"]] == ["ENTREVISTA"]
     assert seen["restricted"] == ["ESTUDIO_SOCIOECONOMICO", "PSICOMETRIA"]
-    assert seen["writable"] == ["ENTREVISTA", "PRUEBA_TECNICA"]
+    assert seen["writable"] == ["ENTREVISTA", "PRUEBA_TECNICA", "REFERENCIAS"]
     for item in (psychometric, study):
         assert other_client.get(f"{API}/assessments/{item['id']}").status_code == 403
         assert update(other_client, item).status_code == 403

@@ -17,7 +17,7 @@ Menú «Usuarios».
 - **Dar de alta.** «Nuevo usuario»: correo, nombre completo, contraseña y rol (administrador, reclutador o analista de estudios socioeconómicos) → «Crear usuario». El sistema no envía correos: comunica tú la contraseña a la persona por un medio seguro. La contraseña debe tener al menos 12 caracteres.
 - **Restablecer contraseña.** «Restablecer contraseña» pone una nueva y cierra todas las sesiones abiertas de esa persona.
 - **Editar.** Puedes cambiar el nombre y el rol.
-- **Analista de estudios socioeconómicos.** Es un rol aparte para quien solo hace estudios: ve la lista de personas en proceso de todas las vacantes y trabaja su estudio (formato, fotografías y ayudas de IA). No ve vacantes, CV, otras evaluaciones, indicadores ni configuración, y no hace falta compartirle ninguna vacante. Los reclutadores y administradores siguen viendo y editando los estudios como antes.
+- **Analista de estudios socioeconómicos.** Es un rol aparte para quien solo hace estudios: ve la lista de personas en proceso de todas las vacantes y trabaja su estudio (formato, fotografías y ayudas de IA) y sus referencias laborales y personales. No ve vacantes, CV, otras evaluaciones, indicadores ni configuración, y no hace falta compartirle ninguna vacante. Los reclutadores y administradores siguen viendo y editando los estudios como antes.
 - **Cuenta bloqueada.** Tras cinco intentos fallidos la cuenta se bloquea quince minutos y se desbloquea sola. Restablecer la contraseña también la libera.
 
 Las contraseñas no se pueden consultar: el sistema guarda solo una huella irreversible.
@@ -54,7 +54,7 @@ La clave se guarda cifrada y **no vuelve a mostrarse**: solo verás sus cuatro �
 
 ### Modelos y asignaciones
 
-Cada tarea de IA usa el modelo que tú le asignes: análisis de perfiles, generación de prompts, evaluación de CV, extracción de datos del CV, análisis de llamadas, lectura de documentos, resumen de pruebas y síntesis de expedientes. Una tarea sin modelo asignado no se puede usar, y la pantalla lo avisa a quien lo intente. «Probar» comprueba un modelo concreto.
+Cada tarea de IA usa el modelo que tú le asignes: análisis de perfiles, generación de prompts, evaluación de CV, extracción de datos del CV, análisis de llamadas (también organiza las entrevistas y analiza las referencias), lectura de documentos, resumen de pruebas y síntesis de expedientes. Una tarea sin modelo asignado no se puede usar, y la pantalla lo avisa a quien lo intente. «Probar» comprueba un modelo concreto.
 
 ### Costos y límite mensual
 
@@ -65,6 +65,16 @@ Cada tarea de IA usa el modelo que tú le asignes: análisis de perfiles, genera
 ### Documentos reales y privacidad
 
 Por omisión el sistema **no envía documentos reales** a los proveedores de IA. Activarlo es una decisión que se toma con Sistemas (variable `RECLU_AI_ALLOW_REAL_DOCUMENTS`), con el aviso de privacidad vigente y sabiendo qué hace cada proveedor con los datos. Antes de enviar un CV se ocultan correos y teléfonos. Los estudios socioeconómicos nunca se incluyen en la síntesis de un expediente.
+
+## Preguntas generales de la empresa
+
+Son las preguntas que se hacen a todas las personas candidatas, sin importar la vacante. En el menú «Bancos», crea un banco (o abre uno) y marca «Preguntas generales de la empresa». Desde ese momento se agregan solas a cada llamada nueva, antes de las preguntas del banco que elija quien llama, y aparecen marcadas como «General».
+
+- Solo los administradores pueden crearlas o modificarlas; el resto del equipo las ve y las usa.
+- Si las cambias, las llamadas ya abiertas conservan las preguntas con las que se abrieron.
+- Si un puesto no las necesita, no hay que quitarlas: quien llama marca «No se realizó» en la pregunta.
+- Para dejar de usarlas, archiva el banco o desmarca la casilla.
+- En cada pregunta puedes anotar «qué se espera de la respuesta». Con eso la IA mide la cobertura de la llamada.
 
 ## Etapas del proceso
 

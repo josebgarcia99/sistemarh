@@ -90,10 +90,10 @@ Al pulsar el nombre se abre su expediente: datos de contacto, evaluación del CV
 
 ### Llamadas telefónicas
 
-1. En «Bancos» (menú) crea un banco de preguntas con «Nuevo banco»; «Proponer preguntas con IA» sugiere preguntas a partir del perfil de una vacante. Los bancos pueden ser privados o compartidos y guardan sus versiones.
-2. En el expediente, «Nueva llamada» → elige el banco → «Abrir llamada».
+1. En «Bancos» (menú) crea un banco de preguntas con «Nuevo banco»; «Proponer preguntas con IA» sugiere preguntas a partir del perfil de una vacante. Los bancos pueden ser privados o compartidos y guardan sus versiones. En cada pregunta puedes anotar **qué se espera de la respuesta**: con eso la IA mide después la llamada.
+2. En el expediente, «Nueva llamada» → elige el banco → «Abrir llamada». Las **preguntas generales de la empresa** (las que se hacen a todas las personas; las define un administrador) aparecen solas al principio, marcadas como «General», sin que tengas que elegirlas.
 3. Captura cada respuesta o márcala como no realizada, y pulsa «Guardar».
-4. «Analizar con IA» resume lo que aportó la llamada y señala diferencias con el CV por aclarar. No recomienda contratar ni descartar.
+4. «Analizar con IA» resume lo que aportó la llamada y señala diferencias con el CV por aclarar. No recomienda contratar ni descartar. Además muestra la **cobertura de la llamada**: en cada pregunta contestada que tenía anotado qué se espera, indica si la respuesta lo cubre, lo cubre en parte o no lo cubre, con la frase en que se basa, y un número de 0 a 100 que calcula el sistema. Mide qué tanto se cubrió lo esperado en la llamada; no es una calificación de la persona.
 5. «Cerrar llamada» la deja fija. Puede haber varias llamadas por persona.
 
 ### Evaluaciones posteriores
@@ -104,6 +104,8 @@ En el expediente, «Registrar evaluación»:
 - **Entrevista con gerente.** Recursos Humanos captura las preguntas, respuestas, competencias observadas y la conclusión del gerente. Marcarla como realizada exige esa conclusión. «Organizar con IA» ordena lo capturado sin cambiar la conclusión.
 - **Prueba técnica.** Opcional. Con la rúbrica («Agregar criterio») el sistema calcula la calificación. Si el puesto no la requiere, regístrala como «no aplica».
 - **Estudio socioeconómico.** Se llena sobre un formulario definido por el administrador. La plantilla inicial es el formato de la empresa «SGC.F3.RH. Estudio socioeconómico», con sus tablas (formación académica, familiares, contactos de emergencia). «Leer el formulario escaneado con IA» propone los valores de cada campo a partir del formato lleno (escaneado, en PDF, Word o Excel); entran marcados como leídos por IA y **sin verificar** hasta que una persona los revise. **Fotografías.** En los campos de fotografía (higiene, localización, fachada) eliges una foto ya cargada o pulsas «Adjuntar foto o archivo» para subirla ahí mismo (JPG o PNG). Con la foto elegida, «Describir con IA» propone un texto con lo que se observa en la imagen; revísalo, corrígelo y guarda el estudio. La IA describe solo lo que se ve: no opina sobre la persona ni califica la vivienda, y la foto se le envía reducida y sin fecha ni ubicación. Las descripciones que guardes aparecen después en la síntesis del expediente y en el Excel de postulaciones, pero solo para quienes tienen el permiso del estudio socioeconómico; el resto del estudio no sale de él. El dictamen, los niveles, el «score total» y la viabilidad los anotas tú: la IA no los llena y el sistema no los calcula ni los usa para ordenar candidatos.
+
+- **Referencias laborales y personales.** No tienen etapa propia: se registran en cualquier momento, antes o después del estudio socioeconómico, y las puede capturar tanto Recursos Humanos como el analista de estudios. «Agregar referencia» y, en cada una: si es laboral o personal, nombre, empresa o relación, puesto, teléfono, periodo, quién la contactó y cuándo, el resultado del contacto (pendiente, contactada, no se localizó, se negó) y **lo que dijo**, tal como lo dijo. Para marcarlas como completadas, ninguna puede quedar pendiente. «Analizar con IA» resume lo que dijo cada referencia y compara las laborales con los empleos del CV: qué coincide, qué no cuadra y qué quedó sin confirmar. No califica ni recomienda; lo que dice una referencia es su opinión, no un hecho comprobado. A la IA no se le envían el nombre ni el teléfono de las referencias.
 
 «Generar síntesis» ordena todo el expediente en hechos documentados, declaraciones, observaciones humanas, resultados técnicos, información pendiente y diferencias por aclarar, y añade **preguntas sugeridas para la siguiente etapa** (hasta seis, para aclarar lo que quedó pendiente). No produce una calificación global ni una recomendación.
 
@@ -126,13 +128,14 @@ Todos piden motivo, salvo la contratación. No se puede contratar a más persona
 
 ## Si tu puesto es analista de estudios socioeconómicos
 
-Al entrar verás solo «Estudios»: la lista de personas en proceso de todas las vacantes, con el estado de su estudio. Puedes buscar por persona o por vacante.
+Al entrar verás solo «Estudios»: la lista de personas en proceso de todas las vacantes, con el estado de su estudio y de sus referencias. Puedes buscar por persona o por vacante.
 
 1. Abre a la persona. Si no tiene estudio, «Registrar evaluación» lo crea con el formato de la empresa.
 2. Captura el formato. Con «Adjuntar foto o archivo» subes las fotografías y el formato firmado; «Leer el formulario escaneado con IA» y «Describir con IA» te proponen datos y descripciones que tú revisas.
 3. Anota el dictamen y guarda. Cuando esté terminado, cambia el estado a «Completado».
+4. Para las referencias, «Registrar evaluación» → «Referencias laborales y personales». Captura cada referencia y lo que dijo, guarda y, si quieres, pulsa «Analizar con IA» (se explica arriba, en «Evaluaciones posteriores»).
 
-No verás el CV ni el resto del expediente: tu puesto solo da acceso a los estudios. La reclutadora responsable y los administradores ven el estudio que captures.
+No verás el CV ni el resto del expediente: tu puesto solo da acceso a los estudios y a las referencias. El análisis de referencias sí menciona los empleos del CV (puesto, empresa y periodo), porque sirve para compararlos. La reclutadora responsable y los administradores ven el estudio que captures.
 
 ## Indicadores
 

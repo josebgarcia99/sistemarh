@@ -142,6 +142,7 @@ class StudyQueueItemOut(BaseModel):
     active: bool
     study_status: str | None
     study_updated_at: datetime | None
+    references_status: str | None
 
 
 class PhotoDescriptionIn(BaseModel):
