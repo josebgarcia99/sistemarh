@@ -71,10 +71,16 @@ class AiOutcome:
     error: str | None = None
 
 
+# Cuántas síntesis anteriores se devuelven para consultarlas.
+MAX_SYNTHESIS_HISTORY = 20
+
+
 @dataclass(frozen=True)
 class SynthesisView:
     latest: Synthesis | None
     total: int
+    # Las síntesis que esta persona puede ver, de la más reciente a la más antigua.
+    history: tuple[Synthesis, ...]
     # Hay síntesis que incluyen psicometría y este usuario no tiene ese permiso.
     hidden: bool
 
@@ -593,6 +599,7 @@ class AssessmentService:
         return SynthesisView(
             latest=visible[0] if visible else None,
             total=len(visible),
+            history=tuple(visible[:MAX_SYNTHESIS_HISTORY]),
             hidden=len(visible) < len(found),
         )
 

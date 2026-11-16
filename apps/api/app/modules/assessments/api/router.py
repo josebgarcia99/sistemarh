@@ -179,6 +179,8 @@ class SynthesisOut(BaseModel):
 class SynthesisViewOut(BaseModel):
     latest: SynthesisOut | None
     total: int
+    # Las síntesis visibles, de la más reciente a la más antigua (hasta 20).
+    history: list[SynthesisOut]
     # Existen síntesis que este usuario no puede ver por incluir psicometría.
     hidden: bool
 
@@ -527,6 +529,7 @@ def get_syntheses(
         return SynthesisViewOut(
             latest=_synthesis_out(repos, view.latest) if view.latest else None,
             total=view.total,
+            history=[_synthesis_out(repos, item) for item in view.history],
             hidden=view.hidden,
         )
 

@@ -331,4 +331,102 @@ describe("DossierSection", () => {
     expect(within(panel).getByText(/fuentes: CV, 1 entrevistas/)).toBeTruthy();
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true);
   });
+
+  const makeSynthesis = (id: string, at: string, result: Record<string, string[]>) => ({
+    id,
+    created_at: at,
+    created_by_name: "Reclutadora de Prueba",
+    result,
+    sources: ["CV"],
+    includes_psychometrics: false,
+    includes_study: false,
+  });
+
+  it("muestra las preguntas sugeridas y deja consultar las síntesis anteriores", async () => {
+    const recent = makeSynthesis("x2", "2026-11-12T19:00:00Z", {
+      hechos_documentados: ["Confirmó su motivo de salida"],
+      preguntas_sugeridas: ["¿Qué sistema de nómina usabas a diario?"],
+    });
+    const older = makeSynthesis("x1", "2026-11-11T19:00:00Z", { hechos_documentados: ["Analista en Uno SA (CV)"] });
+    const fetchMock = mockApi({
+      ["GET /api/v1/applications/a1/calls"]: { body: [] },
+      [`GET ${LIST_URL}`]: { body: list([]) },
+      ["GET /api/v1/applications/a1/syntheses"]: { body: { latest: recent, total: 2, history: [recent, older], hidden: false } },
+    });
+    const user = userEvent.setup();
+    renderApp(<DossierSection detail={detail} canEdit />, { session: makeUser() });
+    const panel = await screen.findByRole("region", { name: "Síntesis" });
+    expect(within(panel).getByText("Preguntas sugeridas para la siguiente etapa")).toBeTruthy();
+    expect(within(panel).getByText("¿Qué sistema de nómina usabas a diario?")).toBeTruthy();
+
+    const picker = screen.getByLabelText("Síntesis guardadas (2)") as HTMLSelectElement;
+    expect(picker.options[0].textContent).toContain("(la más reciente)");
+    await user.selectOptions(picker, "x1");
+    expect(within(panel).getByText("Analista en Uno SA (CV)")).toBeTruthy();
+    expect(within(panel).getByText(/Estás viendo una síntesis anterior/)).toBeTruthy();
+    expect(within(panel).queryByText("Preguntas sugeridas para la siguiente etapa")).toBeNull();
+    await user.selectOptions(picker, "x2");
+    expect(within(panel).queryByText(/Estás viendo una síntesis anterior/)).toBeNull();
+    // Abrir el expediente y consultar el historial no pide nada a la IA.
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("actualiza la síntesis sola cuando se registra un resultado, no al abrir el expediente", async () => {
+    let interview = make("ENTREVISTA", { status: "PROGRAMADA", data: { interviewer: "G" } });
+    let latest: ReturnType<typeof makeSynthesis> | null = null;
+    let fail = false;
+    const fetchMock = mockApi({
+      ["GET /api/v1/applications/a1/calls"]: { body: [] },
+      [`GET ${LIST_URL}`]: () => ({ body: list([interview]) }),
+      ["GET /api/v1/applications/a1/syntheses"]: () => ({
+        body: { latest, total: latest ? 1 : 0, history: latest ? [latest] : [], hidden: false },
+      }),
+      ["POST /api/v1/applications/a1/syntheses"]: () => {
+        if (fail) return { status: 422, body: { detail: "No hay un modelo asignado a la síntesis." } };
+        latest = makeSynthesis("x1", "2026-11-12T19:00:00Z", { observaciones_humanas: ["Entrevista realizada"] });
+        return { status: 201, body: latest };
+      },
+    });
+    const posts = () => fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith("/syntheses") && init?.method === "POST").length;
+    const { queryClient } = renderApp(<DossierSection detail={detail} canEdit />, { session: makeUser() });
+    const stages = within(screen.getByRole("list", { name: "Etapas y fuentes" }));
+    expect(await stages.findByText(/Entrevista con gerente: Programada/)).toBeTruthy();
+    expect(posts()).toBe(0);
+
+    // Guardar un borrador o reprogramar no cuenta: la entrevista sigue sin resultado.
+    interview = { ...interview, version: 2 };
+    await queryClient.invalidateQueries({ queryKey: ["application", "a1", "assessments"] });
+    expect(posts()).toBe(0);
+
+    // La entrevista queda realizada: la síntesis se genera sola.
+    interview = { ...interview, status: "REALIZADA" };
+    await queryClient.invalidateQueries({ queryKey: ["application", "a1", "assessments"] });
+    expect(await screen.findByText("La síntesis se actualizó sola con lo que acabas de registrar.")).toBeTruthy();
+    expect(within(await screen.findByRole("region", { name: "Síntesis" })).getByText("Entrevista realizada")).toBeTruthy();
+    expect(posts()).toBe(1);
+
+    // Si la IA no está disponible, se avisa sin estorbar y queda el botón.
+    fail = true;
+    interview = { ...interview, status: "NO_APLICA" };
+    await queryClient.invalidateQueries({ queryKey: ["application", "a1", "assessments"] });
+    expect((await screen.findByRole("alert")).textContent).toContain("No se pudo actualizar la síntesis sola");
+    expect(posts()).toBe(2);
+    expect(screen.getByRole("button", { name: "Generar una síntesis nueva" })).toBeTruthy();
+  });
+
+  it("no actualiza la síntesis sola para quien solo puede leer", async () => {
+    let interview = make("ENTREVISTA", { status: "PROGRAMADA", data: { interviewer: "G" } });
+    const fetchMock = mockApi({
+      ["GET /api/v1/applications/a1/calls"]: { body: [] },
+      [`GET ${LIST_URL}`]: () => ({ body: list([interview]) }),
+      ["GET /api/v1/applications/a1/syntheses"]: { body: { latest: null, total: 0, history: [], hidden: false } },
+    });
+    const { queryClient } = renderApp(<DossierSection detail={detail} canEdit={false} />, { session: makeUser() });
+    const stages = within(screen.getByRole("list", { name: "Etapas y fuentes" }));
+    expect(await stages.findByText(/Entrevista con gerente: Programada/)).toBeTruthy();
+    interview = { ...interview, status: "REALIZADA" };
+    await queryClient.invalidateQueries({ queryKey: ["application", "a1", "assessments"] });
+    expect(await stages.findByText(/Entrevista con gerente: Realizada/)).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
 });

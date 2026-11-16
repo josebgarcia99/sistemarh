@@ -671,7 +671,12 @@ def test_sintesis_del_expediente_por_tipo_de_fuente_sin_puntuar(
 ):
     other_client, other_id = other
     url = f"{API}/applications/{ana}/syntheses"
-    assert recruiter.get(url).json() == {"latest": None, "total": 0, "hidden": False}
+    assert recruiter.get(url).json() == {
+        "latest": None,
+        "total": 0,
+        "history": [],
+        "hidden": False,
+    }
     assert "modelo asignado" in recruiter.post(url).json()["detail"]
     assign(admin, "SINTESIS_EXPEDIENTES")
 

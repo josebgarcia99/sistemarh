@@ -184,6 +184,7 @@ class SimulatedProvider:
                 "resultados_tecnicos": [],
                 "informacion_pendiente": ["Punto pendiente simulado."],
                 "discrepancias_verificables": [],
+                "preguntas_sugeridas": ["Pregunta sugerida simulada para la siguiente etapa."],
             }
         elif user.startswith("CV a ordenar"):
             # "Extracción" inventada: solo el nombre sale de la primera línea del CV.

@@ -136,6 +136,7 @@ export const SYNTHESIS_SECTIONS: [string, string][] = [
   ["resultados_tecnicos", "Resultados técnicos"],
   ["informacion_pendiente", "Información pendiente"],
   ["discrepancias_verificables", "Diferencias por aclarar entre fuentes"],
+  ["preguntas_sugeridas", "Preguntas sugeridas para la siguiente etapa"],
 ];
 const synthesisSchema = z.object({
   id: z.string(),
@@ -151,6 +152,8 @@ export type Synthesis = z.infer<typeof synthesisSchema>;
 const synthesisViewSchema = z.object({
   latest: synthesisSchema.nullable(),
   total: z.number(),
+  /** Las síntesis visibles, de la más reciente a la más antigua. */
+  history: z.array(synthesisSchema).default([]),
   hidden: z.boolean(),
 });
 

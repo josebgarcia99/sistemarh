@@ -96,9 +96,14 @@ with sync_playwright() as p:
     # 5. Expediente por etapas y síntesis
     dossier = page.get_by_role("region", name="Expediente por etapas")
     expect(dossier.get_by_text("Prueba técnica: Realizada")).to_be_visible()
-    dossier.get_by_role("button", name="Generar síntesis").click()
-    syn = dossier.get_by_role("region", name="Síntesis")
-    expect(syn).to_contain_text("Hechos documentados"); expect(syn).to_contain_text("pruebas psicométricas validadas"); print("5 expediente por etapas con sus fuentes y síntesis por tipo de fuente")
+    # La síntesis ya se generó sola al registrar los resultados de las evaluaciones.
+    syn = dossier.get_by_role("region", name="Síntesis"); expect(syn).to_be_visible()
+    dossier.get_by_role("button", name="Generar una síntesis nueva").click(); expect(dossier.get_by_text("Síntesis lista.")).to_be_visible()
+    expect(syn).to_contain_text("Hechos documentados"); expect(syn).to_contain_text("pruebas psicométricas validadas")
+    expect(syn).to_contain_text("Preguntas sugeridas para la siguiente etapa")
+    historial = dossier.get_by_label(re.compile("Síntesis guardadas")); expect(historial).to_be_visible()
+    historial.select_option(index=1); expect(syn).to_contain_text("Estás viendo una síntesis anterior"); historial.select_option(index=0)
+    print("5 expediente por etapas; la síntesis se actualiza sola, propone preguntas y guarda su historial")
     dossier.screenshot(path=f"{SHOTS}/f6_2_sintesis.png")
     # 6. Beto (lectura, sin permiso sensible)
     ctx2 = browser.new_context(viewport={"width": 1440, "height": 1000}); p2 = ctx2.new_page(); watch(p2, "B ")
@@ -109,7 +114,10 @@ with sync_playwright() as p:
     expect(s2.get_by_role("button", name="Registrar evaluación")).to_have_count(0)
     d2 = p2.get_by_role("region", name="Expediente por etapas")
     expect(d2.get_by_text("síntesis más reciente que incluye psicometría o fotografías del estudio")).to_be_visible()
-    expect(d2.get_by_role("region", name="Síntesis")).to_have_count(0); print("6 sin el permiso adicional no se ven psicometría, estudio ni la síntesis que los incluye")
+    # Sí ve una síntesis anterior, generada sola antes de que hubiera psicometría o fotografías.
+    s2 = d2.get_by_role("region", name="Síntesis"); expect(s2).to_be_visible()
+    expect(s2).not_to_contain_text("psicométricas"); expect(s2).not_to_contain_text("fotografías del estudio")
+    print("6 sin el permiso adicional no se ven psicometría, estudio ni las síntesis que los incluyen")
     # 6b. Analista de estudios: solo ve los estudios, de cualquier vacante
     ctxa = browser.new_context(viewport={"width": 1440, "height": 1000}); pa = ctxa.new_page()
     pa.on("pageerror", lambda e: errors.append("C " + str(e)))

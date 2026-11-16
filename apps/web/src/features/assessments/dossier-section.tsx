@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { cardClass, primaryButtonClass } from "@/components/ui/styles";
+import { useEffect, useRef, useState } from "react";
+import { cardClass, fieldClass, primaryButtonClass } from "@/components/ui/styles";
 import { dateTimeFormat, type Feedback, FeedbackLine } from "@/features/recruitment/shared";
 import {
   createSynthesis,
@@ -23,6 +23,9 @@ const STAGE_KINDS: Record<string, string> = {
   ESTUDIO_SOCIOECONOMICO: "ESTUDIO_SOCIOECONOMICO",
 };
 
+/** Estados con los que una evaluación ya aporta un resultado al expediente. */
+const SETTLED_STATUSES = new Set(["PRESENTADA", "VALIDADA", "REALIZADA", "COMPLETADO", "NO_APLICA"]);
+
 /** Vista consolidada del expediente: cada etapa con sus fuentes, y la síntesis de IA. */
 export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail; canEdit: boolean }) {
   const queryClient = useQueryClient();
@@ -42,20 +45,59 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
   });
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
+  // Síntesis anterior que se está consultando; vacío = la más reciente.
+  const [shownId, setShownId] = useState("");
 
-  async function synthesize() {
+  async function synthesize(automatic = false) {
     setBusy(true);
     setFeedback(null);
     try {
       await createSynthesis(applicationId);
       await queryClient.invalidateQueries({ queryKey: synthesisKey });
-      setFeedback({ kind: "ok", text: "Síntesis lista." });
+      setShownId("");
+      setFeedback({
+        kind: "ok",
+        text: automatic
+          ? "La síntesis se actualizó sola con lo que acabas de registrar."
+          : "Síntesis lista.",
+      });
     } catch (caught) {
-      setFeedback({ kind: "error", text: describeError(caught) });
+      setFeedback({
+        kind: "error",
+        text: automatic
+          ? `No se pudo actualizar la síntesis sola: ${describeError(caught)} Puedes generarla con el botón.`
+          : describeError(caught),
+      });
     } finally {
       setBusy(false);
     }
   }
+
+  // Lo que ya quedó firme en el expediente: llamadas cerradas y evaluaciones con
+  // resultado. Cuando aparece algo nuevo mientras la persona trabaja en esta
+  // pantalla (cerró una llamada, completó una prueba), la síntesis se actualiza sola.
+  const settled =
+    calls.data && assessments.data
+      ? [
+          ...calls.data.filter((call) => call.status === "CERRADA").map((call) => `c:${call.id}`),
+          ...assessments.data.items
+            .filter((item) => SETTLED_STATUSES.has(item.status))
+            .map((item) => `e:${item.id}:${item.status}`),
+        ]
+          .sort()
+          .join("|")
+      : null;
+  const seen = useRef<string | null>(null);
+  useEffect(() => {
+    if (settled === null) return;
+    const previous = seen.current;
+    seen.current = settled;
+    // La primera carga solo se anota: abrir un expediente no consulta a la IA.
+    if (previous === null || previous === settled || !canEdit) return;
+    const before = new Set(previous.split("|"));
+    if (settled.split("|").some((entry) => entry && !before.has(entry))) void synthesize(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo reacciona a lo registrado
+  }, [settled, canEdit]);
 
   const { pipeline, application, movements, evaluation } = detail;
   const current = pipeline.stages.find((stage) => stage.id === application.stage_id);
@@ -86,6 +128,8 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
     return found;
   }
   const latest = syntheses.data?.latest;
+  const history = syntheses.data?.history ?? [];
+  const shown = history.find((item) => item.id === shownId) ?? latest;
 
   return (
     <section className={`${cardClass} flex flex-col gap-5`} aria-labelledby="dossier-title">
@@ -125,12 +169,14 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
       <div className="flex flex-col gap-3 border-t border-line pt-4">
         <h3 className="text-lg font-medium">Síntesis del expediente con IA</h3>
         <p className="text-sm text-ink-muted">
-          Ordena lo que hay en el expediente según de dónde viene. No calcula ninguna puntuación
-          ni índice y no recomienda una decisión. La psicometría solo entra si un profesional la
-          validó; el estudio socioeconómico nunca entra.
+          Ordena lo que hay en el expediente según de dónde viene y propone qué preguntar en la
+          siguiente etapa. No calcula ninguna puntuación ni índice y no recomienda una decisión.
+          Se actualiza sola cuando cierras una llamada o registras el resultado de una
+          evaluación. La psicometría solo entra si un profesional la validó; del estudio
+          socioeconómico solo entran las descripciones de sus fotografías.
         </p>
         {canEdit && (
-          <button type="button" className={`${primaryButtonClass} self-start`} disabled={busy} onClick={synthesize}>
+          <button type="button" className={`${primaryButtonClass} self-start`} disabled={busy} onClick={() => synthesize()}>
             {busy ? "Consultando a la IA…" : latest ? "Generar una síntesis nueva" : "Generar síntesis"}
           </button>
         )}
@@ -141,14 +187,39 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
             adicional sobre la vacante.
           </p>
         )}
-        {latest && (
+        {history.length > 1 && (
+          <div className="flex max-w-xl flex-col gap-2">
+            <label htmlFor="synthesis-history" className="text-sm text-ink-muted">
+              Síntesis guardadas ({history.length})
+            </label>
+            <select
+              id="synthesis-history"
+              className={fieldClass}
+              value={shown?.id ?? ""}
+              onChange={(event) => setShownId(event.target.value === latest?.id ? "" : event.target.value)}
+            >
+              {history.map((item, index) => (
+                <option key={item.id} value={item.id}>
+                  {dateTimeFormat.format(new Date(item.created_at))}
+                  {index === 0 ? " (la más reciente)" : ""} · {item.created_by_name ?? "Sin datos"}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {shown && (
           <div aria-label="Síntesis" role="region" className="flex flex-col gap-3 rounded-3xl bg-surface p-5">
+            {shown !== latest && (
+              <p className="rounded-2xl bg-white/60 px-4 py-2 text-sm">
+                Estás viendo una síntesis anterior. Puede no incluir lo registrado después.
+              </p>
+            )}
             <p className="text-sm text-ink-muted">
-              {dateTimeFormat.format(new Date(latest.created_at))} · {latest.created_by_name ?? "Sin datos"} ·
-              fuentes: {latest.sources.join(", ")}
+              {dateTimeFormat.format(new Date(shown.created_at))} · {shown.created_by_name ?? "Sin datos"} ·
+              fuentes: {shown.sources.join(", ")}
             </p>
             {SYNTHESIS_SECTIONS.map(([key, label]) => {
-              const items = latest.result[key] ?? [];
+              const items = shown.result[key] ?? [];
               if (items.length === 0) return null;
               return (
                 <div key={key}>
