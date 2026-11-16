@@ -88,6 +88,8 @@ with sync_playwright() as p:
     # 6. Bancos de preguntas
     page.get_by_role("link", name="Bancos", exact=True).click()
     page.get_by_role("button", name="Nuevo banco").click()
+    # Una reclutadora también puede marcar un banco como preguntas generales de la empresa.
+    expect(page.get_by_role("checkbox", name="Preguntas generales de la empresa")).to_be_enabled()
     page.get_by_label("Nombre", exact=True).fill("Banco técnico demo")
     page.get_by_label("Pregunta 1", exact=True).fill("¿Qué herramientas usas a diario?")
     page.get_by_role("button", name="Proponer preguntas con IA").click()

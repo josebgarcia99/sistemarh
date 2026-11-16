@@ -75,30 +75,38 @@ describe("QuestionBanksScreen", () => {
     });
   });
 
-  it("solo un administrador marca un banco como preguntas generales de la empresa", async () => {
-    const general = makeBank({ id: "g1", name: "Preguntas generales", general: true, mine: false, can_edit: false });
+  it("una reclutadora crea y modifica las preguntas generales de la empresa, aunque no sean suyas", async () => {
+    const general = makeBank({ id: "g1", name: "Preguntas generales", general: true, mine: false, can_edit: true, owner_name: "Otra Reclutadora" });
     const fetchMock = mockApi({
       [`GET ${URL}`]: { body: [general] },
       [`GET ${URL}/g1`]: { body: DETAIL(general) },
+      [`PUT ${URL}/g1`]: { body: { ...general, version_number: 2 } },
       [`POST ${URL}`]: { status: 201, body: makeBank({ id: "g2", general: true }) },
       [`GET ${URL}/g2`]: { body: DETAIL(makeBank({ id: "g2", general: true })) },
     });
     const user = userEvent.setup();
-    // Una reclutadora las ve identificadas, pero no puede marcar ni desmarcar la casilla.
-    const first = renderApp(<QuestionBanksScreen />, { session: makeUser({ role: "RECLUTADOR" }) });
+    renderApp(<QuestionBanksScreen />, { session: makeUser({ role: "RECLUTADOR" }) });
     expect(await screen.findByText("Generales de la empresa")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Nuevo banco" }));
-    expect(screen.queryByLabelText(/Preguntas generales de la empresa/)).toBeNull();
-    first.unmount();
+    // Las de otra persona se pueden modificar: son de toda la empresa.
+    await user.click(screen.getByRole("button", { name: "Preguntas generales" }));
+    const first = await screen.findByLabelText("Pregunta 1");
+    await user.clear(first);
+    await user.type(first, "¿Cuándo podrías empezar?");
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    expect((await screen.findByRole("status")).textContent).toContain("Banco guardado");
+    const put = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/g1") && init?.method === "PUT");
+    const changed = JSON.parse(String(put?.[1]?.body));
+    expect(changed.general).toBe(true);
+    expect(changed.questions[0].text).toBe("¿Cuándo podrías empezar?");
 
-    renderApp(<QuestionBanksScreen />, { session: makeUser({ role: "ADMINISTRADOR" }) });
+    // Y también puede crear un banco general nuevo.
+    await user.click(screen.getByRole("button", { name: "Volver a la lista" }));
     await user.click(await screen.findByRole("button", { name: "Nuevo banco" }));
     await user.type(screen.getByLabelText("Nombre"), "Generales");
     await user.type(screen.getByLabelText("Pregunta 1"), "¿Por qué te interesa la vacante?");
     await user.type(screen.getByLabelText("Qué se espera de la respuesta 1"), "Motivos ligados al puesto");
     await user.click(screen.getByLabelText(/Preguntas generales de la empresa/));
     await user.click(screen.getByRole("button", { name: "Crear banco" }));
-    expect((await screen.findByRole("status")).textContent).toContain("Banco guardado");
     const post = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith(URL) && init?.method === "POST");
     const body = JSON.parse(String(post?.[1]?.body));
     expect(body.general).toBe(true);

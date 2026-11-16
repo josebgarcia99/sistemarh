@@ -461,7 +461,7 @@ La migración `0011` crea el resultado final de las postulaciones que ya estaban
 | --- | --- | --- | --- |
 | `question_banks` | `name`, `description` | `NVARCHAR(150)`, `NVARCHAR(500)` | Nombre y descripción. |
 | `question_banks` | `owner_user_id` | `UNIQUEIDENTIFIER` | Propietario. |
-| `question_banks` | `scope` | `VARCHAR(20)` | `PRIVADO`, `COMPARTIDO` o `GENERAL` (desde la versión `0017`). Un banco `GENERAL` tiene las preguntas que se hacen a todas las personas: se agregan solas a cada llamada y solo lo crea o modifica un administrador. |
+| `question_banks` | `scope` | `VARCHAR(20)` | `PRIVADO`, `COMPARTIDO` o `GENERAL` (desde la versión `0017`). Un banco `GENERAL` tiene las preguntas que se hacen a todas las personas: se agregan solas a cada llamada y lo puede crear o modificar cualquier reclutador o administrador. |
 | `question_banks` | `status` | `VARCHAR(20)` | `ACTIVO` o `ARCHIVADO`. |
 | `question_banks` | `duplicated_from` | `UNIQUEIDENTIFIER` | Banco del que se copió, si es una copia. |
 | `question_bank_versions` | `bank_id`, `version_number` | | Versión del banco (única por banco). No cambia. |

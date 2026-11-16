@@ -145,8 +145,6 @@ function BankEditor({
   const [description, setDescription] = useState(bank?.description ?? "");
   const [shared, setShared] = useState(bank?.shared ?? false);
   const [general, setGeneral] = useState(bank?.general ?? false);
-  const { user } = useSession();
-  const isAdmin = user?.role === "ADMINISTRADOR";
   const [questions, setQuestions] = useState<QuestionInput[]>(() =>
     bank ? bank.questions.map((question) => ({ ...question })) : [emptyQuestion()],
   );
@@ -222,19 +220,17 @@ function BankEditor({
           />
           Compartir con todo el equipo (los demás lo usan y lo duplican, pero no lo modifican)
         </label>
-        {(isAdmin || general) && (
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              className="size-5 accent-ink"
-              disabled={!editable || !isAdmin}
-              checked={general}
-              onChange={(event) => setGeneral(event.target.checked)}
-            />
-            Preguntas generales de la empresa: se agregan solas a todas las llamadas, antes de las
-            del banco elegido (solo administradores)
-          </label>
-        )}
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            className="size-5 accent-ink"
+            disabled={!editable}
+            checked={general}
+            onChange={(event) => setGeneral(event.target.checked)}
+          />
+          Preguntas generales de la empresa: se agregan solas a todas las llamadas, antes de las
+          del banco elegido, y cualquier persona de Recursos Humanos puede modificarlas
+        </label>
         <ol aria-label="Preguntas" className="flex flex-col gap-3">
           {questions.map((question, index) => (
             <li key={question.id ?? `nueva-${index}`} className="flex flex-col gap-2 rounded-3xl bg-surface p-4">

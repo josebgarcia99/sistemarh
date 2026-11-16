@@ -115,17 +115,14 @@ class PhoneCallService:
     @staticmethod
     def _can_edit(actor: UserInfo, bank: Bank) -> bool:
         if bank.scope is BankScope.GENERAL:
-            # Cambian lo que se pregunta en todas las llamadas de la empresa.
-            return actor.is_admin
+            # Son de toda la empresa: las mantiene cualquier reclutador o
+            # administrador. Cada cambio crea una versión y queda en la auditoría.
+            return True
         return actor.is_admin or bank.owner_user_id == actor.id
 
     @staticmethod
     def _scope(actor: UserInfo, shared: bool, general: bool) -> BankScope:
         if general:
-            if not actor.is_admin:
-                raise PermissionDeniedError(
-                    "Solo un administrador puede definir preguntas generales de la empresa."
-                )
             return BankScope.GENERAL
         return BankScope.COMPARTIDO if shared else BankScope.PRIVADO
 

@@ -52,7 +52,7 @@ Cómo se aplica: (1) la política de documentos y evaluaciones solo le concede l
 | --- | --- | --- |
 | Crear sus propias vacantes | Sí | Sí |
 | Crear bancos de preguntas y compartirlos | Sí | Sí, los propios |
-| Definir o modificar las preguntas generales de la empresa (se agregan a todas las llamadas) | Sí | No (las ve y las usa) |
+| Definir o modificar las preguntas generales de la empresa (se agregan a todas las llamadas) | Sí | Sí, también las que creó otra persona |
 | Dashboard y reportes | Globales | Solo vacantes propias y compartidas |
 | Usuarios, permisos y transferencias masivas | Sí | No |
 | Configuración de IA, claves y presupuestos | Sí | No |

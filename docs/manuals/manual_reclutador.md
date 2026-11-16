@@ -90,8 +90,8 @@ Al pulsar el nombre se abre su expediente: datos de contacto, evaluación del CV
 
 ### Llamadas telefónicas
 
-1. En «Bancos» (menú) crea un banco de preguntas con «Nuevo banco»; «Proponer preguntas con IA» sugiere preguntas a partir del perfil de una vacante. Los bancos pueden ser privados o compartidos y guardan sus versiones. En cada pregunta puedes anotar **qué se espera de la respuesta**: con eso la IA mide después la llamada.
-2. En el expediente, «Nueva llamada» → elige el banco → «Abrir llamada». Las **preguntas generales de la empresa** (las que se hacen a todas las personas; las define un administrador) aparecen solas al principio, marcadas como «General», sin que tengas que elegirlas.
+1. En «Bancos» (menú) crea un banco de preguntas con «Nuevo banco»; «Proponer preguntas con IA» sugiere preguntas a partir del perfil de una vacante. Los bancos pueden ser privados o compartidos y guardan sus versiones. En cada pregunta puedes anotar **qué se espera de la respuesta**: con eso la IA mide después la llamada. Si marcas «Preguntas generales de la empresa», ese banco se agrega solo a todas las llamadas de todo el equipo, y cualquier reclutador o administrador puede modificarlo; cada cambio queda como una versión nueva.
+2. En el expediente, «Nueva llamada» → elige el banco → «Abrir llamada». Las **preguntas generales de la empresa** (las que se hacen a todas las personas) aparecen solas al principio, marcadas como «General», sin que tengas que elegirlas.
 3. Captura cada respuesta o márcala como no realizada, y pulsa «Guardar».
 4. «Analizar con IA» resume lo que aportó la llamada y señala diferencias con el CV por aclarar. No recomienda contratar ni descartar. Además muestra la **cobertura de la llamada**: en cada pregunta contestada que tenía anotado qué se espera, indica si la respuesta lo cubre, lo cubre en parte o no lo cubre, con la frase en que se basa, y un número de 0 a 100 que calcula el sistema. Mide qué tanto se cubrió lo esperado en la llamada; no es una calificación de la persona.
 5. «Cerrar llamada» la deja fija. Puede haber varias llamadas por persona.

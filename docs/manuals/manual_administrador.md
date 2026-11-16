@@ -70,7 +70,7 @@ Por omisión el sistema **no envía documentos reales** a los proveedores de IA.
 
 Son las preguntas que se hacen a todas las personas candidatas, sin importar la vacante. En el menú «Bancos», crea un banco (o abre uno) y marca «Preguntas generales de la empresa». Desde ese momento se agregan solas a cada llamada nueva, antes de las preguntas del banco que elija quien llama, y aparecen marcadas como «General».
 
-- Solo los administradores pueden crearlas o modificarlas; el resto del equipo las ve y las usa.
+- Las crean y las modifican los administradores y los reclutadores: son de toda la empresa, no de quien las escribió. Cada cambio crea una versión nueva del banco, con quién lo hizo y cuándo, y queda en la auditoría.
 - Si las cambias, las llamadas ya abiertas conservan las preguntas con las que se abrieron.
 - Si un puesto no las necesita, no hay que quitarlas: quien llama marca «No se realizó» en la pregunta.
 - Para dejar de usarlas, archiva el banco o desmarca la casilla.

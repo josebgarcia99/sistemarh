@@ -8,6 +8,7 @@ import uuid
 from app.modules.ai_settings.domain.models import ProviderCode
 from app.modules.phone_calls.domain import assistant
 from app.modules.phone_calls.domain.models import Answer, Question
+from app.tests.test_analista_estudios import analyst
 from app.tests.test_api_assessments import ana
 from app.tests.test_api_cv_batches import (
     API,
@@ -94,25 +95,40 @@ def _application():
 
 
 def test_las_preguntas_generales_se_agregan_a_toda_llamada_y_la_llamada_se_mide(
-    ana, recruiter, admin, providers
+    ana, recruiter, admin, other, analyst, providers
 ):
-    # Solo un administrador define las preguntas generales de la empresa.
-    refused = recruiter.post(
-        f"{API}/question-banks",
-        json={"name": "Generales", "general": True, "questions": GENERAL},
-    )
-    assert refused.status_code == 403 and "administrador" in refused.json()["detail"]
-    general = new_bank(admin, name="Preguntas generales", general=True, questions=GENERAL)
+    # Las define una reclutadora (o un administrador)…
+    draft = [{"text": "Pregunta provisional", "guidance": ""}]
+    general = new_bank(recruiter, name="Preguntas generales", general=True, questions=draft)
     assert general["general"] is True and general["shared"] is False
-    # Los reclutadores las ven, pero no las cambian.
-    seen = {item["name"]: item for item in recruiter.get(f"{API}/question-banks").json()}
+    # …y cualquier otra reclutadora las ve y las modifica, aunque no sean suyas.
+    stranger, _ = other
+    seen = {item["name"]: item for item in stranger.get(f"{API}/question-banks").json()}
     assert seen["Preguntas generales"]["general"] is True
-    assert seen["Preguntas generales"]["can_edit"] is False
-    locked = recruiter.put(
-        f"{API}/question-banks/{general['id']}",
-        json={"name": "Otro", "general": True, "questions": GENERAL, "expected_version": 1},
+    assert (
+        seen["Preguntas generales"]["can_edit"] is True and not seen["Preguntas generales"]["mine"]
     )
-    assert locked.status_code == 403
+    edited = stranger.put(
+        f"{API}/question-banks/{general['id']}",
+        json={
+            "name": "Preguntas generales",
+            "general": True,
+            "questions": GENERAL,
+            "expected_version": 1,
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    general = edited.json()
+    assert general["version_number"] == 2 and general["general"] is True
+    # La analista de estudios no entra a los bancos.
+    assert analyst.get(f"{API}/question-banks").status_code == 403
+    assert (
+        analyst.post(
+            f"{API}/question-banks",
+            json={"name": "X", "general": True, "questions": GENERAL},
+        ).status_code
+        == 403
+    )
 
     bank = new_bank(recruiter)
     opened = recruiter.post(f"{API}/applications/{ana}/calls", json={"bank_id": bank["id"]})
@@ -132,7 +148,7 @@ def test_las_preguntas_generales_se_agregan_a_toda_llamada_y_la_llamada_se_mide(
             "name": "Preguntas generales",
             "general": True,
             "questions": [{"text": "¿Cuándo podrías empezar?", "guidance": ""}],
-            "expected_version": 1,
+            "expected_version": 2,
         },
     )
     assert changed.status_code == 200, changed.text
