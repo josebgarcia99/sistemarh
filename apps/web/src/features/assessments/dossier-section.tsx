@@ -169,8 +169,10 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
       <div className="flex flex-col gap-3 border-t border-line pt-4">
         <h3 className="text-lg font-medium">Síntesis del expediente con IA</h3>
         <p className="text-sm text-ink-muted">
-          Ordena lo que hay en el expediente según de dónde viene y propone qué preguntar en la
-          siguiente etapa. No calcula ninguna puntuación ni índice y no recomienda una decisión.
+          Ordena lo que hay en el expediente según de dónde viene, explica qué aportó cada etapa
+          frente a las anteriores, en qué coinciden o difieren las fuentes, y propone qué
+          preguntar en la siguiente. Razona con los datos, pero no valora ni decide: no calcula
+          ninguna puntuación ni índice y no recomienda una decisión.
           Se actualiza sola cuando cierras una llamada o registras el resultado de una
           evaluación. La psicometría solo entra si un profesional la validó; del estudio
           socioeconómico solo entran las descripciones de sus fotografías.

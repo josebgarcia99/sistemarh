@@ -82,3 +82,55 @@ def test_la_sintesis_propone_preguntas_y_guarda_su_historial(
     fake.script = [reply({"preguntas_sugeridas": ["¿Por qué quieres el puesto?"]})]
     assert recruiter.post(url).status_code == 503
     assert recruiter.get(url).json()["total"] == 2
+
+
+def test_la_sintesis_relaciona_las_etapas_sin_valorar_ni_decidir(ana, recruiter, admin, providers):
+    assign(admin, "SINTESIS_EXPEDIENTES")
+    fake = providers[ProviderCode.ANTHROPIC]
+    url = f"{API}/applications/{ana}/syntheses"
+    fake.prompts = []
+    fake.script = [
+        reply(
+            {
+                "hechos_documentados": ["Trabajó en nómina de 2021 a 2024 (CV)"],
+                "coincidencias_entre_fuentes": [
+                    "El CV indica nómina de 2021 a 2024 (CV) y lo repitió (llamada 1)",
+                    "  El CV indica nómina   de 2021 a 2024 (CV) y lo repitió (llamada 1)  ",
+                    *[f"Coincidencia sobrante {n}" for n in range(1, 20)],
+                ],
+                "avance_por_etapa": [
+                    "CV: documenta tres años en nómina.",
+                    "Llamada: confirma los años del CV y añade el tamaño de la nómina.",
+                    *[f"Etapa sobrante {n}" for n in range(1, 20)],
+                ],
+                # Nada de esto se conserva.
+                "nivel_de_idoneidad": "alto",
+                "conclusion": "Conviene avanzar",
+            }
+        )
+    ]
+    made = recruiter.post(url)
+    assert made.status_code in (200, 201), made.text
+    result = made.json()["result"]
+    assert set(result) == set(assistant.SYNTHESIS_LISTS)
+    assert result["coincidencias_entre_fuentes"][0].endswith("(llamada 1)")
+    assert len(result["coincidencias_entre_fuentes"]) == assistant.MAX_MATCHES
+    assert result["avance_por_etapa"][:2] == [
+        "CV: documenta tres años en nómina.",
+        "Llamada: confirma los años del CV y añade el tamaño de la nómina.",
+    ]
+    assert len(result["avance_por_etapa"]) == assistant.MAX_STAGE_NOTES
+
+    # Las instrucciones piden relacionar con datos, y prohíben valorar o decidir.
+    system = " ".join(fake.prompts[0][1].split())
+    assert "citando cada fuente y el dato de cada una" in system
+    assert "qué confirma de las etapas anteriores y qué deja abierto" in system
+    assert "describe; no valores" in system
+    assert "solo puedes relacionar la interpretación escrita por el profesional" in system
+    assert "No relaciones con ninguna otra fuente las fotografías del estudio" in system
+    assert "No recomiendes contratar, rechazar ni avanzar" in system
+
+    # Relaciones sueltas, sin nada del expediente, no cuentan como síntesis.
+    fake.script = [reply({"avance_por_etapa": ["CV: algo"], "coincidencias_entre_fuentes": ["x"]})]
+    assert recruiter.post(url).status_code == 503
+    assert recruiter.get(url).json()["total"] == 1

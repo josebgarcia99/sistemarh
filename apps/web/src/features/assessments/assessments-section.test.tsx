@@ -427,6 +427,8 @@ describe("DossierSection", () => {
     const recent = makeSynthesis("x2", "2026-11-12T19:00:00Z", {
       hechos_documentados: ["Confirmó su motivo de salida"],
       preguntas_sugeridas: ["¿Qué sistema de nómina usabas a diario?"],
+      coincidencias_entre_fuentes: ["El CV y la llamada coinciden en los años en nómina (CV, llamada 1)"],
+      avance_por_etapa: ["Llamada: confirma los años del CV y añade el tamaño de la nómina."],
     });
     const older = makeSynthesis("x1", "2026-11-11T19:00:00Z", { hechos_documentados: ["Analista en Uno SA (CV)"] });
     const fetchMock = mockApi({
@@ -439,6 +441,15 @@ describe("DossierSection", () => {
     const panel = await screen.findByRole("region", { name: "Síntesis" });
     expect(within(panel).getByText("Preguntas sugeridas para la siguiente etapa")).toBeTruthy();
     expect(within(panel).getByText("¿Qué sistema de nómina usabas a diario?")).toBeTruthy();
+    // La relación entre etapas: primero qué aportó cada una, y las coincidencias junto a las diferencias.
+    const titles = Array.from(panel.querySelectorAll("p.font-medium")).map((node) => node.textContent);
+    expect(titles).toEqual([
+      "Qué aportó cada etapa frente a las anteriores",
+      "Hechos documentados",
+      "Coincidencias entre fuentes",
+      "Preguntas sugeridas para la siguiente etapa",
+    ]);
+    expect(within(panel).getByText(/confirma los años del CV/)).toBeTruthy();
 
     const picker = screen.getByLabelText("Síntesis guardadas (2)") as HTMLSelectElement;
     expect(picker.options[0].textContent).toContain("(la más reciente)");

@@ -143,11 +143,13 @@ const digitizationSchema = z.object({
 export type Digitization = z.infer<typeof digitizationSchema>;
 
 export const SYNTHESIS_SECTIONS: [string, string][] = [
+  ["avance_por_etapa", "Qué aportó cada etapa frente a las anteriores"],
   ["hechos_documentados", "Hechos documentados"],
   ["declaraciones", "Lo que la persona declaró"],
   ["observaciones_humanas", "Observaciones de quienes la evaluaron"],
   ["resultados_tecnicos", "Resultados técnicos"],
   ["informacion_pendiente", "Información pendiente"],
+  ["coincidencias_entre_fuentes", "Coincidencias entre fuentes"],
   ["discrepancias_verificables", "Diferencias por aclarar entre fuentes"],
   ["preguntas_sugeridas", "Preguntas sugeridas para la siguiente etapa"],
 ];

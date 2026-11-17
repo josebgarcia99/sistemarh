@@ -196,6 +196,8 @@ class SimulatedProvider:
                 "resultados_tecnicos": [],
                 "informacion_pendiente": ["Punto pendiente simulado."],
                 "discrepancias_verificables": [],
+                "coincidencias_entre_fuentes": ["Coincidencia simulada entre el CV y la llamada."],
+                "avance_por_etapa": ["Llamada: aporte simulado frente a lo que decía el CV."],
                 "preguntas_sugeridas": ["Pregunta sugerida simulada para la siguiente etapa."],
             }
         elif user.startswith("CV a ordenar"):

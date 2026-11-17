@@ -109,6 +109,23 @@ class SampleAi:
                     "No se localizó a la referencia del empleo de 2018 a 2020.",
                 ],
                 "discrepancias_verificables": [],
+                "coincidencias_entre_fuentes": [
+                    "El CV indica seis años como analista de nómina (CV) y la referencia 1 "
+                    "indicó que ocupa ese puesto desde 2020 (referencia 1).",
+                    "En la llamada dijo conciliar contra el SUA cada mes (llamada 1) y quien "
+                    "entrevistó anotó que describió su calendario de cierre (entrevista).",
+                ],
+                "avance_por_etapa": [
+                    "CV: documenta seis años en nómina en una sola empresa.",
+                    "Llamada: confirma el puesto y los años del CV; añade el tamaño de la "
+                    "nómina (350 personas). No se habló de finiquitos.",
+                    "Entrevista: respalda lo dicho en la llamada sobre el cierre de nómina; "
+                    "sigue sin tratarse el tema de finiquitos.",
+                    "Prueba técnica: 88 de 100; el único error fue un recibo con incapacidad, "
+                    "tema que no se había tocado antes.",
+                    "Referencias: una confirma el empleo actual del CV; el empleo de 2018 a "
+                    "2020 queda sin confirmar.",
+                ],
                 "preguntas_sugeridas": [
                     "¿Cómo calculas un recibo con incapacidad?",
                     "¿Quién más puede confirmar tu empleo de 2018 a 2020?",

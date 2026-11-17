@@ -45,6 +45,9 @@ with sync_playwright() as p:
     evaluaciones.get_by_role("button", name="Referencias laborales y personales").click()
     expect(page.get_by_role("region", name="Resumen de la IA")).to_contain_text("Sin confirmar")
     expect(page.get_by_text("Preguntas sugeridas para la siguiente etapa")).to_be_visible()
+    sintesis = page.get_by_role("region", name="Síntesis")
+    expect(sintesis).to_contain_text("Qué aportó cada etapa frente a las anteriores"); expect(sintesis).to_contain_text("Llamada: confirma el puesto y los años del CV")
+    expect(sintesis).to_contain_text("Coincidencias entre fuentes")
     expect(page.get_by_role("region", name="Resumen de la IA")).to_contain_text("Ejemplo de los datos de prueba")
     page.screenshot(path=f"{SHOTS}/dp3_expediente.png", full_page=True); print("3 el expediente muestra llamada medida, evaluaciones, referencias y síntesis de ejemplo")
     # 4. La analista de estudios la encuentra en su lista

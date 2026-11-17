@@ -26,6 +26,8 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 
 **Datos de prueba (17 de noviembre de 2026, rama `pruebas`).** El comando `python -m app.cli load-sample-data --owner <correo>` crea una vacante ficticia con diez personas inventadas en distintas etapas, usando los mismos servicios que las pantallas y sin llamar a ningún proveedor de IA (los textos de IA son ejemplos fijos, marcados). Va en una sola transacción y se niega en producción salvo autorización expresa, porque esos datos no se pueden borrar. Probado sobre el motor en memoria y en navegador con el modo demostración, que la incluye al arrancar; no se ha ejecutado contra SQL Server.
 
+**Síntesis que relaciona las etapas (17 de noviembre de 2026, rama `pruebas`).** A petición del responsable: la síntesis del expediente añade «Qué aportó cada etapa frente a las anteriores» y «Coincidencias entre fuentes». La IA razona con los datos y cita cada fuente, pero no valora ni decide; el servidor sigue descartando cualquier puntuación o recomendación. Sin cambios de base de datos. No se ha probado con un modelo real: hay que revisar con casos sintéticos que respete el «describe, no valores».
+
 ## Funcionalidades terminadas
 
 | Elemento | Detalle |
