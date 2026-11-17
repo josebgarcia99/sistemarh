@@ -34,6 +34,8 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 
 **Preguntas propias de cada llamada (17 de noviembre de 2026, rama `pruebas`).** A petición del responsable: al abrir una llamada, las preguntas generales de la empresa entran solas y los bancos son opcionales (uno, varios o ninguno). Dentro de la llamada se quitan preguntas, se cambia su redacción, se suman las de otros bancos y se escriben preguntas nuevas; todo vale solo para esa llamada y los bancos no cambian. Una pregunta quitada no se analiza ni cuenta para cerrar; si las preguntas cambian después de un análisis, el análisis se retira. De paso se corrigió que las respuestas a las preguntas generales no llegaban a la síntesis del expediente. **Cambia la base de datos (versión `0018`):** columna `call_sessions.questions`, `bank_version_id` admite vacío y tabla nueva `call_session_banks` para el filtro de indicadores por banco. El script se generó sin conexión y **no se ha ejecutado contra un SQL Server real**.
 
+**Paso a `main` (17 de noviembre de 2026).** A petición del responsable, todo lo construido en `pruebas` desde el 15 de noviembre pasó a `main`: cobertura de llamadas, preguntas generales, referencias, guía de pasos de la vacante, datos de prueba, síntesis que relaciona etapas, fotografías adicionales del estudio, descarga del estudio en el formato de la empresa, preguntas propias de cada llamada y sesión de doce horas sin cierre por inactividad. **Para instalarlo, la base de datos debe pasar de la versión `0016` a la `0018`** con `actualizacion_0016_a_0017.sql` y `actualizacion_0017_a_0018.sql`, en ese orden y antes de levantar el código nuevo (sección 4.3 de `docs/deployment/despliegue_produccion.md`). Nada de esto se ha probado todavía en el servidor real ni con modelos de IA reales.
+
 ## Funcionalidades terminadas
 
 | Elemento | Detalle |
@@ -41,7 +43,7 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 | Estructura del monorepositorio | `apps/api`, `apps/worker`, `apps/web`, `database`, `infrastructure`, `docs`, `scripts` |
 | API base | Configuración por entorno, rutas `/api/v1`, formato único de error, identificador de correlación, logs JSON con filtro de secretos, rutas de salud |
 | Usuario maestro | Comando `python -m app.cli create-admin`; solo funciona si no hay ningún administrador |
-| Inicio y cierre de sesión | Sesión en el servidor, cookie `HttpOnly`, token CSRF, caducidad a 30 minutos sin actividad y a 12 horas en total |
+| Inicio y cierre de sesión | Sesión en el servidor, cookie `HttpOnly`, token CSRF, caducidad a las 12 horas (hasta el 17 de noviembre de 2026 también caducaba a los 30 minutos sin actividad; el responsable pidió quitar ese límite) |
 | Bloqueo por intentos | 5 intentos fallidos bloquean la cuenta 15 minutos; el mensaje no revela si el correo existe |
 | Administración de usuarios | Alta con correo, nombre completo, contraseña y rol; edición; restablecer contraseña; baja y reactivación. Sin envío de correos |
 | Reglas de protección | Nadie se da de baja ni se quita el rol a sí mismo; siempre queda un administrador activo; la baja y el restablecimiento cierran las sesiones del usuario |

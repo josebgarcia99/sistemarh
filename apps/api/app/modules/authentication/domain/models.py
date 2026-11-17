@@ -10,7 +10,10 @@ from typing import Protocol
 
 @dataclass(frozen=True)
 class AuthPolicy:
-    idle_timeout: timedelta = timedelta(minutes=30)
+    # La sesión dura la jornada: no se cierra por dejar de usar el sistema un
+    # rato (así lo decidió el responsable el 17 de noviembre de 2026; antes eran
+    # 30 minutos sin actividad). A las doce horas hay que volver a entrar.
+    idle_timeout: timedelta = timedelta(hours=12)
     absolute_timeout: timedelta = timedelta(hours=12)
     max_failed_attempts: int = 5
     lock_duration: timedelta = timedelta(minutes=15)

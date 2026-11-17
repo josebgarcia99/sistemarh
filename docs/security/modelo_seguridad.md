@@ -31,7 +31,7 @@ Las sesiones se guardan en SQL Server y viajan en una cookie `HttpOnly`. Así, d
 | Alta | Solo el administrador crea usuarios, con correo, nombre completo y contraseña inicial. No hay registro público ni envío de correos. |
 | Contraseña inicial | La contraseña inicial la define el administrador al crear la cuenta. El usuario la conserva hasta que el administrador la restablezca, por decisión del 10 nov 2026. |
 | Contraseñas | Hash Argon2id. Mínimo de 12 caracteres y rechazo de contraseñas comunes. |
-| Sesión | Identificador aleatorio guardado como hash en `sessions`. Cookie `HttpOnly`, `Secure` y `SameSite=Lax`. Caduca a los 30 minutos sin actividad y a las 12 horas en total. |
+| Sesión | Identificador aleatorio guardado como hash en `sessions`. Cookie `HttpOnly`, `Secure` y `SameSite=Lax`. Caduca a las 12 horas. Hasta el 17 de noviembre de 2026 caducaba además a los 30 minutos sin actividad; el responsable pidió quitar ese límite. |
 | CSRF | Token por sesión exigido en toda operación que modifica datos. |
 | Intentos abusivos | Bloqueo temporal tras 5 intentos fallidos por cuenta, límite por dirección IP y mensajes de error que no revelan si el correo existe. |
 | Recuperación | El administrador asigna una contraseña nueva desde la pantalla de Usuarios. Al hacerlo se cierran todas las sesiones de ese usuario. |

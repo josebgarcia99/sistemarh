@@ -10,7 +10,7 @@ Para quien lleva vacantes y candidatos. Explica qué puedes hacer en cada pantal
 - **Solo ves tus vacantes y las que te compartieron.** Las de otras personas no aparecen ni en listas, ni en reportes, ni escribiendo su dirección a mano.
 - **La IA propone y resume; tú decides.** Clasifica los CV y ordena información, pero avanzar, descartar o contratar a alguien lo registra siempre una persona, con su nombre.
 - **Nada se borra al avanzar.** Cada cambio queda en el historial del candidato.
-- La sesión se cierra sola tras 30 minutos sin actividad y, en cualquier caso, a las doce horas.
+- La sesión dura doce horas: no se cierra por dejar de usar el sistema un rato. A las doce horas hay que volver a entrar. Si te levantas de la computadora, usa «Cerrar sesión» o bloquea el equipo, porque la sesión queda abierta.
 
 ## Inicio
 

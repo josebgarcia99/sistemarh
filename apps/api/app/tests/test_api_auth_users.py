@@ -104,10 +104,14 @@ def test_una_cookie_inventada_no_da_acceso(seeded):
     assert client.get("/api/v1/auth/me").status_code == 401
 
 
-def test_la_sesion_caduca_por_inactividad(admin_client, clock):
-    clock.advance(minutes=29)
+def test_la_sesion_no_se_cierra_por_un_rato_sin_actividad_y_dura_doce_horas(admin_client, clock):
+    # Varias horas sin tocar el sistema (por ejemplo, llenando un estudio sin
+    # guardar) no cierran la sesión.
+    clock.advance(hours=5)
     assert admin_client.get("/api/v1/auth/me").status_code == 200
-    clock.advance(minutes=31)
+    clock.advance(hours=6, minutes=59)
+    assert admin_client.get("/api/v1/auth/me").status_code == 200
+    clock.advance(minutes=1)
     assert admin_client.get("/api/v1/auth/me").status_code == 401
 
 

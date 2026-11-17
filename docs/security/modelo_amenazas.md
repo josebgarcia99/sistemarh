@@ -58,7 +58,7 @@ Qué puede salir mal, qué lo impide hoy y qué falta. Complementa a [`modelo_se
 | Robar la sesión con un script | Cookie `HttpOnly`, `Secure` (salvo en desarrollo local) y `SameSite=Lax`; el token de sesión se guarda como huella | Probado |
 | Hacer que el navegador de la víctima envíe una acción (CSRF) | Token CSRF obligatorio en toda modificación | Probado |
 | Ex empleado con sesión abierta | La baja cierra sus sesiones y desactiva la cuenta en la misma operación | Probado |
-| Sesión olvidada en un equipo compartido | Caduca a los 30 minutos sin actividad y a las 12 horas | Probado |
+| Sesión olvidada en un equipo compartido | Caduca a las 12 horas. Desde el 17 de noviembre de 2026 ya no caduca a los 30 minutos sin actividad (decisión del responsable, porque se perdía lo escrito en formularios largos). Riesgo aceptado: un equipo desatendido queda con la sesión abierta hasta doce horas; se compensa con «Cerrar sesión» y con el bloqueo de pantalla del equipo | Probado |
 | Un solo factor de autenticación | No hay segundo factor | Riesgo aceptado por ahora; recomendable para administradores |
 
 ### Aplicación web
