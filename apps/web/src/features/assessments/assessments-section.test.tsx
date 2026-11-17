@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Assessment, AssessmentList } from "@/lib/api/assessments";
 import type { ApplicationDetail } from "@/lib/api/recruitment";
-import { makeUser, mockApi, renderApp } from "@/test/helpers";
+import { makeUser, mockApi, renderApp, problem } from "@/test/helpers";
 import { AssessmentsSection } from "./assessments-section";
 import { DossierSection } from "./dossier-section";
 
@@ -245,6 +245,52 @@ describe("AssessmentsSection", () => {
       visita: { value: "2026-11-10", verified: true, source: "IA" },
       domicilio: { value: "Calle Inventada 123", verified: false, source: "IA" },
     });
+  });
+
+  it("descarga el estudio en el formato de la empresa y avisa de lo que no cupo o falta", async () => {
+    const study = make("ESTUDIO_SOCIOECONOMICO", {
+      status: "EN_PROCESO",
+      form: [{ title: "Datos de la visita", fields: [{ ...FIELD, id: "visita", label: "Fecha de la visita", type: "FECHA" }] }],
+    });
+    const DOWNLOAD = "GET /api/v1/assessments/e-ESTUDIO_SOCIOECONOMICO/study-format";
+    let attempt = 0;
+    mockApi({
+      [`GET ${LIST_URL}`]: { body: list([study]) },
+      [`GET ${FILES_URL}`]: { body: [] },
+      [DOWNLOAD]: () => {
+        attempt += 1;
+        if (attempt === 1) return problem(422, "validacion", "Todavía no se ha cargado el formato en blanco de la empresa.");
+        return {
+          body: "xlsx",
+          headers: {
+            "Content-Disposition": "attachment; filename*=UTF-8''Estudio%20socioeconomico%20-%20Ana%20P%C3%A9rez.xlsx",
+            "X-Unplaced": attempt === 2 ? encodeURIComponent(JSON.stringify(["Datos familiares: solo caben 8 filas; faltan 2"])) : "%5B%5D",
+          },
+        };
+      },
+    });
+    const saved: string[] = [];
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:prueba", revokeObjectURL: () => undefined }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      saved.push(this.download);
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: /Estudio socioeconómico/ }));
+    const button = await screen.findByRole("button", { name: "Descargar en el formato de la empresa (Excel)" });
+
+    await user.click(button);
+    expect((await screen.findByRole("alert")).textContent).toContain("Todavía no se ha cargado el formato");
+    expect(saved).toEqual([]);
+
+    await user.click(button);
+    await screen.findByText(/no encontraron lugar en él: Datos familiares: solo caben 8 filas; faltan 2\./);
+    expect(saved).toEqual(["Estudio socioeconomico - Ana Pérez.xlsx"]);
+
+    await user.click(button);
+    expect((await screen.findByRole("status")).textContent).toContain("Formato descargado");
+    expect(saved).toHaveLength(2);
+    click.mockRestore();
   });
 
   it("agrega fotografías adicionales al estudio, la IA las describe y se guardan con su título", async () => {

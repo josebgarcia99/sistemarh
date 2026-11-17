@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import asdict
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Body, Depends, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
 from app.composition.backend import Repositories
@@ -28,6 +30,8 @@ router = APIRouter(tags=["evaluaciones posteriores"])
 _user = Depends(require_user)
 _admin = Depends(require_admin)
 _context = Depends(get_context)
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+MAX_TEMPLATE_BYTES = 5 * 1024 * 1024
 
 
 class FieldOut(BaseModel):
@@ -54,6 +58,8 @@ class TemplateOut(BaseModel):
     status: str
     version_number: int
     sections: list[SectionOut]
+    # Ya se cargó el Excel en blanco del formato de la empresa para este formulario.
+    has_study_format: bool = False
 
 
 class FieldIn(BaseModel):
@@ -273,7 +279,66 @@ def _synthesis_out(repos: Repositories, item: Synthesis) -> SynthesisOut:
 )
 def list_templates(_: Principal = _user, context: AppContext = _context) -> list[TemplateOut]:
     with context.require_backend().transaction() as repos:
-        return [_template_out(t, v) for t, v in context.assessments(repos).templates()]
+        service = context.assessments(repos)
+        return [
+            _template_out(t, v).model_copy(
+                update={"has_study_format": service.has_study_format(t.id)}
+            )
+            for t, v in service.templates()
+        ]
+
+
+class StudyFormatOut(BaseModel):
+    # Apartados del formato que no se encontraron en el archivo cargado.
+    missing_sections: list[str]
+
+
+@router.put(
+    "/form-templates/{template_id}/study-format",
+    response_model=StudyFormatOut,
+    summary="Carga el Excel en blanco del formato de la empresa (solo administradores)",
+)
+def upload_study_format(
+    template_id: uuid.UUID,
+    request: Request,
+    content: bytes = Body(  # noqa: B008
+        media_type="application/octet-stream", max_length=MAX_TEMPLATE_BYTES
+    ),
+    principal: Principal = _admin,
+    context: AppContext = _context,
+) -> StudyFormatOut:
+    with context.require_backend().transaction() as repos:
+        missing = context.assessments(repos).set_study_format(
+            principal.user, template_id, content, ip=client_ip(request)
+        )
+    return StudyFormatOut(missing_sections=missing)
+
+
+@router.get(
+    "/assessments/{assessment_id}/study-format",
+    summary="El estudio guardado, en el formato de la empresa (Excel)",
+    response_class=Response,
+)
+def download_study_format(
+    assessment_id: uuid.UUID,
+    request: Request,
+    principal: Principal = _user,
+    context: AppContext = _context,
+) -> Response:
+    with context.require_backend().transaction() as repos:
+        name, filled = context.assessments(repos).study_file(
+            principal.user, assessment_id, ip=client_ip(request)
+        )
+    return Response(
+        content=filled.content,
+        media_type=XLSX,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}",
+            # Datos capturados que no encontraron lugar en el formato, para avisarlo.
+            "X-Unplaced": quote(json.dumps(list(filled.unplaced), ensure_ascii=False)),
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.post(

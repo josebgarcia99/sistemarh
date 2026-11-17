@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   cardClass,
   dangerButtonClass,
@@ -17,6 +17,7 @@ import {
   listTemplates,
   saveTemplate,
   templateAction,
+  uploadStudyFormat,
 } from "@/lib/api/assessments";
 import { describeError } from "@/lib/api/client";
 
@@ -132,6 +133,30 @@ function TemplateEditor({
   );
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
+  const formatInput = useRef<HTMLInputElement>(null);
+
+  /** Carga el Excel en blanco del formato de la empresa para este formulario. */
+  async function uploadFormat(file: File) {
+    if (!template) return;
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      return setFeedback({ kind: "error", text: "El formato debe ser un Excel (.xlsx)." });
+    }
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const result = await uploadStudyFormat(template.id, file);
+      await onSaved(
+        { ...template, has_study_format: true },
+        result.missing_sections.length > 0
+          ? `Formato cargado, pero no se encontraron ${result.missing_sections.length} de sus apartados: los datos de esos apartados no se podrán colocar.`
+          : "Formato cargado. Ya se puede descargar el estudio lleno desde cada estudio.",
+      );
+    } catch (caught) {
+      setFeedback({ kind: "error", text: describeError(caught) });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const setSection = (index: number, patch: Partial<SectionDraft>) =>
     setSections(sections.map((section, i) => (i === index ? { ...section, ...patch } : section)));
@@ -157,6 +182,37 @@ function TemplateEditor({
       <h2 className="text-xl font-medium">
         {template ? `${template.name} · versión ${template.version_number}` : "Nuevo formulario"}
       </h2>
+      {template && (
+        <div className="flex flex-col gap-2 rounded-2xl bg-white/60 px-4 py-3">
+          <h3 className="font-medium">Formato de la empresa para descargar el estudio</h3>
+          <p className="text-sm text-ink-muted">
+            Sube aquí, una sola vez, el Excel <strong>en blanco</strong> del formato SGC.F3.RH. Con
+            él, cada estudio capturado se puede descargar en ese mismo formato, con sus datos ya
+            puestos. Si el formato cambia de versión, vuelve a subirlo.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`${pillClass} ${template.has_study_format ? "bg-accent-blue-soft text-accent-blue-ink" : "bg-neutral-soft text-neutral-ink"}`}>
+              {template.has_study_format ? "Formato cargado" : "Todavía no se ha cargado"}
+            </span>
+            <input
+              ref={formatInput}
+              type="file"
+              aria-label="Formato en blanco del estudio (Excel)"
+              accept=".xlsx"
+              className="sr-only"
+              tabIndex={-1}
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) await uploadFormat(file);
+              }}
+            />
+            <button type="button" className={secondaryButtonClass} disabled={busy} onClick={() => formatInput.current?.click()}>
+              {template.has_study_format ? "Sustituir el formato en blanco" : "Subir el formato en blanco"}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-2">
           <label htmlFor="template-name" className="text-sm text-ink-muted">

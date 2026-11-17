@@ -30,6 +30,8 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 
 **Estudio, psicometría y preguntas por etapa (17 de noviembre de 2026, rama `pruebas`).** A petición del responsable: (1) el formato lleno del estudio y el reporte de psicometría se adjuntan en la propia evaluación; (2) el estudio admite hasta 20 fotografías adicionales, con título y descripción propuesta por la IA, que entran a la síntesis y al reporte como las del formato; (3) en psicometría la IA ya no solo transcribe: resume el reporte del profesional y explica qué significa cada resultado según el propio reporte, sin diagnosticar ni declarar aptitud; (4) los análisis de psicometría, prueba técnica y referencias proponen preguntas para la siguiente etapa. Sin cambios de base de datos. La lectura del formato del estudio sigue siendo con IA y sin verificar: una lectura exacta del Excel, sin IA, requiere un formato lleno de ejemplo que todavía no se ha recibido. Nada de esto se ha probado con un modelo real.
 
+**Descarga del estudio en el formato de la empresa (17 de noviembre de 2026, rama `pruebas`).** A petición del responsable, porque Recursos Humanos llena hoy el formato a mano: desde el estudio capturado se descarga el formato SGC.F3.RH en Excel con los datos en su lugar (texto, casillas, tablas, niveles, firmas, ubicación y las fotografías del formato). Un administrador sube una sola vez el Excel en blanco en «Formularios»; se guarda en el almacenamiento del servidor y no entra al repositorio porque lleva nombres reales. El archivo se edita por dentro sin reescribirlo, para conservar el diseño, el logotipo y los controles. Sin cambios de base de datos. Límites conocidos: las fotografías adicionales no van en el formato; las nueve casillas antiguas de «Situación social» no se marcan (su dato se escribe como texto junto al encabezado); la colocación depende del texto de las etiquetas. Se comprobó con el formato real y datos inventados, viendo el resultado con LibreOffice; **no se ha abierto en Excel de escritorio ni se ha probado en el servidor real**.
+
 ## Funcionalidades terminadas
 
 | Elemento | Detalle |
@@ -122,11 +124,11 @@ Ejecutadas el 12 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 376 pruebas, todas pasan |
+| API: `pytest` | 392 pruebas, todas pasan |
 | Worker: `pytest` | 5 pruebas, todas pasan |
 | `ruff check` y `lint-imports` | Sin errores; 13 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |
-| Frontend: `vitest` | 105 pruebas, todas pasan |
+| Frontend: `vitest` | 116 pruebas, todas pasan |
 | Frontend: `next build` | Compila |
 | Recorrido en navegador real, identidad | 10 pasos: redirección sin sesión, credenciales erróneas, inicio de sesión, alta de usuario, restablecer contraseña, recarga, cierre de sesión, contraseña anterior rechazada, reclutador sin acceso a Usuarios y respuesta 403 de la API |
 | Recorrido en navegador real, vacantes | 11 pasos: alta de dos reclutadores, alta de dos vacantes, cambio de estado, compartir en lectura, la otra persona solo ve la compartida y no puede editarla, la API le niega cambiar el estado, transferencia individual, baja con transferencia, auditoría con el acceso denegado, la persona dada de baja ya no entra y el receptor queda como responsable |

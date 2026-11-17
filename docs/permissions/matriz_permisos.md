@@ -17,6 +17,8 @@ Su acceso es por puesto, no por vacante: no necesita que nadie le comparta nada 
 | Registrar, capturar y completar el estudio socioeconómico de cualquier postulación | Sí |
 | Cargar, ver y descargar documentos y fotografías de tipo «Estudio socioeconómico» | Sí |
 | Leer el formato con IA y pedir la descripción de una fotografía | Sí |
+| Descargar el estudio en el formato de la empresa (Excel lleno) | Sí |
+| Subir o sustituir el formato en blanco de la empresa | No (solo administradores) |
 | Registrar, capturar y completar las referencias laborales y personales, y pedir su análisis con IA | Sí |
 | Consultar las plantillas del estudio | Sí (sin editarlas) |
 | Ver vacantes, CV, evaluación de la IA, perfil, prompt, llamadas o candidatos | No |

@@ -42,6 +42,7 @@ STUDY_ANALYST_ROUTES = frozenset(
         ("GET", "/assessments/{assessment_id}"),
         ("PUT", "/assessments/{assessment_id}"),
         ("POST", "/assessments/{assessment_id}/digitization"),
+        ("GET", "/assessments/{assessment_id}/study-format"),
         # Solo le sirve para analizar referencias: el servicio rechaza cualquier otro tipo.
         ("POST", "/assessments/{assessment_id}/summary"),
         ("POST", "/assessments/{assessment_id}/photo-descriptions"),

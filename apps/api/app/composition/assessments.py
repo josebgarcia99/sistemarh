@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import io
 import uuid
+from collections.abc import Callable
+from typing import Any
 
 from app.composition.file_access import VacancyFileAccessPolicy, is_study_analyst
 from app.core.security.master_key import DecryptionError, MasterKey
 from app.infrastructure.documents.photos import PHOTO_EXTENSIONS, PhotoError, prepare_photo
 from app.infrastructure.documents.text import Ocr, TextExtractionError, extract_text
-from app.infrastructure.storage.local import LocalFileStorage, StorageError
+from app.infrastructure.documents.xlsx_template import TemplateError
+from app.infrastructure.storage.local import LocalFileStorage, StorageError, build_key
 from app.modules.ai_settings.application.service import AiSettingsService
 from app.modules.ai_settings.domain.models import ImageInput, Operation
 from app.modules.assessments.domain.models import (
@@ -19,9 +22,12 @@ from app.modules.assessments.domain.models import (
     AssistantAnswer,
     DocumentError,
     DossierMaterial,
+    FormTemplateVersion,
     Kind,
     Photo,
+    StudyFile,
 )
+from app.modules.assessments.infrastructure.study_workbook import check_format, fill_study
 from app.modules.cv_processing.domain.models import CvBatchRepository
 from app.modules.evaluation_setup.domain.models import EvaluationSetupRepository
 from app.modules.file_management.domain.models import DocumentType, FileRepository, FileStatus
@@ -197,6 +203,60 @@ class AssessmentDocuments:
             return Photo("image/jpeg", prepare_photo(content))
         except PhotoError as error:
             raise DocumentError("La imagen está dañada o no se pudo leer.") from error
+
+
+class StoredStudyFormats:
+    """El Excel en blanco del estudio que cargó un administrador. Se guarda en el
+    almacenamiento de documentos del servidor, uno por formulario, fuera de las
+    vacantes; no contiene datos de ninguna persona."""
+
+    AREA, FOLDER = "private", "formato_estudio"
+
+    def __init__(self, storage: LocalFileStorage | None) -> None:
+        self._storage = storage
+
+    def key(self, template_id: uuid.UUID) -> str:
+        return build_key(self.AREA, self.FOLDER, template_id)
+
+    def exists(self, template_id: uuid.UUID) -> bool:
+        return self._storage is not None and self._storage.exists(self.key(template_id))
+
+    def save(self, template_id: uuid.UUID, content: bytes) -> list[str]:
+        if self._storage is None:
+            raise DocumentError("El almacenamiento de documentos no está disponible.")
+        try:
+            missing = check_format(content)
+        except TemplateError as error:
+            raise DocumentError(str(error)) from error
+        temporary = uuid.uuid4()
+        key = self.key(template_id)
+        try:
+            with self._storage.open_temp(temporary) as handle:
+                handle.write(content)
+            # Sustituye al anterior: el formato vigente es siempre el último cargado.
+            self._storage.delete(key)
+            self._storage.commit(temporary, key)
+        except (OSError, StorageError) as error:
+            self._storage.discard_temp(temporary)
+            raise DocumentError("No se pudo guardar el formato en el almacenamiento.") from error
+        return missing
+
+    def fill(
+        self,
+        template_id: uuid.UUID,
+        version: FormTemplateVersion,
+        data: dict[str, Any],
+        photo: Callable[[str], bytes | None],
+    ) -> StudyFile | None:
+        if not self.exists(template_id):
+            return None
+        assert self._storage is not None
+        template = b"".join(self._storage.read_chunks(self.key(template_id)))
+        try:
+            filled = fill_study(template, version, data, photo)
+        except TemplateError as error:
+            raise DocumentError(str(error)) from error
+        return StudyFile(filled.content, tuple(filled.unplaced))
 
 
 class AssessmentAssistant:

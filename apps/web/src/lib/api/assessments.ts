@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { apiFetch } from "./client";
+import { apiDownload, apiFetch } from "./client";
 import type { DocumentType } from "./files";
 
 export const kindSchema = z.enum([
@@ -87,6 +87,8 @@ const templateSchema = z.object({
   status: z.enum(["ACTIVA", "ARCHIVADA"]),
   version_number: z.number(),
   sections: z.array(sectionSchema),
+  /** Ya se cargó el Excel en blanco del formato de la empresa. */
+  has_study_format: z.boolean().default(false),
 });
 export type FormTemplate = z.infer<typeof templateSchema>;
 export type FieldInput = {
@@ -222,6 +224,27 @@ export function updateAssessment(
 
 export function summarizeAssessment(id: string) {
   return apiFetch(`/assessments/${id}/summary`, { method: "POST", schema: assessmentSchema });
+}
+
+/** Carga el Excel en blanco del formato de la empresa (solo administradores). */
+export function uploadStudyFormat(templateId: string, file: File) {
+  return apiFetch(`/form-templates/${templateId}/study-format`, {
+    method: "PUT",
+    file,
+    schema: z.object({ missing_sections: z.array(z.string()) }),
+  });
+}
+
+/** El estudio guardado, en el formato de la empresa. Avisa de lo que no cupo. */
+export async function downloadStudyFile(id: string) {
+  const { blob, name, headers } = await apiDownload(`/assessments/${id}/study-format`);
+  let unplaced: string[] = [];
+  try {
+    unplaced = z.array(z.string()).parse(JSON.parse(decodeURIComponent(headers.get("X-Unplaced") ?? "[]")));
+  } catch {
+    unplaced = [];
+  }
+  return { blob, name: name ?? "Estudio socioeconomico.xlsx", unplaced };
 }
 
 export function digitizeStudy(id: string, fileId: string) {

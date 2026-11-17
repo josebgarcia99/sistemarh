@@ -15,6 +15,7 @@ from app.composition.assessments import (
     AssessmentApplications,
     AssessmentAssistant,
     AssessmentDocuments,
+    StoredStudyFormats,
     VacancyAssessmentAccess,
 )
 from app.composition.backend import Backend, Repositories
@@ -119,8 +120,15 @@ class AppContext:
             self.require_storage(),
             self.audit(repos),
             self.clock,
-            # Los Excel de reportes tienen su propio registro.
-            extra_known_keys=repos.reporting.export_keys,
+            # Los Excel de reportes tienen su propio registro, y el formato en blanco
+            # del estudio se guarda por formulario, fuera de las vacantes.
+            extra_known_keys=lambda: (
+                repos.reporting.export_keys()
+                | {
+                    StoredStudyFormats(self.storage).key(template.id)
+                    for template in repos.assessments.templates()
+                }
+            ),
         )
 
     def evaluation_setup(self, repos: Repositories) -> EvaluationSetupService:
@@ -176,6 +184,7 @@ class AppContext:
             AssessmentAssistant(self.ai_settings(repos)),
             self.audit(repos),
             self.clock,
+            formats=StoredStudyFormats(self.storage),
         )
 
     def reporting(self, repos: Repositories) -> ReportingService:

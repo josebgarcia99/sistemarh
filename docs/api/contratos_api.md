@@ -2,7 +2,7 @@
 
 > Generado por `scripts/generate_docs.py` a partir del contrato OpenAPI. No editar a mano.
 
-Versión de la API: `0.8.0`. Rutas: 111. Todas cuelgan de `/api/v1`.
+Versión de la API: `0.8.0`. Rutas: 113. Todas cuelgan de `/api/v1`.
 
 **Reglas comunes**
 
@@ -60,12 +60,14 @@ Versión de la API: `0.8.0`. Rutas: 111. Todas cuelgan de `/api/v1`.
 | PUT | `/assessments/{assessment_id}` | Guarda la evaluación | `AssessmentUpdateIn` | 200 `AssessmentOut` |
 | POST | `/assessments/{assessment_id}/digitization` | La IA lee un formulario escaneado y propone valores, sin guardar ni verificar | `DigitizationIn` | 200 `DigitizationOut` |
 | POST | `/assessments/{assessment_id}/photo-descriptions` | La IA describe lo que se ve en una fotografía del estudio, sin guardar nada | `PhotoDescriptionIn` | 200 `PhotoDescriptionOut` |
+| GET | `/assessments/{assessment_id}/study-format` | El estudio guardado, en el formato de la empresa (Excel) | — | 200 — |
 | POST | `/assessments/{assessment_id}/summary` | La IA resume lo documentado; no diagnostica ni decide | — | 200 `AssessmentOut` |
 | GET | `/form-templates` | Formularios de estudio socioeconómico | — | 200 lista de `TemplateOut` |
 | POST | `/form-templates` | Crea un formulario (solo administradores) | `TemplateIn` | 201 `TemplateOut` |
 | PUT | `/form-templates/{template_id}` | Guarda el formulario; si cambian sus campos crea una versión nueva | `TemplateIn` | 200 `TemplateOut` |
 | POST | `/form-templates/{template_id}/archive` | Archiva el formulario | — | 200 `TemplateOut` |
 | POST | `/form-templates/{template_id}/restore` | Restaura un formulario archivado | — | 200 `TemplateOut` |
+| PUT | `/form-templates/{template_id}/study-format` | Carga el Excel en blanco del formato de la empresa (solo administradores) | archivo | 200 `StudyFormatOut` |
 | GET | `/study-queue` | Lista de trabajo de estudios socioeconómicos (analista de estudios o administrador) | — | 200 lista de `StudyQueueItemOut` |
 
 ## Evaluación de cv

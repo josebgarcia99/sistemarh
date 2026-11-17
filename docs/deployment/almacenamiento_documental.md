@@ -10,7 +10,8 @@ Cada archivo se guarda una sola vez en el disco privado de tu servidor, con nomb
 ```
 <STORAGE_ROOT>/                      configurable; ejemplo /srv/reclutamiento/storage/
   private/<tipo>/<aa>/<bb>/<uuid>    cv, job_profiles, psychometrics, technical_tests,
-                                     socioeconomic_studies, attachments
+                                     socioeconomic_studies, attachments,
+                                     formato_estudio (el Excel en blanco del estudio)
   generated/<tipo>/<aa>/<bb>/<uuid>  excel, zip, reports
   processing/temporary/<uuid>.part   recepción en curso
   quarantine/                        archivos rechazados o huérfanos en revisión

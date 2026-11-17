@@ -4,7 +4,9 @@ Se ejecuta con ``python tests/e2e/run.py``, sobre el modo demostración.
 """
 
 # ruff: noqa
-import os, re, tempfile, zipfile
+import io, os, re, subprocess, tempfile, zipfile
+from pathlib import Path
+from openpyxl import load_workbook
 from PIL import Image
 from playwright.sync_api import sync_playwright, expect
 from comun import BASE, PW, SHOTS
@@ -18,6 +20,12 @@ FORMATO = os.path.join(os.path.dirname(FOTO), "Estudio lleno ficticio.docx")
 with zipfile.ZipFile(FORMATO, "w", zipfile.ZIP_DEFLATED) as z:
     z.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>')
     z.writestr("word/document.xml", '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Estudio socioeconómico ficticio. Fecha de aplicación: 10 de noviembre de 2026.</w:t></w:r></w:p></w:body></w:document>')
+# Formato en blanco del estudio (inventado, con la misma estructura que el de la empresa).
+EN_BLANCO = os.path.join(os.path.dirname(FOTO), "SGC.F3.RH en blanco ficticio.xlsx")
+Path(EN_BLANCO).write_bytes(subprocess.check_output(
+    [os.environ["E2E_API_PYTHON"], "-c",
+     "import sys; from app.tests.support.study_format import study_format_xlsx; "
+     "sys.stdout.buffer.write(study_format_xlsx())"], cwd=Path(__file__).resolve().parents[2] / "apps" / "api"))
 errors = []
 def login(page, email):
     page.goto(BASE + "/login")
@@ -170,11 +178,34 @@ with sync_playwright() as p:
     expect(resumen).to_contain_text("Coincide con el CV"); expect(resumen).to_contain_text("no un hecho comprobado")
     pa.screenshot(path=f"{SHOTS}/f6_4_referencias.png", full_page=True)
     print("6c la analista registra referencias y la IA las ordena y contrasta con el CV")
-    pa.goto(BASE + "/vacantes"); expect(pa.get_by_role("alert").filter(has_text="solo da acceso a los estudios")).to_be_visible(); print("6b analista de estudios: ve su lista y el estudio; no ve otras evaluaciones ni las vacantes")
-    # 7. Admin: formularios
+    # 6d. Sin el formato en blanco cargado, la descarga explica qué falta
+    sa.get_by_role("list", name="Evaluaciones").get_by_role("button", name=re.compile("Estudio socioeconómico")).click()
+    descargar = sa.get_by_role("button", name="Descargar en el formato de la empresa (Excel)")
+    descargar.click()
+    expect(sa.get_by_role("alert").filter(has_text="Todavía no se ha cargado el formato en blanco")).to_be_visible()
+    print("6d sin el formato en blanco, la descarga pide que un administrador lo suba")
+    # 7. Admin: formularios (en otra ventana; la analista sigue en el estudio)
     ctx3 = browser.new_context(viewport={"width": 1440, "height": 1000}); p3 = ctx3.new_page(); watch(p3, "A ")
     login(p3, "admin@demo.test"); p3.get_by_role("link", name="Formularios", exact=True).click()
     p3.get_by_role("button", name="SGC.F3.RH. Estudio socioeconómico").click()
+    expect(p3.get_by_text("Todavía no se ha cargado")).to_be_visible()
+    p3.get_by_label("Formato en blanco del estudio (Excel)").set_input_files(EN_BLANCO)
+    expect(p3.get_by_role("status").filter(has_text="Formato cargado")).to_be_visible()
+    expect(p3.get_by_role("button", name="Sustituir el formato en blanco")).to_be_visible()
+    p3.screenshot(path=f"{SHOTS}/f6_6_formato_en_blanco.png", full_page=True)
+    print("7a el administrador sube el formato en blanco de la empresa")
+    # 7b. La analista descarga el estudio en ese formato, con datos y fotografías
+    with pa.expect_download() as d: descargar.click()
+    assert d.value.suggested_filename.startswith("Estudio socioeconomico"), d.value.suggested_filename
+    assert d.value.suggested_filename.endswith(".xlsx")
+    hoja = load_workbook(io.BytesIO(Path(d.value.path()).read_bytes())).active
+    textos = [str(c.value) for fila_ in hoja.iter_rows() for c in fila_ if c.value not in (None, "")]
+    assert any(t.startswith("Nombre completo: ") and len(t) > 20 for t in textos), [t for t in textos if "Nombre" in t]
+    assert len(hoja._images) == 3, len(hoja._images)  # el logotipo y las dos fotografías del estudio
+    expect(sa.get_by_role("status").or_(sa.get_by_role("alert")).filter(has_text="ormato")).to_be_visible()
+    print("7b la analista descarga el estudio en el formato de la empresa:", d.value.suggested_filename, "| imágenes:", len(hoja._images))
+    pa.goto(BASE + "/vacantes"); expect(pa.get_by_role("alert").filter(has_text="solo da acceso a los estudios")).to_be_visible(); print("6b analista de estudios: ve su lista y el estudio; no ve otras evaluaciones ni las vacantes")
+    # 7c. Admin: una versión nueva del formulario
     p3.get_by_role("button", name="Agregar campo").first.click()
     p3.get_by_label("Nombre del campo 2 de la sección 1", exact=True).fill("Medio de transporte declarado")
     p3.get_by_role("button", name="Guardar cambios").click()

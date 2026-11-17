@@ -90,6 +90,14 @@ Para que el botón «Describir con IA» de las fotografías funcione, en la pant
 
 La plantilla inicial es el formato de la empresa «SGC.F3.RH. Estudio socioeconómico». Ese formato incluye un dictamen, cinco indicadores con nivel (suficiente, medio, inferior), un «score total» y si la persona se considera viable. El sistema guarda lo que anote quien aplicó el estudio, pero no calcula esa puntuación, la IA no la llena y no se usa en la síntesis del expediente ni en los reportes. Si la empresa decide no registrar esos datos en el sistema, basta con quitar esos campos de la plantilla.
 
+**Formato de la empresa para descargar el estudio.** Al abrir un formulario, arriba aparece «Formato de la empresa para descargar el estudio». Sube ahí, una sola vez, el Excel **en blanco** del formato SGC.F3.RH (archivo .xlsx, hasta 5 MB). A partir de ese momento, cualquier estudio capturado con ese formulario se puede descargar en ese mismo archivo, con sus datos puestos. Qué conviene saber:
+
+- Solo un administrador lo sube o lo sustituye. Si el formato cambia de versión, vuelve a subirlo: el vigente es siempre el último.
+- El sistema revisa que sea el formato del estudio (busca los títulos de sus apartados). Si falta alguno te lo dice, porque los datos de ese apartado no se podrán colocar.
+- El sistema ubica cada dato por el texto de su etiqueta («Nombre completo:», «Rentada:», etc.), no por la celda. Si en una versión nueva cambias el texto de una etiqueta, ese dato puede quedar sin colocar; quien descarga recibe el aviso de cuáles fueron.
+- El archivo se guarda en el almacenamiento de documentos del servidor, no en el código ni en la base de datos, y entra en los respaldos normales de esa carpeta.
+- No hace falta ningún cambio en la base de datos.
+
 ## Documentos
 
 - **Eliminar.** Solo tú puedes eliminar un documento, con motivo. Se conserva el registro de que existió, quién lo eliminó y por qué.

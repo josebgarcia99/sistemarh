@@ -38,7 +38,7 @@ export function renderApp(ui: ReactElement, options: { session?: User } = {}) {
   };
 }
 
-type Route = { status?: number; body?: unknown };
+type Route = { status?: number; body?: unknown; headers?: Record<string, string> };
 type Handler = Route | ((request: { url: string; init: RequestInit }) => Route);
 
 /** Sustituye fetch por rutas "MÉTODO /ruta". Devuelve el espía para inspeccionar llamadas. */
@@ -50,7 +50,10 @@ export function mockApi(routes: Record<string, Handler>) {
     if (!handler) throw new Error(`Llamada inesperada en la prueba: ${key}`);
     const route = typeof handler === "function" ? handler({ url, init }) : handler;
     const status = route.status ?? 200;
-    return new Response(route.body === undefined ? null : JSON.stringify(route.body), { status });
+    return new Response(route.body === undefined ? null : JSON.stringify(route.body), {
+      status,
+      headers: route.headers,
+    });
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;

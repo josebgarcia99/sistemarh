@@ -23,6 +23,7 @@ import {
   describePhoto,
   type Digitization,
   digitizeStudy,
+  downloadStudyFile,
   type FormField,
   KIND_DOCUMENT,
   KIND_LABELS,
@@ -35,7 +36,7 @@ import {
   summarizeAssessment,
   updateAssessment,
 } from "@/lib/api/assessments";
-import { describeError } from "@/lib/api/client";
+import { describeError, saveBlob } from "@/lib/api/client";
 import {
   acceptedExtensions,
   downloadUrl,
@@ -437,6 +438,27 @@ function AssessmentEditor({
         }),
       "Evaluación guardada.",
     );
+  /** Descarga el estudio guardado en el formato de la empresa (Excel). */
+  async function download() {
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const file = await downloadStudyFile(item.id);
+      saveBlob(file.blob, file.name);
+      setFeedback(
+        file.unplaced.length > 0
+          ? {
+              kind: "error",
+              text: `El formato se descargó, pero estos datos no encontraron lugar en él: ${file.unplaced.join("; ")}.`,
+            }
+          : { kind: "ok", text: "Formato descargado con lo último guardado." },
+      );
+    } catch (caught) {
+      setFeedback({ kind: "error", text: describeError(caught) });
+    } finally {
+      setBusy(false);
+    }
+  }
   /** Adjunta un archivo aquí mismo, sin pasar por los documentos de la vacante. */
   async function attach(file: File) {
     const type = KIND_DOCUMENT[kind];
@@ -709,6 +731,15 @@ function AssessmentEditor({
 
       {kind === "ESTUDIO_SOCIOECONOMICO" && item.form && (
         <>
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-white/60 px-4 py-3">
+            <button type="button" className={secondaryButtonClass} disabled={busy} onClick={download}>
+              Descargar en el formato de la empresa (Excel)
+            </button>
+            <p className="flex-[1_1_260px] text-sm text-ink-muted">
+              Baja el formato SGC.F3.RH con los datos ya puestos en su lugar, incluidas las
+              fotografías. Usa lo último guardado: guarda antes de descargar.
+            </p>
+          </div>
           {canEdit && (
             <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-white/60 px-4 py-3">
               <button type="button" className={secondaryButtonClass} disabled={busy || (!fileId && documents.length === 0)} onClick={digitize}>

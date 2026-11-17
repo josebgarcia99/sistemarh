@@ -15,6 +15,7 @@ declara aptitud y no decide: cada conclusión es de una persona.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -222,6 +223,34 @@ class Photo:
 
 class DocumentError(Exception):
     """El documento no se puede usar. Mensaje apto para mostrarse."""
+
+
+@dataclass(frozen=True)
+class StudyFile:
+    """El estudio vaciado en el formato de la empresa, listo para descargar."""
+
+    content: bytes
+    # Datos capturados que no encontraron lugar en el formato.
+    unplaced: tuple[str, ...] = ()
+
+
+class StudyFormats(Protocol):
+    """El Excel en blanco del estudio que cargó un administrador, por formulario."""
+
+    def exists(self, template_id: uuid.UUID) -> bool: ...
+
+    def save(self, template_id: uuid.UUID, content: bytes) -> list[str]:
+        """Comprueba que sea el formato y lo guarda. Devuelve los apartados que
+        no encontró. Lanza ``DocumentError`` si no es el formato."""
+
+    def fill(
+        self,
+        template_id: uuid.UUID,
+        version: FormTemplateVersion,
+        data: dict[str, Any],
+        photo: Callable[[str], bytes | None],
+    ) -> StudyFile | None:
+        """El formato con los datos puestos, o ``None`` si no se ha cargado."""
 
 
 class Documents(Protocol):

@@ -12,6 +12,7 @@ const BASIC: FormTemplate = {
   description: null,
   status: "ACTIVA",
   version_number: 1,
+  has_study_format: false,
   sections: [{ title: "Datos de la visita", fields: [{ id: "visita", label: "Fecha de la visita", type: "FECHA", required: true, options: [], minimum: null, maximum: null, columns: [], manual_only: false }] }],
 };
 
@@ -78,5 +79,34 @@ describe("FormTemplatesScreen", () => {
       manual_only: true,
     });
     expect(body.sections[0].fields[0].manual_only).toBe(false);
+  });
+
+  it("carga el formato en blanco de la empresa y avisa si no es un Excel", async () => {
+    let loaded = false;
+    const fetchMock = mockApi({
+      [`GET ${URL}`]: () => ({ body: [{ ...BASIC, has_study_format: loaded }] }),
+      [`PUT ${URL}/t1/study-format`]: () => {
+        loaded = true;
+        return { body: { missing_sections: [] } };
+      },
+    });
+    const user = userEvent.setup({ applyAccept: false });
+    renderApp(<FormTemplatesScreen />, { session: makeUser() });
+    await user.click(await screen.findByRole("button", { name: "Estudio socioeconómico básico" }));
+    expect(screen.getByText("Todavía no se ha cargado")).toBeTruthy();
+    const input = screen.getByLabelText("Formato en blanco del estudio (Excel)");
+
+    await user.upload(input, new File(["pdf"], "formato.pdf"));
+    expect((await screen.findByRole("alert")).textContent).toContain("debe ser un Excel");
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+
+    const blank = new File(["xlsx"], "SGC.F3.RH en blanco.xlsx");
+    await user.upload(input, blank);
+    expect((await screen.findByRole("status")).textContent).toContain("Formato cargado");
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(String(put?.[0])).toBe(`${URL}/t1/study-format`);
+    expect(put?.[1]?.body).toBe(blank);
+    expect(await screen.findByText("Formato cargado")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sustituir el formato en blanco" })).toBeTruthy();
   });
 });

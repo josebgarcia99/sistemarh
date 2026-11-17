@@ -41,6 +41,8 @@ from app.modules.assessments.domain.models import (
     Kind,
     Photo,
     PhotoNote,
+    StudyFile,
+    StudyFormats,
     Synthesis,
 )
 from app.modules.audit.application.service import AuditLog
@@ -96,7 +98,9 @@ class AssessmentService:
         ai: Assistant,
         audit: AuditLog,
         clock: Callable[[], datetime],
+        formats: StudyFormats | None = None,
     ) -> None:
+        self._formats = formats
         self._repo = repo
         self._access = access
         self._applications = applications
@@ -601,6 +605,89 @@ class AssessmentService:
             details={"vacante": str(assessment.vacancy_id), "documento": str(file_id)},
         )
         return outcome
+
+    # --- El estudio en el formato de la empresa -------------------------------------------
+
+    def has_study_format(self, template_id: uuid.UUID) -> bool:
+        return self._formats is not None and self._formats.exists(template_id)
+
+    def set_study_format(
+        self, actor: Actor, template_id: uuid.UUID, content: bytes, *, ip: str | None = None
+    ) -> list[str]:
+        """Guarda el Excel en blanco del formato de la empresa para un formulario.
+        Devuelve los apartados del formato que no se encontraron en el archivo."""
+        if not actor.is_admin:
+            raise PermissionDeniedError("Solo un administrador carga el formato del estudio.")
+        template = self._repo.template(template_id)
+        if template is None:
+            raise NotFoundError("El formulario no existe.")
+        if self._formats is None:
+            raise ValidationFailedError("El almacenamiento de documentos no está disponible.")
+        try:
+            missing = self._formats.save(template.id, content)
+        except DocumentError as error:
+            raise ValidationFailedError(str(error)) from error
+        self._audit.record(
+            AuditAction.ESTUDIO_FORMATO_CARGADO,
+            actor_user_id=actor.id,
+            resource_type="formulario",
+            resource_id=template.id,
+            ip=ip,
+            details={"bytes": len(content), "apartados_no_encontrados": len(missing)},
+        )
+        return missing
+
+    def study_file(
+        self, actor: Actor, assessment_id: uuid.UUID, *, ip: str | None = None
+    ) -> tuple[str, StudyFile]:
+        """El estudio guardado, vaciado en el formato de la empresa. Devuelve el
+        nombre sugerido del archivo y su contenido. No modifica nada."""
+        assessment = self._load(actor, assessment_id, write=False)
+        if assessment.kind is not Kind.ESTUDIO_SOCIOECONOMICO:
+            raise ValidationFailedError("Solo se descarga el formato de un estudio socioeconómico.")
+        version = self._repo.template_version(assessment.template_version_id)  # type: ignore[arg-type]
+        if version is None:
+            raise NotFoundError("El formulario del estudio ya no existe.")
+
+        def photo(file_id: str) -> bytes | None:
+            try:
+                return self._documents.read_photo(assessment.vacancy_id, uuid.UUID(file_id)).data
+            except (DocumentError, ValueError):
+                return None  # un PDF u otro archivo que no es una imagen
+
+        try:
+            filled = (
+                self._formats.fill(version.template_id, version, assessment.data, photo)
+                if self._formats is not None
+                else None
+            )
+        except DocumentError as error:
+            raise ValidationFailedError(str(error)) from error
+        if filled is None:
+            raise ValidationFailedError(
+                "Todavía no se ha cargado el formato en blanco de la empresa. Pídele a un "
+                "administrador que lo suba en «Formularios»."
+            )
+        self._audit.record(
+            AuditAction.ESTUDIO_DESCARGADO,
+            actor_user_id=actor.id,
+            resource_type="evaluacion",
+            resource_id=assessment.id,
+            ip=ip,
+            details={"vacante": str(assessment.vacancy_id), "sin_colocar": len(filled.unplaced)},
+        )
+        # El nombre del archivo sale del propio estudio, si ya se capturó.
+        answers = assessment.data.get("answers") or {}
+        name = next(
+            (
+                str((answers.get(item.id) or {}).get("value") or "")
+                for item in version.fields
+                if item.label == "Nombre completo"
+            ),
+            "",
+        )
+        safe = "".join(ch for ch in name if ch.isalnum() or ch in " -_").strip()[:80]
+        return f"Estudio socioeconomico - {safe or 'persona'}.xlsx", filled
 
     # --- Síntesis del expediente ---------------------------------------------------------
 

@@ -84,9 +84,13 @@ export async function apiFetch<T = void>(path: string, options: RequestOptions<T
     return schema.parse(payload);
   }
 
+  throw await failure(response);
+}
+
+async function failure(response: Response): Promise<ApiError> {
   const payload: unknown = await response.json().catch(() => null);
   const problem = problemSchema.safeParse(payload);
-  throw new ApiError(
+  return new ApiError(
     problem.success
       ? problem.data
       : {
@@ -97,6 +101,32 @@ export async function apiFetch<T = void>(path: string, options: RequestOptions<T
           correlation_id: response.headers.get("X-Correlation-ID"),
         },
   );
+}
+
+/** Descarga un archivo que la API genera al momento, con su nombre sugerido. */
+export async function apiDownload(
+  path: string,
+): Promise<{ blob: Blob; name: string | null; headers: Headers }> {
+  const response = await fetch(buildUrl(path), { credentials: "same-origin" });
+  if (!response.ok) throw await failure(response);
+  const named = /filename\*=UTF-8''([^;]+)/.exec(response.headers.get("Content-Disposition") ?? "");
+  return {
+    blob: await response.blob(),
+    name: named ? decodeURIComponent(named[1]) : null,
+    headers: response.headers,
+  };
+}
+
+/** Entrega al navegador un archivo ya descargado, para que lo guarde. */
+export function saveBlob(blob: Blob, name: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 /** Mensaje para mostrar a la persona, con el identificador de soporte si existe. */
