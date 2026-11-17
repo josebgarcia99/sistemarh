@@ -756,11 +756,8 @@ def test_llamada_completa_con_banco_respuestas_cierre_y_analisis(
     assert opened.status_code == 201
     call = opened.json()
     url = f"{API}/calls/{call['id']}"
-    assert (
-        call["status"] == "BORRADOR"
-        and call["bank_name"] == "Banco de nómina"
-        and call["bank_version"] == 1
-    )
+    assert call["status"] == "BORRADOR" and call["sources"] == ["Banco de nómina"]
+    assert {q["source"] for q in call["questions"]} == {"BANCO"}
     assert [q["text"] for q in call["questions"]] == [q["text"] for q in QUESTIONS]
     assert call["created_by_name"] == "Reclutadora de Prueba"
     q1, q2 = (q["id"] for q in call["questions"])
@@ -845,7 +842,8 @@ def test_llamada_completa_con_banco_respuestas_cierre_y_analisis(
 
     # Varias llamadas por postulación; permisos por vacante.
     second = recruiter.post(calls_url, json={"bank_id": bank["id"]}).json()
-    assert second["bank_version"] == 2 and len(recruiter.get(calls_url).json()) == 2
+    assert [q["text"] for q in second["questions"]] == ["Pregunta nueva"]
+    assert len(recruiter.get(calls_url).json()) == 2
     assert (
         "al menos una respuesta"
         in recruiter.post(f"{API}/calls/{second['id']}/analysis").json()["detail"]

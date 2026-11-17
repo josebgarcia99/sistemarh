@@ -49,9 +49,9 @@ Lo que sigue describe las pruebas que existen hoy y dónde están. Todas corren 
 ### Cómo ejecutarlas
 
 ```bash
-cd apps/api && pytest            # 392 pruebas de la API
+cd apps/api && pytest            # 396 pruebas de la API
 cd apps/worker && pytest         # 5 pruebas del worker
-cd apps/web && npm test          # 116 pruebas de pantallas
+cd apps/web && npm test          # 118 pruebas de pantallas
 python scripts/generate_docs.py --check   # la documentación generada está al día
 python scripts/medir_rendimiento.py       # medición con volumen sintético
 python tests/e2e/run.py                   # seis recorridos en navegador (requiere las pantallas compiladas)

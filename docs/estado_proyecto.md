@@ -32,6 +32,8 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 
 **Descarga del estudio en el formato de la empresa (17 de noviembre de 2026, rama `pruebas`).** A petición del responsable, porque Recursos Humanos llena hoy el formato a mano: desde el estudio capturado se descarga el formato SGC.F3.RH en Excel con los datos en su lugar (texto, casillas, tablas, niveles, firmas, ubicación y las fotografías del formato). Un administrador sube una sola vez el Excel en blanco en «Formularios»; se guarda en el almacenamiento del servidor y no entra al repositorio porque lleva nombres reales. El archivo se edita por dentro sin reescribirlo, para conservar el diseño, el logotipo y los controles. Sin cambios de base de datos. Límites conocidos: las fotografías adicionales no van en el formato; las nueve casillas antiguas de «Situación social» no se marcan (su dato se escribe como texto junto al encabezado); la colocación depende del texto de las etiquetas. Se comprobó con el formato real y datos inventados, viendo el resultado con LibreOffice; **no se ha abierto en Excel de escritorio ni se ha probado en el servidor real**.
 
+**Preguntas propias de cada llamada (17 de noviembre de 2026, rama `pruebas`).** A petición del responsable: al abrir una llamada, las preguntas generales de la empresa entran solas y los bancos son opcionales (uno, varios o ninguno). Dentro de la llamada se quitan preguntas, se cambia su redacción, se suman las de otros bancos y se escriben preguntas nuevas; todo vale solo para esa llamada y los bancos no cambian. Una pregunta quitada no se analiza ni cuenta para cerrar; si las preguntas cambian después de un análisis, el análisis se retira. De paso se corrigió que las respuestas a las preguntas generales no llegaban a la síntesis del expediente. **Cambia la base de datos (versión `0018`):** columna `call_sessions.questions`, `bank_version_id` admite vacío y tabla nueva `call_session_banks` para el filtro de indicadores por banco. El script se generó sin conexión y **no se ha ejecutado contra un SQL Server real**.
+
 ## Funcionalidades terminadas
 
 | Elemento | Detalle |
@@ -108,7 +110,7 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 | Cabeceras de seguridad | Todas las respuestas de la API y de las pantallas impiden enmarcar la aplicación, interpretar tipos y, en la API, guardar respuestas en cachés; HSTS en producción |
 | Métricas y registro de accesos | Cada solicitud deja una línea estructurada con método, ruta, estado y duración (sin la consulta, que puede llevar nombres). `GET /system/metrics`, solo para administradores, muestra solicitudes, errores y duración por ruta |
 | Versión del esquema en la comprobación de salud | `/health/ready` falla si la base no tiene la versión de esquema que espera la aplicación |
-| Validaciones de integridad | `validaciones_integridad.sql`: 18 comprobaciones de solo lectura para ejecutar tras instalar, actualizar o restaurar |
+| Validaciones de integridad | `validaciones_integridad.sql`: 20 comprobaciones de solo lectura para ejecutar tras instalar, actualizar o restaurar |
 | Respaldo de reportes | El manifiesto de respaldo y la comprobación del almacenamiento incluyen los Excel de reportes |
 | Despliegue de producción | Compose de producción (proxy, pantallas, API, worker, cola y antivirus), configuración de nginx con HTTPS, variables de ejemplo por entorno e imagen con solo las dependencias de ejecución. Sin ejecutar |
 | Documentación derivada del código | `scripts/generate_docs.py` genera los contratos de la API y el diagrama entidad-relación; una prueba falla si quedan desactualizados |
@@ -124,11 +126,11 @@ Ejecutadas el 12 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 392 pruebas, todas pasan |
+| API: `pytest` | 396 pruebas, todas pasan |
 | Worker: `pytest` | 5 pruebas, todas pasan |
 | `ruff check` y `lint-imports` | Sin errores; 13 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |
-| Frontend: `vitest` | 116 pruebas, todas pasan |
+| Frontend: `vitest` | 118 pruebas, todas pasan |
 | Frontend: `next build` | Compila |
 | Recorrido en navegador real, identidad | 10 pasos: redirección sin sesión, credenciales erróneas, inicio de sesión, alta de usuario, restablecer contraseña, recarga, cierre de sesión, contraseña anterior rechazada, reclutador sin acceso a Usuarios y respuesta 403 de la API |
 | Recorrido en navegador real, vacantes | 11 pasos: alta de dos reclutadores, alta de dos vacantes, cambio de estado, compartir en lectura, la otra persona solo ve la compartida y no puede editarla, la API le niega cambiar el estado, transferencia individual, baja con transferencia, auditoría con el acceso denegado, la persona dada de baja ya no entra y el receptor queda como responsable |
@@ -186,7 +188,7 @@ No hay todavía una instancia de SQL Server de pruebas. Por eso:
 - **El formato de perfil real en la aplicación.** El lector del formato «SGC.F15.RH» se comprobó con el archivo de ejemplo que entregaste (fuera del repositorio) y con libros generados en las pruebas con la misma distribución de celdas. No se ha probado con otros perfiles llenados por la empresa ni con archivos guardados desde Google Sheets o LibreOffice.
 - **Descripción de fotografías con un modelo real.** La forma de enviar imágenes a Gemini se tomó de la documentación pública de Google consultada el 12 de noviembre de 2026; la de Anthropic y OpenAI, de su documentación conocida. Ninguna se ha ejecutado contra el servicio real, así que no se ha visto una descripción producida por un modelo de verdad ni se ha comprobado que el modelo respete las instrucciones.
 - **La cobertura de la llamada y el análisis de referencias con un modelo real.** Probados con respuestas programadas. No se ha visto cómo valora un modelo real una respuesta frente a lo esperado ni si contrasta bien las referencias con el CV; hay que revisarlo con casos sintéticos antes de confiar en el número.
-- **Migraciones `0013` a `0017` en SQL Server.** Como el resto de los scripts, se generó sin conexión y no se ha ejecutado contra un SQL Server real.
+- **Migraciones `0013` a `0018` en SQL Server.** Como el resto de los scripts, se generó sin conexión y no se ha ejecutado contra un SQL Server real.
 - **Los resúmenes, la digitalización y la síntesis con un modelo real.** Probados con respuestas programadas. No se sabe todavía si un modelo real respeta siempre las prohibiciones (no diagnosticar, no recomendar, no puntuar); el servidor descarta lo que no cabe en el formato, pero el texto de un resumen puede contener una frase indebida. Hay que revisarlo con casos sintéticos antes de usarlo.
 - **OCR con documentos reales.** Tesseract se probó con imágenes sintéticas de letra impresa y nítida. Con escaneos reales (torcidos, con sellos, en baja resolución o manuscritos) la lectura será peor; hay que medirla. Tampoco se ha construido la imagen Docker con Tesseract.
 - **Extracción del CV y análisis de llamadas con un modelo real.** Probados con respuestas programadas.

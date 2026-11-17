@@ -371,5 +371,5 @@ def test_las_validaciones_de_integridad_solo_leen_y_usan_columnas_que_existen():
     # Falla si se nombra una tabla o una columna que no existe.
     qualify(selects[0], schema=schema, dialect="tsql", validate_qualify_columns=True)
     referenced = {f"{t.db}.{t.name}" for t in selects[0].find_all(exp.Table) if t.db}
-    assert len(referenced) >= 10 and len(re.findall(r"SELECT '\d\d\. ", text)) == 18
+    assert len(referenced) >= 10 and len(re.findall(r"SELECT '\d\d\. ", text)) == 20
     assert f"'{SCHEMA_VERSION}'" in text

@@ -2,7 +2,7 @@
 
 > Generado por `scripts/generate_docs.py` a partir del modelo de datos. No editar a mano.
 
-Versión del esquema: `0017`. Tablas: 36. El detalle de cada columna está en [`diccionario_datos.md`](diccionario_datos.md).
+Versión del esquema: `0018`. Tablas: 37. El detalle de cada columna está en [`diccionario_datos.md`](diccionario_datos.md).
 
 Cada diagrama muestra las tablas de un esquema y sus relaciones, también con tablas de otros esquemas. Para que se lean, se omiten las columnas de autoría (quién creó, modificó o aprobó algo), que apuntan todas a `auth.users`.
 
@@ -143,6 +143,10 @@ erDiagram
   recruitment_assessments {
     uuid id PK
   }
+  recruitment_call_session_banks {
+    uuid call_id PK
+    uuid bank_id PK
+  }
   recruitment_call_sessions {
     uuid id PK
   }
@@ -187,6 +191,8 @@ erDiagram
   files_file_assets ||--o{ recruitment_assessments : file_id
   recruitment_form_template_versions ||--o{ recruitment_assessments : template_version_id
   vacancy_vacancies ||--o{ recruitment_assessments : vacancy_id
+  recruitment_question_banks ||--o{ recruitment_call_session_banks : bank_id
+  recruitment_call_sessions ||--o{ recruitment_call_session_banks : call_id
   recruitment_applications ||--o{ recruitment_call_sessions : application_id
   recruitment_question_bank_versions ||--o{ recruitment_call_sessions : bank_version_id
   vacancy_vacancies ||--o{ recruitment_call_sessions : vacancy_id

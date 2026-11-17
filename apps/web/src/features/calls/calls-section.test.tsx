@@ -1,7 +1,7 @@
 import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Bank, Call } from "@/lib/api/calls";
+import type { Bank, Call, CallQuestion } from "@/lib/api/calls";
 import { makeUser, mockApi, renderApp } from "@/test/helpers";
 import { CallsSection } from "./calls-section";
 
@@ -21,19 +21,55 @@ const BANK: Bank = {
   updated_at: "2026-11-11T18:00:00Z",
 };
 
+const GENERAL_BANK: Bank = {
+  ...BANK,
+  id: "g1",
+  name: "Preguntas generales",
+  general: true,
+  questions: [{ id: "q1", text: "¿Qué nóminas has calculado?", competency: "Nómina", guidance: "Tamaño y periodicidad", origin: "MANUAL" }],
+};
+const SYSTEMS_BANK: Bank = {
+  ...BANK,
+  id: "b3",
+  name: "Banco de sistemas",
+  questions: [
+    { id: "q2", text: "¿Cómo validas el IMSS?", competency: "", guidance: "", origin: "MANUAL" },
+    { id: "q7", text: "¿Has usado CONTPAQi Nóminas?", competency: "Sistemas", guidance: "Sí o no", origin: "MANUAL" },
+  ],
+};
+
+function question(id: string, text: string, changes: Partial<CallQuestion> = {}): CallQuestion {
+  return {
+    id,
+    text,
+    competency: "",
+    guidance: "",
+    origin: "MANUAL",
+    source: "BANCO",
+    general: false,
+    bank_id: "b1",
+    bank_name: "Banco de nómina",
+    original_text: null,
+    omitted: false,
+    answer: "",
+    notes: "",
+    not_asked: false,
+    ...changes,
+  };
+}
+
 function makeCall(overrides: Partial<Call> = {}): Call {
   return {
     id: "l1",
     application_id: "a1",
     status: "BORRADOR",
-    bank_name: "Banco de nómina",
-    bank_version: 1,
+    sources: ["Preguntas generales", "Banco de nómina"],
     called_at: "2026-11-11T18:00:00Z",
     created_by_name: "Reclutadora de Prueba",
     notes: "",
     questions: [
-      { id: "q1", text: "¿Qué nóminas has calculado?", competency: "Nómina", guidance: "Tamaño y periodicidad", origin: "MANUAL", general: true, answer: "", notes: "", not_asked: false },
-      { id: "q2", text: "¿Cómo validas el IMSS?", competency: "", guidance: "", origin: "MANUAL", general: false, answer: "", notes: "", not_asked: false },
+      question("q1", "¿Qué nóminas has calculado?", { competency: "Nómina", guidance: "Tamaño y periodicidad", source: "GENERAL", general: true, bank_id: "g1", bank_name: "Preguntas generales" }),
+      question("q2", "¿Cómo validas el IMSS?"),
     ],
     analysis: null,
     analysis_at: null,
@@ -42,17 +78,28 @@ function makeCall(overrides: Partial<Call> = {}): Call {
   };
 }
 
+/** Lo que la pantalla envía de cada pregunta al guardar. */
+const sent = (id: string, text: string, changes: Record<string, unknown> = {}) => ({
+  id,
+  text,
+  competency: "",
+  guidance: "",
+  omitted: false,
+  bank_id: "b1",
+  ...changes,
+});
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
 
 describe("CallsSection", () => {
-  it("abre una llamada con un banco, captura respuestas y la cierra", async () => {
+  it("abre una llamada con las generales y los bancos elegidos, captura respuestas y la cierra", async () => {
     let calls: Call[] = [];
     const fetchMock = mockApi({
       [`GET ${CALLS_URL}`]: () => ({ body: calls }),
-      ["GET /api/v1/question-banks"]: { body: [BANK, { ...BANK, id: "b2", name: "Archivado", status: "ARCHIVADO" }] },
+      ["GET /api/v1/question-banks"]: { body: [BANK, GENERAL_BANK, { ...BANK, id: "b2", name: "Archivado", status: "ARCHIVADO" }] },
       [`POST ${CALLS_URL}`]: () => {
         calls = [makeCall()];
         return { status: 201, body: calls[0] };
@@ -66,9 +113,14 @@ describe("CallsSection", () => {
     const user = userEvent.setup();
     renderApp(<CallsSection applicationId="a1" canEdit active />, { session: makeUser() });
     await user.click(await screen.findByRole("button", { name: "Nueva llamada" }));
-    // Solo se ofrecen bancos activos.
-    expect(within(await screen.findByLabelText("Banco de preguntas")).getAllByRole("option")).toHaveLength(1);
+    // Las generales entran solas; solo se eligen los demás bancos activos.
+    expect(await screen.findByText(/Las 1 preguntas generales de la empresa entran solas/)).toBeTruthy();
+    const optional = screen.getByRole("group", { name: "Suma también las preguntas de estos bancos (opcional)" });
+    expect(within(optional).getAllByRole("checkbox")).toHaveLength(1);
+    await user.click(within(optional).getByRole("checkbox", { name: "Banco de nómina · 0 preguntas" }));
     await user.click(screen.getByRole("button", { name: "Abrir llamada" }));
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ bank_ids: ["b1"] });
 
     await user.type(await screen.findByLabelText("Respuesta a la pregunta 1"), "Nómina quincenal de 200 personas");
     await user.click(screen.getAllByRole("checkbox", { name: "No se realizó" })[1]);
@@ -82,11 +134,121 @@ describe("CallsSection", () => {
         { question_id: "q1", answer: "Nómina quincenal de 200 personas", notes: "", not_asked: false },
         { question_id: "q2", answer: "", notes: "", not_asked: true },
       ],
+      questions: [
+        sent("q1", "¿Qué nóminas has calculado?", { competency: "Nómina", guidance: "Tamaño y periodicidad", bank_id: "g1" }),
+        sent("q2", "¿Cómo validas el IMSS?"),
+      ],
       notes: "Llamada de 15 minutos",
       close: true,
     });
     // Cerrada: ya no se puede guardar ni cerrar otra vez.
     expect(screen.queryByRole("button", { name: /^Guardar$|Cerrar llamada/ })).toBeNull();
+  });
+
+  it("en la llamada se quitan, se redactan distinto y se agregan preguntas, sin tocar los bancos", async () => {
+    const analysis = { resumen: "Resumen anterior." };
+    let calls: Call[] = [
+      makeCall({
+        analysis,
+        questions: [
+          question("q1", "¿Qué nóminas has calculado?", { source: "GENERAL", general: true, bank_id: "g1", bank_name: "Preguntas generales", answer: "Quincenal" }),
+          question("q2", "¿Cómo validas el IMSS?"),
+          question("q3", "¿Cuál es tu expectativa de sueldo?", { source: "GENERAL", general: true, bank_id: "g1", bank_name: "Preguntas generales", omitted: true }),
+        ],
+      }),
+    ];
+    const fetchMock = mockApi({
+      [`GET ${CALLS_URL}`]: () => ({ body: calls }),
+      ["GET /api/v1/question-banks"]: { body: [GENERAL_BANK, SYSTEMS_BANK] },
+      ["PUT /api/v1/calls/l1"]: () => {
+        calls = [{ ...calls[0], analysis: null }];
+        return { body: calls[0] };
+      },
+    });
+    const user = userEvent.setup();
+    renderApp(<CallsSection applicationId="a1" canEdit active />, { session: makeUser() });
+    await user.click(await screen.findByRole("button", { name: /Preguntas generales \+ Banco de nómina/ }));
+
+    // Quitar: deja de numerarse y pasa a la lista de quitadas, de donde se puede recuperar.
+    const removed = () => within(screen.getByRole("group", { name: "Preguntas quitadas de esta llamada" }));
+    expect(removed().getByText("¿Cuál es tu expectativa de sueldo?")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Quitar de esta llamada la pregunta 1" }));
+    expect(screen.getByText("1. ¿Cómo validas el IMSS?")).toBeTruthy();
+    expect(removed().getByText("Quitadas de esta llamada (2)")).toBeTruthy();
+    await user.click(removed().getByRole("button", { name: "Volver a incluir: ¿Cuál es tu expectativa de sueldo?" }));
+    expect(screen.getByText("2. ¿Cuál es tu expectativa de sueldo?")).toBeTruthy();
+
+    // Cambiar la redacción solo para esta llamada, y poder volver a la del banco.
+    await user.click(screen.getByRole("button", { name: "Cambiar la redacción de la pregunta 1" }));
+    const wording = screen.getByLabelText("Redacción de la pregunta 1 para esta llamada");
+    await user.clear(wording);
+    await user.type(wording, "¿Cómo validas IMSS e ISR?");
+    expect(screen.getByText("Redacción cambiada")).toBeTruthy();
+    expect(screen.getByText("Redacción del banco: «¿Cómo validas el IMSS?»")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Volver a la redacción del banco" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Listo" }));
+
+    // Escribir una pregunta nueva y responderla en el mismo guardado.
+    const adding = within(screen.getByRole("group", { name: "Agregar preguntas a esta llamada" }));
+    await user.click(adding.getByRole("button", { name: "Escribir una pregunta" }));
+    await user.type(adding.getByLabelText("Pregunta nueva"), "¿Puedes trabajar en sitio?");
+    await user.type(adding.getByLabelText("Qué se espera de la respuesta (opcional)"), "Sí o no");
+    await user.click(adding.getByRole("button", { name: "Agregar a la llamada" }));
+    expect(screen.getByText("3. ¿Puedes trabajar en sitio?")).toBeTruthy();
+    expect(screen.getByText("Solo de esta llamada")).toBeTruthy();
+    await user.type(screen.getByLabelText("Respuesta a la pregunta 3"), "Sí");
+
+    // Tomar preguntas de otro banco: las que ya están no se pueden repetir.
+    await user.click(adding.getByRole("button", { name: "Tomar de un banco" }));
+    await user.selectOptions(await adding.findByLabelText("Banco"), "b3");
+    const offered = within(adding.getByRole("list", { name: "Preguntas de Banco de sistemas" }));
+    expect((offered.getByRole("checkbox", { name: "¿Cómo validas el IMSS? (ya está en la llamada)" }) as HTMLInputElement).disabled).toBe(true);
+    await user.click(offered.getByRole("checkbox", { name: "¿Has usado CONTPAQi Nóminas?" }));
+    await user.click(adding.getByRole("button", { name: "Agregar las elegidas" }));
+    expect(screen.getByText("4. ¿Has usado CONTPAQi Nóminas?")).toBeTruthy();
+    expect(screen.getByText("Banco de sistemas")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    // Como cambiaron las preguntas, el análisis anterior se retira y se avisa.
+    expect((await screen.findByRole("status")).textContent).toContain("el análisis anterior se retiró");
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    const body = JSON.parse(String(put?.[1]?.body));
+    const written = body.questions[3].id;
+    expect(written).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(body.questions).toEqual([
+      sent("q1", "¿Qué nóminas has calculado?", { bank_id: "g1", omitted: true }),
+      sent("q2", "¿Cómo validas IMSS e ISR?"),
+      sent("q3", "¿Cuál es tu expectativa de sueldo?", { bank_id: "g1" }),
+      sent(written, "¿Puedes trabajar en sitio?", { guidance: "Sí o no", bank_id: null }),
+      sent("q7", "¿Has usado CONTPAQi Nóminas?", { competency: "Sistemas", guidance: "Sí o no", bank_id: "b3" }),
+    ]);
+    // Lo anotado en una pregunta quitada se conserva mientras es borrador.
+    expect(body.answers).toEqual([
+      { question_id: "q1", answer: "Quincenal", notes: "", not_asked: false },
+      { question_id: written, answer: "Sí", notes: "", not_asked: false },
+    ]);
+  });
+
+  it("una llamada cerrada muestra qué preguntas no se usaron, sin poder cambiarlas", async () => {
+    const closed = makeCall({
+      status: "CERRADA",
+      questions: [
+        question("q1", "¿Qué nóminas has calculado y con qué sistema?", { original_text: "¿Qué nóminas has calculado?", answer: "Quincenal" }),
+        question("q9", "¿Puedes trabajar en sitio?", { source: "LLAMADA", bank_id: null, bank_name: "", answer: "Sí" }),
+        question("q3", "¿Cuál es tu expectativa de sueldo?", { source: "GENERAL", general: true, omitted: true }),
+      ],
+    });
+    mockApi({ [`GET ${CALLS_URL}`]: { body: [closed] } });
+    const user = userEvent.setup();
+    renderApp(<CallsSection applicationId="a1" canEdit active />, { session: makeUser() });
+    await user.click(await screen.findByRole("button", { name: /Banco de nómina/ }));
+    expect(screen.getByText("1. ¿Qué nóminas has calculado y con qué sistema?")).toBeTruthy();
+    expect(screen.getByText("Redacción cambiada")).toBeTruthy();
+    expect(screen.getByText("Solo de esta llamada")).toBeTruthy();
+    const unused = within(screen.getByRole("group", { name: "Preguntas quitadas de esta llamada" }));
+    expect(unused.getByText("No se usaron en esta llamada (1)")).toBeTruthy();
+    expect(unused.getByText("¿Cuál es tu expectativa de sueldo?")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Quitar|Cambiar la redacción|Volver a incluir|Escribir una pregunta/ })).toBeNull();
   });
 
   it("muestra el análisis de la IA como resumen, sin recomendación", async () => {

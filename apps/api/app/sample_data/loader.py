@@ -452,20 +452,42 @@ class _Loader:
 
     def _call(self, application_id: uuid.UUID, bank_id: uuid.UUID, *, finished: bool) -> None:
         calls = self._context.phone_calls(self._repos)
-        view = calls.open_call(self._owner, application_id, bank_id)
+        view = calls.open_call(self._owner, application_id, [bank_id])
         examples = {text: answer for text, _, _, answer in content.BANK}
-        answers = []
+        general = [q for q in view.questions if q.source.value == "GENERAL"]
+        questions: list[dict[str, object]] = []
+        answers: list[dict[str, object]] = []
         for position, question in enumerate(view.questions):
+            # Para que se vea cómo queda: si hay varias preguntas generales, la
+            # última se quita de esta llamada; y una del banco cambia de redacción.
+            omitted = len(general) > 1 and question.id == general[-1].id
+            reworded = question.text == content.CALL_REWORDED[0]
+            questions.append(
+                {
+                    "id": question.id,
+                    "text": content.CALL_REWORDED[1] if reworded else question.text,
+                    "omitted": omitted,
+                }
+            )
             example = examples.get(question.text)
+            if omitted:
+                continue
             if example is None:
                 # Una pregunta general de la empresa: aquí no hay respuesta inventada.
                 if finished:
                     answers.append({"question_id": question.id, "not_asked": True})
             elif finished or position < len(view.questions) - 2:
                 answers.append({"question_id": question.id, "answer": example})
+        # Una pregunta escrita solo para esta llamada.
+        text, guidance, example = content.CALL_WRITTEN
+        written = uuid.uuid4()
+        questions.append({"id": written, "text": text, "guidance": guidance})
+        if finished:
+            answers.append({"question_id": written, "answer": example})
         calls.save_call(
             self._owner,
             view.call.id,
+            questions=questions,
             answers=answers,
             notes="Llamada inventada de los datos de prueba.",
             called_at=None,

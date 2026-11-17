@@ -27,7 +27,7 @@ SQL Server no crea índices para las claves foráneas. Se revisaron las 99 que t
   | Índice | Para qué |
   | --- | --- |
   | `recruitment.call_sessions (vacancy_id)` | Bancos de preguntas usados en las vacantes visibles |
-  | `recruitment.call_sessions (bank_version_id)` | Filtro del histórico por banco de preguntas |
+  | `recruitment.call_sessions (bank_version_id)` | Referencia al primer banco de la llamada. Desde la versión `0018` el filtro del histórico por banco usa `recruitment.call_session_banks (bank_id)` |
   | `ai.cv_batches (prompt_version_id)` | Versión del prompt de cada postulación |
   | `recruitment.applications (evaluation_item_id)` | Unión con la evaluación inicial del CV |
   | `ai.executions (vacancy_id, occurred_at)` | Uso de IA de unas vacantes en un periodo |

@@ -92,10 +92,16 @@ Al pulsar el nombre se abre su expediente: datos de contacto, evaluación del CV
 ### Llamadas telefónicas
 
 1. En «Bancos» (menú) crea un banco de preguntas con «Nuevo banco»; «Proponer preguntas con IA» sugiere preguntas a partir del perfil de una vacante. Los bancos pueden ser privados o compartidos y guardan sus versiones. En cada pregunta puedes anotar **qué se espera de la respuesta**: con eso la IA mide después la llamada. Si marcas «Preguntas generales de la empresa», ese banco se agrega solo a todas las llamadas de todo el equipo, y cualquier reclutador o administrador puede modificarlo; cada cambio queda como una versión nueva.
-2. En el expediente, «Nueva llamada» → elige el banco → «Abrir llamada». Las **preguntas generales de la empresa** (las que se hacen a todas las personas) aparecen solas al principio, marcadas como «General», sin que tengas que elegirlas.
-3. Captura cada respuesta o márcala como no realizada, y pulsa «Guardar».
-4. «Analizar con IA» resume lo que aportó la llamada y señala diferencias con el CV por aclarar. No recomienda contratar ni descartar. Además muestra la **cobertura de la llamada**: en cada pregunta contestada que tenía anotado qué se espera, indica si la respuesta lo cubre, lo cubre en parte o no lo cubre, con la frase en que se basa, y un número de 0 a 100 que calcula el sistema. Mide qué tanto se cubrió lo esperado en la llamada; no es una calificación de la persona.
-5. «Cerrar llamada» la deja fija. Puede haber varias llamadas por persona.
+2. En el expediente, «Nueva llamada». Las **preguntas generales de la empresa** (las que se hacen a todas las personas) entran solas, sin elegirlas. Si quieres, marca además uno o varios bancos para sumar sus preguntas; también puedes no marcar ninguno. «Abrir llamada».
+3. **Ajusta las preguntas de esta llamada.** Cada llamada tiene su propia lista y lo que cambies aquí **no modifica los bancos**:
+   - **Quitar.** «Quitar» saca una pregunta que no aplica. Pasa a «Quitadas de esta llamada», de donde la recuperas con «Volver a incluir». Una pregunta quitada no se pregunta, no se analiza y no cuenta para cerrar. Es distinto de «No se realizó», que es para una pregunta que sí tocaba y no se alcanzó a hacer.
+   - **Cambiar la redacción.** «Cambiar redacción» te deja reescribir la pregunta solo para esta llamada. Queda marcada como «Redacción cambiada», se muestra la redacción del banco y puedes volver a ella.
+   - **Escribir una pregunta.** En «Agregar preguntas a esta llamada», «Escribir una pregunta» agrega una que existe solo en esta llamada (marcada «Solo de esta llamada»). Puedes anotar qué se espera de la respuesta para que la IA la mida.
+   - **Tomar de un banco.** «Tomar de un banco» muestra las preguntas de cualquiera de tus bancos; marcas las que quieras y «Agregar las elegidas». Las que ya están en la llamada no se repiten.
+   Cada pregunta indica de dónde viene: «General», el nombre de su banco o «Solo de esta llamada». Una llamada admite hasta 80 preguntas.
+4. Captura cada respuesta o márcala como no realizada, y pulsa «Guardar». Los cambios en las preguntas se guardan con ese mismo botón.
+5. «Analizar con IA» resume lo que aportó la llamada y señala diferencias con el CV por aclarar. No recomienda contratar ni descartar. Trabaja con las preguntas que quedaron en la llamada y con su redacción. Además muestra la **cobertura de la llamada**: en cada pregunta contestada que tenía anotado qué se espera, indica si la respuesta lo cubre, lo cubre en parte o no lo cubre, con la frase en que se basa, y un número de 0 a 100 que calcula el sistema. Mide qué tanto se cubrió lo esperado en la llamada; no es una calificación de la persona. Si después del análisis quitas, agregas o cambias preguntas, el análisis se retira al guardar (porque numera las preguntas) y hay que pedirlo de nuevo.
+6. «Cerrar llamada» la deja fija, con las preguntas que se hicieron y, aparte, las que no se usaron. Puede haber varias llamadas por persona.
 
 ### Evaluaciones posteriores
 

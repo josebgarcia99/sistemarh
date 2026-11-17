@@ -29,7 +29,7 @@ Abre http://localhost:3000. La primera terminal muestra los tres usuarios de eje
 
 **Para probar la evaluación de CV.** Entra como `ana@demo.test`, abre Vacantes, elige «Analista de Nómina», y pulsa el paso 3, «Cargar y evaluar CV». La vacante ya trae un prompt aprobado y cuatro CV ficticios (uno «escaneado», sin texto). Pulsa «Evaluar 4 CV» y descarga el Excel y los ZIP. Los niveles y las puntuaciones que verás son inventados por el proveedor simulado: sirven para ver la pantalla, no para juzgar la calidad de la evaluación.
 
-**Para probar candidatos, etapas y llamadas.** Después de evaluar los CV de «Analista de Nómina», pulsa «Ver candidatos y etapas» (o, desde la vacante, el paso 4): las cuatro personas están en «Revisión local RH». Selecciona a una rechazada por la IA, pulsa «Mover de etapa» y elige «Llamada telefónica»: te pedirá el motivo. Abre su expediente, pulsa «Nueva llamada», captura respuestas, guarda y pulsa «Analizar con IA». En el menú, «Bancos» tiene los bancos de preguntas y, como administradora, «Etapas» permite cambiar las etapas del proceso.
+**Para probar candidatos, etapas y llamadas.** Después de evaluar los CV de «Analista de Nómina», pulsa «Ver candidatos y etapas» (o, desde la vacante, el paso 4): las cuatro personas están en «Revisión local RH». Selecciona a una rechazada por la IA, pulsa «Mover de etapa» y elige «Llamada telefónica»: te pedirá el motivo. Abre su expediente, pulsa «Nueva llamada» (las preguntas generales entran solas; marca además el banco «Filtro telefónico de nómina») y «Abrir llamada». Prueba «Quitar» en una pregunta, «Cambiar redacción» en otra y, en «Agregar preguntas a esta llamada», escribe una nueva. Captura respuestas, guarda y pulsa «Analizar con IA». En el menú, «Bancos» tiene los bancos de preguntas y, como administradora, «Etapas» permite cambiar las etapas del proceso.
 
 **Para probar las evaluaciones posteriores.** En el expediente de una persona, baja a «Evaluaciones posteriores» y pulsa «Registrar evaluación». Prueba técnica: agrega criterios a la rúbrica con sus puntos y guarda; la calificación la calcula el sistema. Psicometría: elige el documento «Reporte psicométrico ficticio.docx» y pulsa «Resumir e interpretar con IA». Estudio socioeconómico: elige «Estudio escaneado ficticio.docx» (o adjunta el tuyo con «Adjuntar archivo») y pulsa «Leer el formato con IA»; debajo de las fotografías del formato, «Agregar fotografías» añade más. Más abajo, «Expediente por etapas» muestra las fuentes de cada etapa y permite generar la síntesis. Como administradora, «Formularios» permite cambiar el formulario del estudio.
 
@@ -175,6 +175,7 @@ Si Sistemas prefiere ejecutar T-SQL en lugar de Alembic, los scripts equivalente
 | `actualizacion_0014_a_0015.sql` | Base que ya tiene la versión `0014` |
 | `actualizacion_0015_a_0016.sql` | Base que ya tiene la versión `0015` |
 | `actualizacion_0016_a_0017.sql` | Base que ya tiene la versión `0016` |
+| `actualizacion_0017_a_0018.sql` | Base que ya tiene la versión `0017` |
 | `permisos_usuario_aplicacion.sql` | Plantilla de permisos mínimos para el usuario de la aplicación |
 | `validaciones_integridad.sql` | Solo lectura. Comprueba la coherencia de los datos tras instalar, actualizar o restaurar: todas las filas deben dar 0 |
 | `reversion_completa.sql` | Elimina todo. Solo para bases de prueba |

@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Instalación completa
-   Versión del esquema: (vacía) -> 0017
-   Generado: 2026-11-16 04:00 (UTC) con scripts/generate_sql.py
+   Versión del esquema: (vacía) -> 0018
+   Generado: 2026-11-17 18:26 (UTC) con scripts/generate_sql.py
 
    Crea todos los esquemas y tablas en una base de datos VACÍA.
 
@@ -1211,6 +1211,61 @@ ALTER TABLE recruitment.call_sessions ADD general_version_ids VARCHAR(800) NOT N
 GO
 
 UPDATE alembic_version SET version_num='0017' WHERE alembic_version.version_num = '0016';
+
+GO
+
+-- Running upgrade 0017 -> 0018
+
+ALTER TABLE recruitment.call_sessions ADD questions NVARCHAR(max) NULL;
+
+GO
+
+ALTER TABLE recruitment.call_sessions ADD CONSTRAINT ck_call_sessions_questions_json CHECK (questions IS NULL OR ISJSON(questions) = 1);
+
+GO
+
+DROP INDEX ix_call_sessions_bank_version ON recruitment.call_sessions;
+
+GO
+
+ALTER TABLE recruitment.call_sessions DROP CONSTRAINT fk_call_sessions_bank_version;
+
+GO
+
+ALTER TABLE recruitment.call_sessions ALTER COLUMN bank_version_id UNIQUEIDENTIFIER NULL;
+
+GO
+
+ALTER TABLE recruitment.call_sessions ADD CONSTRAINT fk_call_sessions_bank_version FOREIGN KEY(bank_version_id) REFERENCES recruitment.question_bank_versions (id);
+
+GO
+
+CREATE INDEX ix_call_sessions_bank_version ON recruitment.call_sessions (bank_version_id);
+
+GO
+
+CREATE TABLE recruitment.call_session_banks (
+    call_id UNIQUEIDENTIFIER NOT NULL, 
+    bank_id UNIQUEIDENTIFIER NOT NULL, 
+    CONSTRAINT pk_call_session_banks PRIMARY KEY (call_id, bank_id), 
+    CONSTRAINT fk_call_session_banks_call FOREIGN KEY(call_id) REFERENCES recruitment.call_sessions (id), 
+    CONSTRAINT fk_call_session_banks_bank FOREIGN KEY(bank_id) REFERENCES recruitment.question_banks (id)
+);
+
+GO
+
+CREATE INDEX ix_call_session_banks_bank ON recruitment.call_session_banks (bank_id);
+
+GO
+
+INSERT INTO recruitment.call_session_banks (call_id, bank_id)
+SELECT c.id, v.bank_id
+FROM recruitment.call_sessions AS c
+JOIN recruitment.question_bank_versions AS v ON v.id = c.bank_version_id;
+
+GO
+
+UPDATE alembic_version SET version_num='0018' WHERE alembic_version.version_num = '0017';
 
 GO
 

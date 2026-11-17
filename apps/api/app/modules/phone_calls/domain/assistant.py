@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from app.core.ai_json import parse_json_object
-from app.modules.phone_calls.domain.models import Answer, ApplicationRef, Question
+from app.modules.phone_calls.domain.models import Answer, ApplicationRef, CallQuestion, Question
 
 PROFILE_ANALYSIS = "ANALISIS_PERFILES"
 CALL_ANALYSIS = "ANALISIS_LLAMADAS"
@@ -101,7 +101,7 @@ def questions_from_answer(text: str) -> list[dict[str, str]]:
 
 
 def analysis_request(
-    questions: tuple[Question, ...],
+    questions: Sequence[Question | CallQuestion],
     answers: tuple[Answer, ...],
     notes: str,
     application: ApplicationRef,
@@ -144,7 +144,9 @@ def analysis_request(
 
 
 def measurement(
-    payload: dict[str, object], questions: Sequence[Question], answers: Sequence[Answer]
+    payload: dict[str, object],
+    questions: Sequence[Question | CallQuestion],
+    answers: Sequence[Answer],
 ) -> dict[str, object] | None:
     """Cobertura de la llamada: qué tanto cubrió cada respuesta lo que se esperaba.
 
@@ -188,7 +190,9 @@ def measurement(
 
 
 def analysis_from_answer(
-    text: str, questions: Sequence[Question] = (), answers: Sequence[Answer] = ()
+    text: str,
+    questions: Sequence[Question | CallQuestion] = (),
+    answers: Sequence[Answer] = (),
 ) -> dict[str, object]:
     try:
         payload = parse_json_object(text)

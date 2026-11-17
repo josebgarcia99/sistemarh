@@ -14,8 +14,9 @@ import {
   ANALYSIS_SECTIONS,
   COVERAGE_LABELS,
   analyzeCall,
-  type AnswerInput,
+  type Bank,
   type Call,
+  type CallQuestion,
   listBanks,
   listCalls,
   openCall,
@@ -34,7 +35,7 @@ export function CallsSection({ applicationId, canEdit, active }: Props) {
     queryFn: ({ signal }) => listCalls(applicationId, signal),
   });
   const [choosing, setChoosing] = useState(false);
-  const [bankId, setBankId] = useState("");
+  const [bankIds, setBankIds] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
@@ -44,15 +45,21 @@ export function CallsSection({ applicationId, canEdit, active }: Props) {
     enabled: choosing,
   });
   const banks = (banksQuery.data ?? []).filter((bank) => bank.status === "ACTIVO");
+  // Las generales de la empresa entran solas; los demás bancos se eligen.
+  const generalCount = banks
+    .filter((bank) => bank.general)
+    .reduce((total, bank) => total + bank.questions.length, 0);
+  const optional = banks.filter((bank) => !bank.general);
 
   async function start() {
     setBusy(true);
     setFeedback(null);
     try {
-      const call = await openCall(applicationId, bankId || banks[0].id);
+      const call = await openCall(applicationId, bankIds);
       await queryClient.invalidateQueries({ queryKey });
       setOpenId(call.id);
       setChoosing(false);
+      setBankIds([]);
     } catch (caught) {
       setFeedback({ kind: "error", text: describeError(caught) });
     } finally {
@@ -79,33 +86,44 @@ export function CallsSection({ applicationId, canEdit, active }: Props) {
       )}
       {choosing && (
         <div className="flex flex-col gap-3 rounded-3xl bg-surface p-5">
-          {banksQuery.data && banks.length === 0 ? (
-            <p>No tienes bancos de preguntas activos. Crea uno en «Bancos».</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <label htmlFor="call-bank" className="text-sm text-ink-muted">
-                Banco de preguntas
+          <p>
+            {generalCount > 0
+              ? `Las ${generalCount} preguntas generales de la empresa entran solas.`
+              : "Todavía no hay preguntas generales de la empresa (se crean en «Bancos»)."}{" "}
+            Ya en la llamada podrás quitar las que no apliquen, cambiar su redacción, sumar
+            preguntas de otros bancos o escribir nuevas.
+          </p>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-sm text-ink-muted">
+              Suma también las preguntas de estos bancos (opcional)
+            </legend>
+            {banksQuery.data && optional.length === 0 && (
+              <p className="text-ink-muted">No tienes otros bancos activos. Se crean en «Bancos».</p>
+            )}
+            {optional.map((bank) => (
+              <label key={bank.id} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="size-5 accent-ink"
+                  checked={bankIds.includes(bank.id)}
+                  onChange={(event) =>
+                    setBankIds(
+                      event.target.checked
+                        ? [...bankIds, bank.id]
+                        : bankIds.filter((id) => id !== bank.id),
+                    )
+                  }
+                />
+                {bank.name} · {bank.questions.length} preguntas
               </label>
-              <select
-                id="call-bank"
-                className={fieldClass}
-                value={bankId || banks[0]?.id || ""}
-                onChange={(event) => setBankId(event.target.value)}
-              >
-                {banks.map((bank) => (
-                  <option key={bank.id} value={bank.id}>
-                    {bank.name} · {bank.questions.length} preguntas
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+            ))}
+          </fieldset>
           <FeedbackLine feedback={feedback} />
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
               className={primaryButtonClass}
-              disabled={busy || banks.length === 0}
+              disabled={busy || !banksQuery.data}
               onClick={start}
             >
               Abrir llamada
@@ -129,8 +147,8 @@ export function CallsSection({ applicationId, canEdit, active }: Props) {
               onClick={() => setOpenId(openId === call.id ? null : call.id)}
             >
               <span className="flex-[1_1_200px] font-medium">
-                {dateTimeFormat.format(new Date(call.called_at))} · {call.bank_name} (v
-                {call.bank_version})
+                {dateTimeFormat.format(new Date(call.called_at))} ·{" "}
+                {call.sources.join(" + ") || "Sin preguntas todavía"}
               </span>
               <span
                 className={`${pillClass} ${
@@ -156,6 +174,71 @@ export function CallsSection({ applicationId, canEdit, active }: Props) {
   );
 }
 
+/** Tope de preguntas de una llamada, contando las quitadas (lo valida también el servidor). */
+const MAX_CALL_QUESTIONS = 80;
+const smallButtonClass = `${secondaryButtonClass} text-sm`;
+
+/** Una pregunta de la llamada mientras se edita, con lo capturado en ella. */
+type Item = {
+  id: string;
+  text: string;
+  competency: string;
+  guidance: string;
+  source: CallQuestion["source"];
+  bankId: string | null;
+  bankName: string;
+  /** Redacción con la que vino del banco; sirve para marcar el cambio y deshacerlo. */
+  base: string | null;
+  omitted: boolean;
+  answer: string;
+  notes: string;
+  notAsked: boolean;
+};
+
+function toItem(question: CallQuestion): Item {
+  return {
+    id: question.id,
+    text: question.text,
+    competency: question.competency,
+    guidance: question.guidance,
+    source: question.source,
+    bankId: question.bank_id,
+    bankName: question.bank_name,
+    base: question.source === "LLAMADA" ? null : (question.original_text ?? question.text),
+    omitted: question.omitted,
+    answer: question.answer,
+    notes: question.notes,
+    notAsked: question.not_asked,
+  };
+}
+
+/** Identificador para una pregunta escrita aquí: así su respuesta viaja en el mismo guardado. */
+function newId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+const reworded = (item: Item) => item.base !== null && item.text.trim() !== item.base;
+
+function SourcePills({ item }: { item: Item }) {
+  return (
+    <>
+      <span className={`${pillClass} ml-2 bg-neutral-soft text-neutral-ink`}>
+        {item.source === "GENERAL" ? "General" : item.source === "LLAMADA" ? "Solo de esta llamada" : item.bankName}
+      </span>
+      {reworded(item) && (
+        <span className={`${pillClass} ml-2 bg-accent-blue-soft text-accent-blue-ink`}>
+          Redacción cambiada
+        </span>
+      )}
+    </>
+  );
+}
+
 function CallEditor({
   call,
   canEdit,
@@ -166,78 +249,183 @@ function CallEditor({
   onChanged: () => Promise<void>;
 }) {
   const editable = canEdit && call.status === "BORRADOR";
-  const [answers, setAnswers] = useState<AnswerInput[]>(() =>
-    call.questions.map((question) => ({
-      question_id: question.id,
-      answer: question.answer,
-      notes: question.notes,
-      not_asked: question.not_asked,
-    })),
-  );
+  const [items, setItems] = useState<Item[]>(() => call.questions.map(toItem));
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [notes, setNotes] = useState(call.notes);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
-  const change = (index: number, patch: Partial<AnswerInput>) =>
-    setAnswers(answers.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const active = items.filter((item) => !item.omitted);
+  const removed = items.filter((item) => item.omitted);
+  const change = (id: string, patch: Partial<Item>) =>
+    setItems(items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
 
-  async function run(action: () => Promise<unknown>, message: string) {
+  async function run(action: () => Promise<string | void>, message: string) {
     setBusy(true);
     setFeedback(null);
     try {
-      await action();
+      const other = await action();
       await onChanged();
-      setFeedback({ kind: "ok", text: message });
+      setFeedback({ kind: "ok", text: other || message });
     } catch (caught) {
       setFeedback({ kind: "error", text: describeError(caught) });
     } finally {
       setBusy(false);
     }
   }
-  const payload = (close: boolean) => ({
-    answers: answers.filter((item) => item.answer.trim() || item.notes.trim() || item.not_asked),
-    notes,
-    close,
-  });
+  async function save(close: boolean) {
+    const saved = await saveCall(call.id, {
+      answers: items
+        .filter((item) => item.answer.trim() || item.notes.trim() || item.notAsked)
+        .map((item) => ({
+          question_id: item.id,
+          answer: item.answer,
+          notes: item.notes,
+          not_asked: item.notAsked,
+        })),
+      questions: items.map((item) => ({
+        id: item.id,
+        text: item.text,
+        competency: item.competency,
+        guidance: item.guidance,
+        omitted: item.omitted,
+        bank_id: item.bankId,
+      })),
+      notes,
+      close,
+    });
+    setEditingId(null);
+    // El análisis numera las preguntas: si cambiaron, el servidor lo retira.
+    if (call.analysis && !saved.analysis) {
+      return "Llamada guardada. Como cambiaron las preguntas, el análisis anterior se retiró: vuelve a pedirlo.";
+    }
+  }
+  function add(extra: Item[]) {
+    if (items.length + extra.length > MAX_CALL_QUESTIONS) {
+      return setFeedback({
+        kind: "error",
+        text: `Una llamada admite como máximo ${MAX_CALL_QUESTIONS} preguntas, contando las quitadas.`,
+      });
+    }
+    setFeedback(null);
+    setItems([...items, ...extra]);
+  }
 
   return (
     <div className="mt-4 flex flex-col gap-4 border-t border-line pt-4">
+      {active.length === 0 && (
+        <p className="text-ink-muted">
+          {editable
+            ? "Esta llamada todavía no tiene preguntas. Agrégalas aquí abajo."
+            : "Esta llamada no tiene preguntas."}
+        </p>
+      )}
       <ol className="flex flex-col gap-4">
-        {call.questions.map((question, index) => (
-          <li key={question.id} className="flex flex-col gap-2">
-            <p className="font-medium">
-              {index + 1}. {question.text}
-              {question.general && (
-                <span className={`${pillClass} ml-2 bg-neutral-soft text-neutral-ink`}>General</span>
+        {active.map((item, index) => (
+          <li key={item.id} className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-start gap-2">
+              <p className="flex-[1_1_320px] font-medium">
+                {index + 1}. {item.text}
+                <SourcePills item={item} />
+              </p>
+              {editable && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={smallButtonClass}
+                    aria-label={`Cambiar la redacción de la pregunta ${index + 1}`}
+                    aria-expanded={editingId === item.id}
+                    onClick={() => setEditingId(editingId === item.id ? null : item.id)}
+                  >
+                    Cambiar redacción
+                  </button>
+                  <button
+                    type="button"
+                    className={smallButtonClass}
+                    aria-label={`Quitar de esta llamada la pregunta ${index + 1}`}
+                    onClick={() => change(item.id, { omitted: true })}
+                  >
+                    Quitar
+                  </button>
+                </div>
               )}
-            </p>
-            {(question.competency || question.guidance) && (
+            </div>
+            {editable && editingId === item.id && (
+              <div className="flex flex-col gap-2 rounded-2xl bg-white/60 p-4">
+                <label htmlFor={`text-${call.id}-${item.id}`} className="text-sm text-ink-muted">
+                  Redacción de la pregunta {index + 1} para esta llamada
+                </label>
+                <textarea
+                  id={`text-${call.id}-${item.id}`}
+                  rows={2}
+                  maxLength={1000}
+                  value={item.text}
+                  onChange={(event) => change(item.id, { text: event.target.value })}
+                  className={areaClass}
+                />
+                {item.source === "LLAMADA" && (
+                  <>
+                    <label htmlFor={`guidance-${call.id}-${item.id}`} className="text-sm text-ink-muted">
+                      Qué se espera de la respuesta a la pregunta {index + 1} (opcional)
+                    </label>
+                    <input
+                      id={`guidance-${call.id}-${item.id}`}
+                      maxLength={1000}
+                      value={item.guidance}
+                      onChange={(event) => change(item.id, { guidance: event.target.value })}
+                      className={fieldClass}
+                    />
+                  </>
+                )}
+                {reworded(item) && (
+                  <p className="text-sm text-ink-muted">Redacción del banco: «{item.base}»</p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {reworded(item) && (
+                    <button
+                      type="button"
+                      className={smallButtonClass}
+                      onClick={() => change(item.id, { text: item.base ?? item.text })}
+                    >
+                      Volver a la redacción del banco
+                    </button>
+                  )}
+                  <button type="button" className={smallButtonClass} onClick={() => setEditingId(null)}>
+                    Listo
+                  </button>
+                </div>
+                <p className="text-sm text-ink-muted">
+                  El cambio vale solo para esta llamada; {item.source === "LLAMADA" ? "la pregunta no está en ningún banco" : "el banco queda igual"}.
+                </p>
+              </div>
+            )}
+            {(item.competency || item.guidance) && (
               <p className="text-sm text-ink-muted">
-                {[question.competency, question.guidance].filter(Boolean).join(" · ")}
+                {[item.competency, item.guidance].filter(Boolean).join(" · ")}
               </p>
             )}
-            <label htmlFor={`answer-${call.id}-${index}`} className="sr-only">
+            <label htmlFor={`answer-${call.id}-${item.id}`} className="sr-only">
               Respuesta a la pregunta {index + 1}
             </label>
             <textarea
-              id={`answer-${call.id}-${index}`}
+              id={`answer-${call.id}-${item.id}`}
               rows={3}
               readOnly={!editable}
-              disabled={answers[index].not_asked}
+              disabled={item.notAsked}
               placeholder="Lo que respondió la persona"
-              value={answers[index].answer}
-              onChange={(event) => change(index, { answer: event.target.value })}
+              value={item.answer}
+              onChange={(event) => change(item.id, { answer: event.target.value })}
               className={areaClass}
             />
             <div className="flex flex-wrap items-center gap-4">
-              <label htmlFor={`notes-${call.id}-${index}`} className="sr-only">
+              <label htmlFor={`notes-${call.id}-${item.id}`} className="sr-only">
                 Observación sobre la pregunta {index + 1}
               </label>
               <input
-                id={`notes-${call.id}-${index}`}
+                id={`notes-${call.id}-${item.id}`}
                 readOnly={!editable}
                 placeholder="Observación (opcional)"
-                value={answers[index].notes}
-                onChange={(event) => change(index, { notes: event.target.value })}
+                value={item.notes}
+                onChange={(event) => change(item.id, { notes: event.target.value })}
                 className={`${fieldClass} flex-[1_1_260px]`}
               />
               <label className="flex items-center gap-2">
@@ -245,8 +433,8 @@ function CallEditor({
                   type="checkbox"
                   className="size-5 accent-ink"
                   disabled={!editable}
-                  checked={answers[index].not_asked}
-                  onChange={(event) => change(index, { not_asked: event.target.checked })}
+                  checked={item.notAsked}
+                  onChange={(event) => change(item.id, { notAsked: event.target.checked })}
                 />
                 No se realizó
               </label>
@@ -254,6 +442,42 @@ function CallEditor({
           </li>
         ))}
       </ol>
+      {editable && <AddQuestions items={items} onAdd={add} />}
+      {removed.length > 0 && (
+        <div
+          role="group"
+          aria-label="Preguntas quitadas de esta llamada"
+          className="flex flex-col gap-2 rounded-2xl bg-white/60 p-4"
+        >
+          <p className="font-medium">
+            {editable ? "Quitadas de esta llamada" : "No se usaron en esta llamada"} ({removed.length})
+          </p>
+          <p className="text-sm text-ink-muted">
+            No se preguntan, no se analizan y no cuentan para cerrar la llamada. Los bancos quedan
+            igual.
+          </p>
+          <ul className="flex flex-col gap-2">
+            {removed.map((item) => (
+              <li key={item.id} className="flex flex-wrap items-center gap-3">
+                <span className="flex-[1_1_320px]">
+                  {item.text}
+                  <SourcePills item={item} />
+                </span>
+                {editable && (
+                  <button
+                    type="button"
+                    className={smallButtonClass}
+                    aria-label={`Volver a incluir: ${item.text}`}
+                    onClick={() => change(item.id, { omitted: false })}
+                  >
+                    Volver a incluir
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="flex flex-col gap-2">
         <label htmlFor={`call-notes-${call.id}`} className="text-sm text-ink-muted">
           Observaciones generales
@@ -276,7 +500,7 @@ function CallEditor({
                 type="button"
                 className={primaryButtonClass}
                 disabled={busy}
-                onClick={() => run(() => saveCall(call.id, payload(false)), "Llamada guardada.")}
+                onClick={() => run(() => save(false), "Llamada guardada.")}
               >
                 Guardar
               </button>
@@ -284,7 +508,7 @@ function CallEditor({
                 type="button"
                 className={secondaryButtonClass}
                 disabled={busy}
-                onClick={() => run(() => saveCall(call.id, payload(true)), "Llamada cerrada.")}
+                onClick={() => run(() => save(true), "Llamada cerrada.")}
               >
                 Cerrar llamada
               </button>
@@ -294,7 +518,11 @@ function CallEditor({
             type="button"
             className={secondaryButtonClass}
             disabled={busy}
-            onClick={() => run(() => analyzeCall(call.id), "Análisis listo.")}
+            onClick={() =>
+              run(async () => {
+                await analyzeCall(call.id);
+              }, "Análisis listo.")
+            }
           >
             {busy ? "Trabajando…" : "Analizar con IA"}
           </button>
@@ -302,8 +530,8 @@ function CallEditor({
       )}
       {editable && (
         <p className="text-sm text-ink-muted">
-          Guarda antes de analizar: la IA trabaja con lo último guardado. Al cerrar, la llamada ya
-          no se puede modificar.
+          Guarda antes de analizar: la IA trabaja con lo último guardado, también en las preguntas
+          que quitaste, cambiaste o agregaste. Al cerrar, la llamada ya no se puede modificar.
         </p>
       )}
       {call.analysis && (
@@ -355,6 +583,210 @@ function CallEditor({
           })}
         </section>
       )}
+    </div>
+  );
+}
+
+/** Sumar preguntas a la llamada: escritas aquí mismo o tomadas de un banco. */
+function AddQuestions({ items, onAdd }: { items: Item[]; onAdd: (extra: Item[]) => void }) {
+  const [mode, setMode] = useState<"write" | "bank" | null>(null);
+  const [text, setText] = useState("");
+  const [guidance, setGuidance] = useState("");
+  const [bankId, setBankId] = useState("");
+  const [chosen, setChosen] = useState<string[]>([]);
+  const banksQuery = useQuery({
+    queryKey: ["question-banks"],
+    queryFn: ({ signal }) => listBanks(signal),
+    enabled: mode === "bank",
+  });
+  const banks = (banksQuery.data ?? []).filter((bank) => bank.status === "ACTIVO");
+  const bank: Bank | undefined = banks.find((item) => item.id === bankId) ?? banks[0];
+  const inCall = new Map(items.map((item) => [item.id, item]));
+  const blank: Pick<Item, "omitted" | "answer" | "notes" | "notAsked"> = {
+    omitted: false,
+    answer: "",
+    notes: "",
+    notAsked: false,
+  };
+
+  return (
+    <div
+      role="group"
+      aria-label="Agregar preguntas a esta llamada"
+      className="flex flex-col gap-3 rounded-2xl bg-white/60 p-4"
+    >
+      <p className="font-medium">Agregar preguntas a esta llamada</p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={smallButtonClass}
+          aria-expanded={mode === "write"}
+          onClick={() => setMode(mode === "write" ? null : "write")}
+        >
+          Escribir una pregunta
+        </button>
+        <button
+          type="button"
+          className={smallButtonClass}
+          aria-expanded={mode === "bank"}
+          onClick={() => setMode(mode === "bank" ? null : "bank")}
+        >
+          Tomar de un banco
+        </button>
+      </div>
+      {mode === "write" && (
+        <div className="flex flex-col gap-2">
+          <label htmlFor="new-question-text" className="text-sm text-ink-muted">
+            Pregunta nueva
+          </label>
+          <textarea
+            id="new-question-text"
+            rows={2}
+            maxLength={1000}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            className={areaClass}
+          />
+          <label htmlFor="new-question-guidance" className="text-sm text-ink-muted">
+            Qué se espera de la respuesta (opcional)
+          </label>
+          <input
+            id="new-question-guidance"
+            maxLength={1000}
+            value={guidance}
+            onChange={(event) => setGuidance(event.target.value)}
+            className={fieldClass}
+          />
+          <div>
+            <button
+              type="button"
+              className={smallButtonClass}
+              disabled={!text.trim()}
+              onClick={() => {
+                onAdd([
+                  {
+                    ...blank,
+                    id: newId(),
+                    text: text.trim(),
+                    competency: "",
+                    guidance: guidance.trim(),
+                    source: "LLAMADA",
+                    bankId: null,
+                    bankName: "",
+                    base: null,
+                  },
+                ]);
+                setText("");
+                setGuidance("");
+              }}
+            >
+              Agregar a la llamada
+            </button>
+          </div>
+        </div>
+      )}
+      {mode === "bank" && (
+        <div className="flex flex-col gap-2">
+          {banksQuery.error && (
+            <p role="alert" className="text-accent-red-ink">
+              {describeError(banksQuery.error)}
+            </p>
+          )}
+          {banksQuery.data && banks.length === 0 && (
+            <p className="text-ink-muted">No tienes bancos activos. Se crean en «Bancos».</p>
+          )}
+          {bank && (
+            <>
+              <label htmlFor="add-from-bank" className="text-sm text-ink-muted">
+                Banco
+              </label>
+              <select
+                id="add-from-bank"
+                className={fieldClass}
+                value={bank.id}
+                onChange={(event) => {
+                  setBankId(event.target.value);
+                  setChosen([]);
+                }}
+              >
+                {banks.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} · {item.questions.length} preguntas
+                  </option>
+                ))}
+              </select>
+              <ul aria-label={`Preguntas de ${bank.name}`} className="flex flex-col gap-2">
+                {bank.questions.map((question) => {
+                  const present = inCall.get(question.id);
+                  return (
+                    <li key={question.id}>
+                      <label className="flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          className="mt-1 size-5 shrink-0 accent-ink"
+                          disabled={present !== undefined}
+                          checked={chosen.includes(question.id)}
+                          onChange={(event) =>
+                            setChosen(
+                              event.target.checked
+                                ? [...chosen, question.id]
+                                : chosen.filter((id) => id !== question.id),
+                            )
+                          }
+                        />
+                        <span>
+                          {question.text}
+                          {present && (
+                            <>
+                              {" "}
+                              <span className="text-sm text-ink-muted">
+                                {present.omitted
+                                  ? "(está quitada: vuelve a incluirla abajo)"
+                                  : "(ya está en la llamada)"}
+                              </span>
+                            </>
+                          )}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div>
+                <button
+                  type="button"
+                  className={smallButtonClass}
+                  disabled={chosen.length === 0}
+                  onClick={() => {
+                    onAdd(
+                      bank.questions
+                        .filter((question) => chosen.includes(question.id))
+                        .map((question) => ({
+                          ...blank,
+                          id: question.id,
+                          text: question.text,
+                          competency: question.competency,
+                          guidance: question.guidance,
+                          source: bank.general ? "GENERAL" : "BANCO",
+                          bankId: bank.id,
+                          bankName: bank.name,
+                          base: question.text,
+                        })),
+                    );
+                    setChosen([]);
+                  }}
+                >
+                  Agregar las elegidas
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      <p className="text-sm text-ink-muted">
+        Lo que agregues, quites o cambies vale solo para esta llamada (los bancos quedan igual) y
+        se guarda al pulsar «Guardar».
+      </p>
     </div>
   );
 }

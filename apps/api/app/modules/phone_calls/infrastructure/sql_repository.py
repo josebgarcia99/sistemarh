@@ -14,11 +14,14 @@ from app.modules.phone_calls.domain.models import (
     BankScope,
     BankStatus,
     BankVersion,
+    CallQuestion,
     CallSession,
     CallStatus,
     Question,
+    QuestionSource,
 )
 from app.modules.phone_calls.infrastructure.orm import (
+    CallSessionBankRow,
     CallSessionRow,
     QuestionBankRow,
     QuestionBankVersionRow,
@@ -87,16 +90,55 @@ def _call_values(call: CallSession) -> dict[str, object]:
         ensure_ascii=False,
     )
     values["general_version_ids"] = json.dumps([str(item) for item in call.general_version_ids])
+    values["questions"] = json.dumps(
+        [
+            {
+                "id": str(question.id),
+                "text": question.text,
+                "competency": question.competency,
+                "guidance": question.guidance,
+                "origin": question.origin,
+                "source": question.source.value,
+                "bank_id": str(question.bank_id) if question.bank_id else None,
+                "bank_name": question.bank_name,
+                "bank_version": question.bank_version,
+                "original_text": question.original_text,
+                "omitted": question.omitted,
+            }
+            for question in call.questions
+        ],
+        ensure_ascii=False,
+    )
     values["analysis"] = (
         json.dumps(call.analysis, ensure_ascii=False) if call.analysis is not None else None
     )
     return values
 
 
-def _to_call(row: CallSessionRow) -> CallSession:
+def _stored_questions(raw: str) -> tuple[CallQuestion, ...]:
+    return tuple(
+        CallQuestion(
+            id=uuid.UUID(item["id"]),
+            text=item["text"],
+            competency=item.get("competency", ""),
+            guidance=item.get("guidance", ""),
+            origin=item.get("origin", "MANUAL"),
+            source=QuestionSource(item.get("source", "BANCO")),
+            bank_id=uuid.UUID(item["bank_id"]) if item.get("bank_id") else None,
+            bank_name=item.get("bank_name", ""),
+            bank_version=item.get("bank_version"),
+            original_text=item.get("original_text"),
+            omitted=bool(item.get("omitted")),
+        )
+        for item in json.loads(raw)
+    )
+
+
+def _to_call(row: CallSessionRow, questions: tuple[CallQuestion, ...]) -> CallSession:
     values = {name: getattr(row, name) for name in _CALL}
     return CallSession(
         id=row.id,
+        questions=questions,
         status=CallStatus(row.status),
         answers=tuple(
             Answer(
@@ -193,9 +235,60 @@ class SqlPhoneCallRepository:
 
     # --- Llamadas ------------------------------------------------------------------------
 
+    def _questions(self, row: CallSessionRow) -> tuple[CallQuestion, ...]:
+        if row.questions is not None:
+            return _stored_questions(row.questions)
+        # Llamada anterior a las preguntas por llamada: se arma con las versiones
+        # de los bancos con que se abrió, primero las generales.
+        sources = [
+            (uuid.UUID(item), QuestionSource.GENERAL)
+            for item in json.loads(row.general_version_ids or "[]")
+        ]
+        if row.bank_version_id is not None:
+            sources.append((row.bank_version_id, QuestionSource.BANCO))
+        found: dict[uuid.UUID, CallQuestion] = {}
+        for version_id, source in sources:
+            version_row = self._session.get(QuestionBankVersionRow, version_id)
+            if version_row is None:
+                continue
+            bank_row = self._session.get(QuestionBankRow, version_row.bank_id)
+            for question in _to_version(version_row).questions:
+                found.setdefault(
+                    question.id,
+                    CallQuestion(
+                        id=question.id,
+                        text=question.text,
+                        competency=question.competency,
+                        guidance=question.guidance,
+                        origin=question.origin,
+                        source=source,
+                        bank_id=version_row.bank_id,
+                        bank_name=bank_row.name if bank_row is not None else "",
+                        bank_version=version_row.version_number,
+                    ),
+                )
+        return tuple(found.values())
+
+    def _link_banks(self, call: CallSession) -> None:
+        """Anota los bancos de los que la llamada tomó preguntas. Solo agrega."""
+        wanted = {
+            question.bank_id
+            for question in call.questions
+            if question.source is QuestionSource.BANCO and question.bank_id is not None
+        }
+        if not wanted:
+            return
+        linked = set(
+            self._session.execute(
+                sa.select(CallSessionBankRow.bank_id).where(CallSessionBankRow.call_id == call.id)
+            ).scalars()
+        )
+        for bank_id in sorted(wanted - linked, key=str):
+            self._session.add(CallSessionBankRow(call_id=call.id, bank_id=bank_id))
+
     def call(self, call_id: uuid.UUID) -> CallSession | None:
         row = self._session.get(CallSessionRow, call_id)
-        return _to_call(row) if row is not None else None
+        return _to_call(row, self._questions(row)) if row is not None else None
 
     def calls(self, application_id: uuid.UUID) -> list[CallSession]:
         rows = self._session.execute(
@@ -203,10 +296,12 @@ class SqlPhoneCallRepository:
             .where(CallSessionRow.application_id == application_id)
             .order_by(CallSessionRow.called_at.desc(), CallSessionRow.created_at.desc())
         ).scalars()
-        return [_to_call(row) for row in rows]
+        return [_to_call(row, self._questions(row)) for row in rows]
 
     def add_call(self, call: CallSession) -> None:
         self._session.add(CallSessionRow(id=call.id, **_call_values(call)))
+        self._session.flush()
+        self._link_banks(call)
         self._session.flush()
 
     def save_call(self, call: CallSession) -> None:
@@ -215,4 +310,5 @@ class SqlPhoneCallRepository:
             raise LookupError("La llamada no existe.")
         for name, value in _call_values(call).items():
             setattr(row, name, value)
+        self._link_banks(call)
         self._session.flush()

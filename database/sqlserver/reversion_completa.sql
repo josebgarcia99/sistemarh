@@ -1,7 +1,7 @@
 /* ============================================================================
    Sistema Integral de Reclutamiento e IA - Reversión completa (DESTRUCTIVO)
-   Versión del esquema: 0017 -> (vacía)
-   Generado: 2026-11-16 04:00 (UTC) con scripts/generate_sql.py
+   Versión del esquema: 0018 -> (vacía)
+   Generado: 2026-11-17 18:26 (UTC) con scripts/generate_sql.py
 
    ELIMINA todas las tablas y esquemas del sistema, con todos sus datos.
    Solo para entornos de prueba. Nunca ejecutar en producción sin respaldo.
@@ -24,14 +24,56 @@ SET XACT_ABORT ON;
 GO
 
 -- Protección: si la base no está en la versión esperada, no se ejecuta nada.
-IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0017')
+IF OBJECT_ID(N'dbo.alembic_version') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.alembic_version WHERE version_num = N'0018')
 BEGIN
-    RAISERROR(N'La base no esta en la version 0017. No se aplico ningun cambio.', 16, 1);
+    RAISERROR(N'La base no esta en la version 0018. No se aplico ningun cambio.', 16, 1);
     SET NOEXEC ON;
 END
 GO
 
 BEGIN TRANSACTION;
+
+-- Running downgrade 0018 -> 0017
+
+DROP INDEX ix_call_session_banks_bank ON recruitment.call_session_banks;
+
+GO
+
+DROP TABLE recruitment.call_session_banks;
+
+GO
+
+DROP INDEX ix_call_sessions_bank_version ON recruitment.call_sessions;
+
+GO
+
+ALTER TABLE recruitment.call_sessions DROP CONSTRAINT fk_call_sessions_bank_version;
+
+GO
+
+ALTER TABLE recruitment.call_sessions ALTER COLUMN bank_version_id UNIQUEIDENTIFIER NOT NULL;
+
+GO
+
+ALTER TABLE recruitment.call_sessions ADD CONSTRAINT fk_call_sessions_bank_version FOREIGN KEY(bank_version_id) REFERENCES recruitment.question_bank_versions (id);
+
+GO
+
+CREATE INDEX ix_call_sessions_bank_version ON recruitment.call_sessions (bank_version_id);
+
+GO
+
+ALTER TABLE recruitment.call_sessions DROP CONSTRAINT ck_call_sessions_questions_json;
+
+GO
+
+ALTER TABLE recruitment.call_sessions DROP COLUMN questions;
+
+GO
+
+UPDATE alembic_version SET version_num='0017' WHERE alembic_version.version_num = '0018';
+
+GO
 
 -- Running downgrade 0017 -> 0016
 

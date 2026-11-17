@@ -11,8 +11,8 @@ Llamadas: pertenecen a una postulación y siguen el permiso de su vacante
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from app.core.exceptions.errors import (
@@ -27,6 +27,7 @@ from app.modules.audit.application.service import AuditLog
 from app.modules.audit.domain.models import AuditAction, AuditResult
 from app.modules.phone_calls.domain import assistant
 from app.modules.phone_calls.domain.models import (
+    MAX_CALL_QUESTIONS,
     Answer,
     Applications,
     Assistant,
@@ -34,11 +35,13 @@ from app.modules.phone_calls.domain.models import (
     BankScope,
     BankStatus,
     BankVersion,
+    CallQuestion,
     CallSession,
     CallStatus,
     JobProfiles,
     PhoneCallRepository,
     Question,
+    QuestionSource,
 )
 from app.modules.vacancies.application.access import VacancyAccess
 from app.modules.vacancies.domain.models import AccessLevel, UserInfo
@@ -65,13 +68,20 @@ class Proposal:
 @dataclass(frozen=True)
 class CallView:
     call: CallSession
-    version: BankVersion
-    bank: Bank
-    # Todas las preguntas de la llamada: primero las generales de la empresa y
-    # después las del banco elegido.
-    questions: tuple[Question, ...] = ()
-    # Cuáles de esas preguntas son generales.
-    general_ids: frozenset[uuid.UUID] = frozenset()
+
+    @property
+    def questions(self) -> tuple[CallQuestion, ...]:
+        """Todas las preguntas de la llamada, incluidas las quitadas."""
+        return self.call.questions
+
+    @property
+    def sources(self) -> tuple[str, ...]:
+        """De dónde salen las preguntas que sí se hacen: los nombres de los
+        bancos, en orden, y al final las escritas para la llamada."""
+        names = [q.bank_name for q in self.call.active_questions if q.bank_name]
+        if any(q.source is QuestionSource.LLAMADA for q in self.call.active_questions):
+            names.append("Preguntas escritas para esta llamada")
+        return tuple(dict.fromkeys(names))
 
 
 def _clean(text: object, limit: int) -> str:
@@ -361,23 +371,9 @@ class PhoneCallService:
         self._access.require(actor, call.vacancy_id, minimum)
         return call
 
-    def _view(self, call: CallSession) -> CallView:
-        version = self._repo.version(call.bank_version_id)
-        bank = self._repo.bank(version.bank_id) if version else None
-        if version is None or bank is None:
-            raise NotFoundError("El banco de preguntas de la llamada ya no existe.")
-        general: list[Question] = []
-        for version_id in call.general_version_ids:
-            extra = self._repo.version(version_id)
-            if extra is not None:
-                general += extra.questions
-        return CallView(
-            call,
-            version,
-            bank,
-            questions=(*general, *version.questions),
-            general_ids=frozenset(question.id for question in general),
-        )
+    @staticmethod
+    def _view(call: CallSession) -> CallView:
+        return CallView(call)
 
     def calls(self, actor: UserInfo, application_id: uuid.UUID) -> list[CallView]:
         application = self._applications.get(application_id)
@@ -389,48 +385,79 @@ class PhoneCallService:
     def call(self, actor: UserInfo, call_id: uuid.UUID) -> CallView:
         return self._view(self._call(actor, call_id, AccessLevel.LECTURA))
 
+    def _usable_bank(self, actor: UserInfo, bank_id: uuid.UUID) -> tuple[Bank, BankVersion]:
+        """Un banco del que la persona puede tomar preguntas, con su versión vigente."""
+        bank = self._bank(actor, bank_id)
+        if bank.status is BankStatus.ARCHIVADO:
+            raise ConflictError(f"El banco «{bank.name}» está archivado; elige otro.")
+        return bank, self._repo.versions(bank_id)[0]
+
+    @staticmethod
+    def _from_bank(bank: Bank, version: BankVersion, question: Question) -> CallQuestion:
+        general = bank.scope is BankScope.GENERAL
+        return CallQuestion(
+            id=question.id,
+            text=question.text,
+            competency=question.competency,
+            guidance=question.guidance,
+            origin=question.origin,
+            source=QuestionSource.GENERAL if general else QuestionSource.BANCO,
+            bank_id=bank.id,
+            bank_name=bank.name,
+            bank_version=version.version_number,
+        )
+
     def open_call(
         self,
         actor: UserInfo,
         application_id: uuid.UUID,
-        bank_id: uuid.UUID,
+        bank_ids: Sequence[uuid.UUID] = (),
         *,
         ip: str | None = None,
     ) -> CallView:
+        """Abre una llamada. Sus preguntas son las generales de la empresa
+        vigentes hoy y, después, las de los bancos elegidos (puede no elegirse
+        ninguno). A partir de ahí la lista es propia de la llamada."""
         application = self._applications.get(application_id)
         if application is None:
             raise NotFoundError("La postulación no existe.")
         self._access.require(actor, application.vacancy_id, AccessLevel.COLABORACION)
         if not application.active:
             raise ConflictError("La postulación no está activa.")
-        bank = self._bank(actor, bank_id)
-        if bank.status is BankStatus.ARCHIVADO:
-            raise ConflictError("El banco está archivado; elige otro.")
-        version = self._repo.versions(bank_id)[0]
-        # Las preguntas generales de la empresa vigentes hoy se suman a la llamada.
+        chosen = [self._usable_bank(actor, bank_id) for bank_id in dict.fromkeys(bank_ids)]
         general = sorted(
             (
                 item
                 for item in self._repo.banks()
-                if item.scope is BankScope.GENERAL
-                and item.status is BankStatus.ACTIVO
-                and item.id != bank.id
+                if item.scope is BankScope.GENERAL and item.status is BankStatus.ACTIVO
             ),
             key=lambda item: (item.created_at, item.name),
         )
         general_versions = self._repo.latest_versions([item.id for item in general])
+        questions: dict[uuid.UUID, CallQuestion] = {}
+        for bank, version in (*((item, general_versions[item.id]) for item in general), *chosen):
+            for question in version.questions:
+                questions.setdefault(question.id, self._from_bank(bank, version, question))
+        if len(questions) > MAX_CALL_QUESTIONS:
+            raise ValidationFailedError(
+                f"Una llamada admite como máximo {MAX_CALL_QUESTIONS} preguntas; "
+                "elige menos bancos."
+            )
+        first = next((v for bank, v in chosen if bank.scope is not BankScope.GENERAL), None)
         now = self._clock()
         call = CallSession(
             id=new_sequential_uuid(),
             application_id=application.id,
             vacancy_id=application.vacancy_id,
-            bank_version_id=version.id,
+            bank_version_id=first.id if first is not None else None,
             status=CallStatus.BORRADOR,
             called_at=now,
             created_at=now,
             created_by=actor.id,
             updated_at=now,
-            general_version_ids=tuple(general_versions[item.id].id for item in general),
+            questions=tuple(questions.values()),
+            # Referencia de las versiones generales usadas (la columna guarda hasta 20).
+            general_version_ids=tuple(general_versions[item.id].id for item in general)[:20],
         )
         self._repo.add_call(call)
         self._audit.record(
@@ -442,12 +469,90 @@ class PhoneCallService:
             details={
                 "vacante": str(call.vacancy_id),
                 "postulacion": str(application.id),
-                "banco": str(bank.id),
-                "version": version.version_number,
-                "preguntas_generales": len(call.general_version_ids),
+                "bancos": [str(bank.id) for bank, _ in chosen],
+                "preguntas": len(call.questions),
+                "preguntas_generales": sum(
+                    1 for q in call.questions if q.source is QuestionSource.GENERAL
+                ),
             },
         )
         return self._view(call)
+
+    def _merge_questions(
+        self,
+        actor: UserInfo,
+        current: tuple[CallQuestion, ...],
+        wanted: list[dict[str, object]],
+    ) -> tuple[CallQuestion, ...]:
+        """La lista de preguntas de la llamada tal como la dejó la persona.
+
+        - Una pregunta que ya estaba conserva su origen; cambia su redacción y
+          si está quitada. Si venía de un banco, se guarda la redacción original.
+        - Una pregunta nueva con banco se toma de la versión vigente de ese banco.
+        - Una pregunta nueva sin banco es una escrita solo para esta llamada.
+        - Las que ya estaban y no se mencionan se conservan, al final."""
+        existing = {question.id: question for question in current}
+        banks: dict[uuid.UUID, tuple[Bank, BankVersion]] = {}
+        result: dict[uuid.UUID, CallQuestion] = {}
+        for item in wanted:
+            question_id = item.get("id")
+            if not isinstance(question_id, uuid.UUID) or question_id in result:
+                raise ValidationFailedError("Hay preguntas repetidas en la llamada.")
+            text = _clean(item.get("text"), 1000)
+            if not text:
+                raise ValidationFailedError("Hay preguntas sin texto.")
+            omitted = item.get("omitted") is True
+            bank_id = item.get("bank_id")
+            if question_id in existing:
+                old = existing[question_id]
+                if old.source is QuestionSource.LLAMADA:
+                    new = replace(
+                        old,
+                        text=text,
+                        competency=_clean(item.get("competency"), 100),
+                        guidance=_clean(item.get("guidance"), 1000),
+                        omitted=omitted,
+                    )
+                else:
+                    base = old.original_text or old.text
+                    new = replace(
+                        old,
+                        text=text,
+                        original_text=None if text == base else base,
+                        omitted=omitted,
+                    )
+            elif isinstance(bank_id, uuid.UUID):
+                if bank_id not in banks:
+                    banks[bank_id] = self._usable_bank(actor, bank_id)
+                bank, version = banks[bank_id]
+                source = next((q for q in version.questions if q.id == question_id), None)
+                if source is None:
+                    raise ValidationFailedError(
+                        f"Una pregunta ya no está en el banco «{bank.name}». Vuelve a elegirla."
+                    )
+                new = replace(
+                    self._from_bank(bank, version, source),
+                    text=text,
+                    original_text=None if text == source.text else source.text,
+                    omitted=omitted,
+                )
+            else:
+                new = CallQuestion(
+                    id=question_id,
+                    text=text,
+                    competency=_clean(item.get("competency"), 100),
+                    guidance=_clean(item.get("guidance"), 1000),
+                    source=QuestionSource.LLAMADA,
+                    omitted=omitted,
+                )
+            result[question_id] = new
+        for question in current:
+            result.setdefault(question.id, question)
+        if len(result) > MAX_CALL_QUESTIONS:
+            raise ValidationFailedError(
+                f"Una llamada admite como máximo {MAX_CALL_QUESTIONS} preguntas."
+            )
+        return tuple(result.values())
 
     def save_call(
         self,
@@ -457,15 +562,19 @@ class PhoneCallService:
         answers: list[dict[str, object]],
         notes: str | None,
         called_at: datetime | None,
+        questions: list[dict[str, object]] | None = None,
         close: bool = False,
         ip: str | None = None,
     ) -> CallView:
-        """Guarda lo capturado. Con ``close`` la llamada queda cerrada y fija."""
+        """Guarda lo capturado. Con ``questions`` cambia además la lista de
+        preguntas de esta llamada. Con ``close`` queda cerrada y fija."""
         call = self._call(actor, call_id, AccessLevel.COLABORACION)
         if call.status is CallStatus.CERRADA:
             raise ConflictError("La llamada está cerrada y ya no se modifica.")
-        view = self._view(call)
-        valid = {question.id for question in view.questions}
+        asked_before = [(q.id, q.text) for q in call.active_questions]
+        if questions is not None:
+            call.questions = self._merge_questions(actor, call.questions, questions)
+        valid = {question.id for question in call.questions}
         cleaned: dict[uuid.UUID, Answer] = {}
         for item in answers:
             question_id = item.get("question_id")
@@ -477,10 +586,15 @@ class PhoneCallService:
                 notes=_clean(item.get("notes"), 1000),
                 not_asked=item.get("not_asked") is True,
             )
+        active = call.active_questions
         if close:
+            if not active:
+                raise ValidationFailedError(
+                    "Para cerrar, la llamada debe tener al menos una pregunta."
+                )
             pending = [
                 number
-                for number, question in enumerate(view.questions, start=1)
+                for number, question in enumerate(active, start=1)
                 if not (
                     (answer := cleaned.get(question.id)) and (answer.not_asked or answer.answer)
                 )
@@ -495,9 +609,16 @@ class PhoneCallService:
             if called_at > now:
                 raise ValidationFailedError("La fecha de la llamada no puede ser futura.")
             call.called_at = called_at
-        call.answers = tuple(cleaned[q.id] for q in view.questions if q.id in cleaned)
+        # Mientras es borrador, lo anotado en una pregunta quitada se conserva por
+        # si se vuelve a incluir. Al cerrar solo queda lo de las preguntas hechas.
+        kept = active if close else call.questions
+        call.answers = tuple(cleaned[q.id] for q in kept if q.id in cleaned)
         call.notes = _block(notes, 6000)
         call.updated_at = now
+        # El análisis numera las preguntas: si cambiaron, ya no corresponde.
+        stale = call.analysis is not None and asked_before != [(q.id, q.text) for q in active]
+        if stale:
+            call.analysis, call.analysis_at, call.analysis_by = None, None, None
         if close:
             call.status = CallStatus.CERRADA
             call.closed_at = now
@@ -508,9 +629,17 @@ class PhoneCallService:
             resource_type="llamada",
             resource_id=call.id,
             ip=ip,
-            details={"vacante": str(call.vacancy_id), "respuestas": len(call.answers)},
+            details={
+                "vacante": str(call.vacancy_id),
+                "respuestas": len(call.answers),
+                "preguntas": len(active),
+                "quitadas": len(call.questions) - len(active),
+                "redaccion_cambiada": sum(1 for q in active if q.original_text is not None),
+                "escritas": sum(1 for q in active if q.source is QuestionSource.LLAMADA),
+                "analisis_retirado": stale,
+            },
         )
-        return view
+        return self._view(call)
 
     def analyze_call(
         self, actor: UserInfo, call_id: uuid.UUID, *, ip: str | None = None
@@ -519,7 +648,10 @@ class PhoneCallService:
         falló, el motivo. El análisis anterior se sustituye solo si este sirve."""
         call = self._call(actor, call_id, AccessLevel.COLABORACION)
         view = self._view(call)
-        if not any(answer.answer for answer in call.answers):
+        asked = call.active_questions
+        asked_ids = {question.id for question in asked}
+        answers = tuple(answer for answer in call.answers if answer.question_id in asked_ids)
+        if not any(answer.answer for answer in answers):
             raise ValidationFailedError(
                 "Captura y guarda al menos una respuesta antes de analizar."
             )
@@ -531,7 +663,7 @@ class PhoneCallService:
         answer = self._ai.ask(
             assistant.CALL_ANALYSIS,
             system=assistant.ANALYSIS_SYSTEM,
-            user=assistant.analysis_request(view.questions, call.answers, call.notes, application),
+            user=assistant.analysis_request(asked, answers, call.notes, application),
             vacancy_id=call.vacancy_id,
             actor_user_id=actor.id,
             # Lleva lo dicho por una persona candidata: misma regla que un documento.
@@ -539,7 +671,7 @@ class PhoneCallService:
         )
         proposal = self._proposal(
             answer,
-            lambda text: assistant.analysis_from_answer(text, view.questions, call.answers),
+            lambda text: assistant.analysis_from_answer(text, asked, answers),
         )
         if proposal.content is not None:
             call.analysis = proposal.content  # type: ignore[assignment]

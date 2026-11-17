@@ -136,11 +136,25 @@ FROM (
     JOIN files.file_assets AS f ON f.id = a.cv_file_id
     WHERE f.vacancy_id <> a.vacancy_id
 
+    -- Llamadas -----------------------------------------------------------------
+    UNION ALL
+    SELECT '18. Llamadas sin banco y sin preguntas propias', COUNT(*)
+    FROM recruitment.call_sessions AS c
+    WHERE c.bank_version_id IS NULL AND c.questions IS NULL
+    UNION ALL
+    SELECT '19. Llamadas con banco que no quedaron ligadas a el', COUNT(*)
+    FROM recruitment.call_sessions AS c
+    JOIN recruitment.question_bank_versions AS v ON v.id = c.bank_version_id
+    WHERE NOT EXISTS (
+        SELECT 1 FROM recruitment.call_session_banks AS b
+        WHERE b.call_id = c.id AND b.bank_id = v.bank_id
+    )
+
     -- Version del esquema ------------------------------------------------------
     UNION ALL
-    SELECT '18. La version del esquema debe ser 0017',
+    SELECT '20. La version del esquema debe ser 0018',
            CASE WHEN EXISTS (
-                SELECT 1 FROM dbo.alembic_version AS x WHERE x.version_num = '0017'
+                SELECT 1 FROM dbo.alembic_version AS x WHERE x.version_num = '0018'
            ) THEN 0 ELSE 1 END
 ) AS v
 ORDER BY v.validacion;

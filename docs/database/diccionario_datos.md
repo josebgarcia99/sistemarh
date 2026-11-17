@@ -1,6 +1,6 @@
 # Diccionario de datos
 
-Describe las tablas que existen hoy (versión de esquema `0017`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
+Describe las tablas que existen hoy (versión de esquema `0018`). Se amplía con cada migración. Los scripts están en `database/sqlserver/`.
 
 Convenciones: las claves `UNIQUEIDENTIFIER` las genera la aplicación en orden creciente; las fechas son `DATETIME2(3)` en UTC; nada se borra en cascada. "Sí" en la columna Oblig. significa `NOT NULL`.
 
@@ -476,7 +476,8 @@ Una llamada telefónica de una postulación.
 | --- | --- | --- | --- |
 | `id` | `UNIQUEIDENTIFIER` | Sí | Clave primaria. |
 | `application_id`, `vacancy_id` | `UNIQUEIDENTIFIER` | Sí | Postulación y su vacante. |
-| `bank_version_id` | `UNIQUEIDENTIFIER` | Sí | Versión exacta del banco con la que se hizo la llamada. |
+| `bank_version_id` | `UNIQUEIDENTIFIER` | No | Versión del primer banco elegido al abrir la llamada, como referencia. Desde la versión `0018` admite vacío: una llamada puede abrirse solo con las preguntas generales o con preguntas escritas. Las preguntas de la llamada están en `questions`. |
+| `questions` | `NVARCHAR(MAX)` | No | Desde la versión `0018`. La lista propia de preguntas de la llamada, en JSON (`ISJSON`), en orden: identificador, texto, competencia, qué se espera, origen (`GENERAL`, `BANCO` o `LLAMADA`, esta última si se escribió solo para la llamada), banco del que se tomó (identificador, nombre y versión de ese momento), redacción del banco si se cambió para la llamada y si se quitó de la llamada. Vacío en las llamadas anteriores a la `0018`: sus preguntas se leen de `general_version_ids` y `bank_version_id`, y la columna se llena la siguiente vez que la llamada se guarda. |
 | `general_version_ids` | `VARCHAR(800)` | Sí | Desde la versión `0017`. Lista JSON con las versiones de los bancos generales que se incluyeron al abrir la llamada (`[]` si no había). Así la llamada conserva sus preguntas aunque después cambien las generales. |
 | `status` | `VARCHAR(20)` | Sí | `BORRADOR` o `CERRADA`. Cerrada ya no se modifica. |
 | `called_at` | `DATETIME2(3)` | Sí | Fecha de la llamada. |
@@ -484,6 +485,15 @@ Una llamada telefónica de una postulación.
 | `answers` | `NVARCHAR(MAX)` | Sí | Respuestas en JSON (`ISJSON`): pregunta, respuesta, observación y si no se realizó. |
 | `analysis`, `analysis_at`, `analysis_by` | | No | Último análisis de IA, en JSON, con su fecha y quién lo pidió. Incluye `medicion`: la cobertura de la llamada (de 0 a 100) y el nivel de cada pregunta contestada que tenía anotado «qué se espera de la respuesta». La IA propone el nivel; el número lo calcula el sistema. |
 | `created_at`, `created_by`, `updated_at`, `closed_at` | | | Registro y cierre. |
+
+### `recruitment.call_session_banks`
+
+Desde la versión `0018`. De qué bancos tomó preguntas cada llamada (sin contar los generales). La usa el filtro «banco de preguntas» de los indicadores. La aplicación solo agrega filas: el vínculo se conserva aunque después se quiten esas preguntas de la llamada. La migración la llena con las llamadas que ya existían.
+
+| Columna | Tipo | Oblig. | Descripción |
+| --- | --- | --- | --- |
+| `call_id` | `UNIQUEIDENTIFIER` | Sí | Llamada (`call_sessions.id`). Parte de la clave primaria. |
+| `bank_id` | `UNIQUEIDENTIFIER` | Sí | Banco (`question_banks.id`). Parte de la clave primaria; con índice propio. |
 
 ### `recruitment.form_templates` y `recruitment.form_template_versions`
 

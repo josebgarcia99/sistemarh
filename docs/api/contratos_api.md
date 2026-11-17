@@ -23,7 +23,7 @@ Versión de la API: `0.8.0`. Rutas: 113. Todas cuelgan de `/api/v1`.
 | Método | Ruta | Qué hace | Entrada | Respuesta |
 | --- | --- | --- | --- | --- |
 | GET | `/applications/{application_id}/calls` | Llamadas de una postulación | — | 200 lista de `CallOut` |
-| POST | `/applications/{application_id}/calls` | Abre una llamada con la versión vigente de un banco | `NewCallIn` | 201 `CallOut` |
+| POST | `/applications/{application_id}/calls` | Abre una llamada con las preguntas generales y las de los bancos elegidos | `NewCallIn` | 201 `CallOut` |
 | GET | `/calls/{call_id}` | Una llamada | — | 200 `CallOut` |
 | PUT | `/calls/{call_id}` | Guarda o cierra la llamada | `CallIn` | 200 `CallOut` |
 | POST | `/calls/{call_id}/analysis` | La IA resume lo que aporta la llamada; no decide nada | — | 200 `CallOut` |

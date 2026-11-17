@@ -115,7 +115,6 @@ class AssessmentApplications:
         )
         calls = []
         for call in reversed(self._calls.calls(application_id)):
-            version = self._calls.version(call.bank_version_id)
             answers = {answer.question_id: answer for answer in call.answers}
             rows = [
                 {
@@ -123,7 +122,7 @@ class AssessmentApplications:
                     "respuesta": answers[question.id].answer,
                     "observacion": answers[question.id].notes,
                 }
-                for question in (version.questions if version else ())
+                for question in call.active_questions
                 if question.id in answers and answers[question.id].answer
             ]
             if rows or call.notes:

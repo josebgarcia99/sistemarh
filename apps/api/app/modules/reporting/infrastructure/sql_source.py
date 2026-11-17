@@ -20,9 +20,9 @@ from app.modules.cv_processing.infrastructure.orm import CvBatchItemRow, CvBatch
 from app.modules.evaluation_setup.infrastructure.orm import PromptVersionRow
 from app.modules.file_management.infrastructure.orm import FileAssetRow
 from app.modules.phone_calls.infrastructure.orm import (
+    CallSessionBankRow,
     CallSessionRow,
     QuestionBankRow,
-    QuestionBankVersionRow,
 )
 from app.modules.recruitment.infrastructure.orm import (
     ApplicationMovementRow,
@@ -364,12 +364,9 @@ class SqlReportingSource:
         return set(
             self._session.execute(
                 sa.select(CallSessionRow.application_id)
-                .join(
-                    QuestionBankVersionRow,
-                    QuestionBankVersionRow.id == CallSessionRow.bank_version_id,
-                )
+                .join(CallSessionBankRow, CallSessionBankRow.call_id == CallSessionRow.id)
                 .where(
-                    QuestionBankVersionRow.bank_id == bank_id,
+                    CallSessionBankRow.bank_id == bank_id,
                     CallSessionRow.vacancy_id.in_(_selected(selection)),
                 )
             ).scalars()
@@ -416,8 +413,8 @@ class SqlReportingSource:
         ).all()
         banks = self._session.execute(
             sa.select(QuestionBankRow.id, QuestionBankRow.name)
-            .join(QuestionBankVersionRow, QuestionBankVersionRow.bank_id == QuestionBankRow.id)
-            .join(CallSessionRow, CallSessionRow.bank_version_id == QuestionBankVersionRow.id)
+            .join(CallSessionBankRow, CallSessionBankRow.bank_id == QuestionBankRow.id)
+            .join(CallSessionRow, CallSessionRow.id == CallSessionBankRow.call_id)
             .where(CallSessionRow.vacancy_id.in_(ids))
             .distinct()
             .order_by(QuestionBankRow.name)

@@ -45,6 +45,7 @@ Cómo se aplica: (1) la política de documentos y evaluaciones solo le concede l
 | Cargar CV e iniciar lotes | Sí | Sí | Sí | No | No |
 | Mover candidatos de etapa y registrar incidencias | Sí | Sí | Sí | No | No |
 | Registrar llamadas, psicometría, entrevistas y pruebas | Sí | Sí | Sí | No | No |
+| En una llamada: quitar preguntas, cambiar su redacción, sumar las de otros bancos o escribir nuevas (solo cambia esa llamada) | Sí | Sí | Sí | No | No |
 | Registrar el resultado final | Sí | Sí | Sí | No | No |
 | Ver documentos psicométricos y socioeconómicos | Con finalidad registrada | Sí | Solo con permiso adicional | Solo con permiso adicional | No |
 

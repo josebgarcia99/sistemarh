@@ -73,8 +73,10 @@ class CallSessionRow(Base):
     vacancy_id: Mapped[uuid.UUID] = mapped_column(
         GUID, sa.ForeignKey(f"{SCHEMA_VACANCY}.vacancies.id")
     )
-    bank_version_id: Mapped[uuid.UUID] = mapped_column(
-        GUID, sa.ForeignKey(f"{_S}.question_bank_versions.id")
+    # Primer banco elegido al abrir la llamada (referencia). Vacío si la llamada
+    # se abrió solo con las preguntas generales o con preguntas escritas.
+    bank_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        GUID, sa.ForeignKey(f"{_S}.question_bank_versions.id"), nullable=True
     )
     status: Mapped[str] = mapped_column(sa.String(20))
     called_at: Mapped[datetime] = mapped_column(UTCDateTime)
@@ -83,6 +85,10 @@ class CallSessionRow(Base):
     answers: Mapped[str] = mapped_column(long_text())
     # Lista JSON con las versiones de los bancos generales incluidos en la llamada.
     general_version_ids: Mapped[str] = mapped_column(sa.String(800), default="[]")
+    # Las preguntas propias de la llamada, en JSON: texto, de dónde salió cada
+    # una, si se cambió su redacción y si se quitó. Vacío en las llamadas
+    # anteriores a la versión 0018: sus preguntas se leen de los bancos.
+    questions: Mapped[str | None] = mapped_column(long_text(), nullable=True)
     analysis: Mapped[str | None] = mapped_column(long_text(), nullable=True)
     analysis_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     analysis_by: Mapped[uuid.UUID | None] = mapped_column(
@@ -92,3 +98,22 @@ class CallSessionRow(Base):
     created_by: Mapped[uuid.UUID] = mapped_column(GUID, sa.ForeignKey(_USER_FK))
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
     closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+
+class CallSessionBankRow(Base):
+    """Bancos de los que una llamada tomó preguntas. Sirve para filtrar reportes
+    por banco. Solo se agregan filas: el vínculo queda aunque después se quiten
+    esas preguntas de la llamada."""
+
+    __tablename__ = "call_session_banks"
+    __table_args__ = (
+        sa.Index("ix_call_session_banks_bank", "bank_id"),
+        {"schema": _S},
+    )
+
+    call_id: Mapped[uuid.UUID] = mapped_column(
+        GUID, sa.ForeignKey(f"{_S}.call_sessions.id"), primary_key=True
+    )
+    bank_id: Mapped[uuid.UUID] = mapped_column(
+        GUID, sa.ForeignKey(f"{_S}.question_banks.id"), primary_key=True
+    )

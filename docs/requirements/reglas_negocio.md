@@ -42,7 +42,8 @@ Todo lo que influye en una evaluación se versiona y lo aprobado no se modifica.
 | Prompt | Borrador, en revisión, aprobado, archivado; lo aprobado es inmutable | Cada lote guarda su versión |
 | Rúbrica y umbral | Versión nueva ante cualquier cambio de criterio o peso | Cada evaluación guarda su versión |
 | Flujo de etapas | Plantilla con versiones | Cada convocatoria usa la versión con la que se abrió |
-| Banco de preguntas | Editar o quitar preguntas crea una versión | Cada llamada guarda la versión usada |
+| Banco de preguntas | Editar o quitar preguntas crea una versión | Cada llamada guarda su propia lista de preguntas |
+| Preguntas de una llamada | Empieza con las generales de la empresa y las de los bancos elegidos; en la llamada se quitan, se redactan distinto, se suman de otros bancos o se escriben nuevas | Los cambios valen solo para esa llamada: los bancos no se modifican. Una pregunta quitada no se analiza ni cuenta para cerrar |
 | Plantilla de estudio | Versión nueva ante cualquier cambio de campos | Cada estudio guarda su versión |
 | Evaluación de CV | Solo inserción; un reanálisis crea otra evaluación | La original siempre se puede consultar |
 | Archivo | Versiones con su propio hash | El original nunca se sobrescribe |

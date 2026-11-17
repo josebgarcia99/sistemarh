@@ -56,6 +56,19 @@ BANK = [
     ),
 ]
 
+# En cada llamada de ejemplo se cambia la redacción de una pregunta del banco y
+# se escribe una pregunta solo para esa llamada, para que se vea cómo queda.
+CALL_REWORDED = (
+    "¿Cuándo podrías empezar y cuál es tu expectativa de sueldo?",
+    "¿Cuándo podrías empezar y cuál es tu expectativa de sueldo mensual, ya con prestaciones?",
+)
+# (pregunta, qué se espera de la respuesta, respuesta de ejemplo)
+CALL_WRITTEN = (
+    "¿Puedes trabajar en sitio de lunes a viernes?",
+    "Un sí o un no claro y, si hay limitaciones, cuáles.",
+    "Sí, sin problema; vivo a veinte minutos de la oficina.",
+)
+
 
 @dataclass(frozen=True)
 class Person:

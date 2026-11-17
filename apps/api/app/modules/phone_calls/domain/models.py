@@ -5,6 +5,10 @@
   versión con la que se hizo.
 - Una llamada pertenece a una postulación. Mientras es borrador se puede
   seguir capturando; al cerrarla queda fija.
+- Cada llamada tiene su propia lista de preguntas. Empieza con las generales
+  de la empresa y las de los bancos elegidos; en esa llamada se pueden quitar,
+  redactar distinto, sumar preguntas de otros bancos o escribir nuevas. Nada
+  de eso cambia los bancos.
 - El análisis de IA resume lo dicho en la llamada. No decide nada.
 """
 
@@ -21,7 +25,7 @@ class BankScope(StrEnum):
     PRIVADO = "PRIVADO"
     COMPARTIDO = "COMPARTIDO"
     # Preguntas generales de la empresa: se agregan solas a toda llamada, antes
-    # de las del banco elegido. Solo las administran los administradores.
+    # de las de los bancos elegidos.
     GENERAL = "GENERAL"
 
 
@@ -65,6 +69,39 @@ class BankVersion:
     change_note: str | None = None
 
 
+class QuestionSource(StrEnum):
+    """De dónde salió una pregunta de la llamada."""
+
+    GENERAL = "GENERAL"  # banco general de la empresa
+    BANCO = "BANCO"  # banco elegido para la llamada
+    LLAMADA = "LLAMADA"  # escrita solo para esta llamada
+
+
+# Tope de preguntas de una llamada, contando las quitadas.
+MAX_CALL_QUESTIONS = 80
+
+
+@dataclass(frozen=True)
+class CallQuestion:
+    """Una pregunta tal como quedó en una llamada."""
+
+    id: uuid.UUID
+    text: str
+    competency: str = ""
+    guidance: str = ""
+    origin: str = "MANUAL"
+    source: QuestionSource = QuestionSource.BANCO
+    # Banco del que se tomó (nombre y versión de ese momento); vacío si se
+    # escribió para la llamada.
+    bank_id: uuid.UUID | None = None
+    bank_name: str = ""
+    bank_version: int | None = None
+    # Redacción del banco, cuando se cambió para esta llamada.
+    original_text: str | None = None
+    # Quitada de esta llamada: no se pregunta, no se analiza y no cuenta.
+    omitted: bool = False
+
+
 class CallStatus(StrEnum):
     BORRADOR = "BORRADOR"
     CERRADA = "CERRADA"
@@ -83,7 +120,9 @@ class CallSession:
     id: uuid.UUID
     application_id: uuid.UUID
     vacancy_id: uuid.UUID
-    bank_version_id: uuid.UUID
+    # Primer banco elegido al abrir la llamada, si se eligió alguno. Se conserva
+    # como referencia; las preguntas de la llamada están en ``questions``.
+    bank_version_id: uuid.UUID | None
     status: CallStatus
     called_at: datetime
     created_at: datetime
@@ -91,6 +130,8 @@ class CallSession:
     updated_at: datetime
     notes: str = ""
     answers: tuple[Answer, ...] = ()
+    # Las preguntas de esta llamada, en orden, incluidas las quitadas.
+    questions: tuple[CallQuestion, ...] = ()
     closed_at: datetime | None = None
     # Versiones de los bancos generales vigentes cuando se abrió la llamada.
     general_version_ids: tuple[uuid.UUID, ...] = ()
@@ -98,6 +139,11 @@ class CallSession:
     analysis: dict[str, Any] | None = None
     analysis_at: datetime | None = None
     analysis_by: uuid.UUID | None = None
+
+    @property
+    def active_questions(self) -> tuple[CallQuestion, ...]:
+        """Las que sí forman parte de la llamada (sin las quitadas)."""
+        return tuple(question for question in self.questions if not question.omitted)
 
 
 @dataclass(frozen=True)
@@ -170,6 +216,8 @@ class PhoneCallRepository(Protocol):
         """De la más reciente a la más antigua."""
         ...
 
-    def add_call(self, call: CallSession) -> None: ...
+    def add_call(self, call: CallSession) -> None:
+        """Guarda la llamada y anota los bancos de los que tomó preguntas."""
+        ...
 
     def save_call(self, call: CallSession) -> None: ...

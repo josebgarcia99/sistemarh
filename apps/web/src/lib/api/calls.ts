@@ -126,15 +126,23 @@ const callSchema = z.object({
   id: z.string(),
   application_id: z.string(),
   status: z.enum(["BORRADOR", "CERRADA"]),
-  bank_name: z.string(),
-  bank_version: z.number(),
+  /** De dónde salen las preguntas que se hacen: bancos y, si las hay, las escritas. */
+  sources: z.array(z.string()).default([]),
   called_at: z.string(),
   created_by_name: z.string().nullable(),
   notes: z.string(),
   questions: z.array(
     questionSchema.extend({
-      /** Pregunta general de la empresa (no viene del banco elegido). */
+      /** GENERAL (de la empresa), BANCO (de un banco elegido) o LLAMADA (escrita para esta). */
+      source: z.enum(["GENERAL", "BANCO", "LLAMADA"]).default("BANCO"),
+      /** Pregunta general de la empresa. */
       general: z.boolean().default(false),
+      bank_id: z.string().nullable().default(null),
+      bank_name: z.string().default(""),
+      /** Redacción del banco, si se cambió para esta llamada. */
+      original_text: z.string().nullable().default(null),
+      /** Quitada de esta llamada: no se pregunta ni cuenta. */
+      omitted: z.boolean().default(false),
       answer: z.string(),
       notes: z.string(),
       not_asked: z.boolean(),
@@ -148,6 +156,17 @@ const callSchema = z.object({
   closed_at: z.string().nullable(),
 });
 export type Call = z.infer<typeof callSchema>;
+export type CallQuestion = Call["questions"][number];
+/** Una pregunta de la lista propia de la llamada, tal como se guarda. */
+export type CallQuestionInput = {
+  id: string;
+  text: string;
+  competency: string;
+  guidance: string;
+  omitted: boolean;
+  /** Banco del que se toma, cuando todavía no está en la llamada. */
+  bank_id: string | null;
+};
 export type AnswerInput = {
   question_id: string;
   answer: string;
@@ -159,17 +178,23 @@ export function listCalls(applicationId: string, signal?: AbortSignal) {
   return apiFetch(`/applications/${applicationId}/calls`, { schema: z.array(callSchema), signal });
 }
 
-export function openCall(applicationId: string, bankId: string) {
+/** Abre una llamada: las preguntas generales entran solas; los bancos son opcionales. */
+export function openCall(applicationId: string, bankIds: string[]) {
   return apiFetch(`/applications/${applicationId}/calls`, {
     method: "POST",
-    body: { bank_id: bankId },
+    body: { bank_ids: bankIds },
     schema: callSchema,
   });
 }
 
 export function saveCall(
   callId: string,
-  input: { answers: AnswerInput[]; notes: string; close: boolean },
+  input: {
+    answers: AnswerInput[];
+    questions: CallQuestionInput[];
+    notes: string;
+    close: boolean;
+  },
 ) {
   return apiFetch(`/calls/${callId}`, { method: "PUT", body: input, schema: callSchema });
 }

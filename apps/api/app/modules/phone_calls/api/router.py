@@ -14,7 +14,7 @@ from app.composition.context import AppContext, client_ip, get_context
 from app.core.exceptions.errors import ServiceUnavailableError
 from app.modules.authentication.api.dependencies import Principal, require_user
 from app.modules.phone_calls.application.service import BankView, CallView
-from app.modules.phone_calls.domain.models import BankVersion
+from app.modules.phone_calls.domain.models import MAX_CALL_QUESTIONS, BankVersion
 
 router = APIRouter(tags=["bancos de preguntas y llamadas"])
 _user = Depends(require_user)
@@ -97,21 +97,50 @@ class AnswerIn(BaseModel):
     not_asked: bool = False
 
 
+class CallQuestionIn(BaseModel):
+    """Una pregunta de la lista propia de la llamada."""
+
+    # El que ya tenía en la llamada o en su banco. Para una pregunta escrita
+    # solo para esta llamada, uno nuevo generado por quien la escribe.
+    id: uuid.UUID
+    text: str = Field(max_length=1000)
+    competency: str = Field(default="", max_length=100)
+    guidance: str = Field(default="", max_length=1000)
+    # Quitada de esta llamada (se puede volver a incluir mientras es borrador).
+    omitted: bool = False
+    # Banco del que se toma, cuando la pregunta todavía no está en la llamada.
+    bank_id: uuid.UUID | None = None
+
+
 class CallIn(BaseModel):
     answers: list[AnswerIn]
     notes: str = Field(default="", max_length=6000)
     called_at: datetime | None = None
+    # La lista de preguntas de esta llamada, en orden. Si no se envía, no cambia.
+    questions: list[CallQuestionIn] | None = Field(default=None, max_length=MAX_CALL_QUESTIONS)
     # Cerrar la llamada: ya no se podrá modificar.
     close: bool = False
 
 
 class NewCallIn(BaseModel):
-    bank_id: uuid.UUID
+    # Bancos cuyas preguntas se suman a las generales de la empresa. Puede ir vacío.
+    bank_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10)
+    # Forma anterior (un solo banco). Se acepta para que una pantalla abierta
+    # antes de la actualización siga funcionando.
+    bank_id: uuid.UUID | None = None
 
 
 class CallQuestionOut(QuestionOut):
-    # Pregunta general de la empresa (no viene del banco elegido).
+    # De dónde salió: GENERAL (de la empresa), BANCO o LLAMADA (escrita para esta).
+    source: str
+    # Pregunta general de la empresa.
     general: bool
+    bank_id: uuid.UUID | None
+    bank_name: str
+    # Redacción del banco, si se cambió para esta llamada.
+    original_text: str | None
+    # Quitada de esta llamada.
+    omitted: bool
     answer: str
     notes: str
     not_asked: bool
@@ -121,6 +150,10 @@ class CallOut(BaseModel):
     id: uuid.UUID
     application_id: uuid.UUID
     status: str
+    # De dónde salen las preguntas que se hacen: bancos y, si las hay, las escritas.
+    sources: list[str]
+    # Forma anterior (un solo banco por llamada). Se conserva para que una
+    # pantalla abierta antes de la actualización siga mostrando las llamadas.
     bank_name: str
     bank_version: int
     called_at: datetime
@@ -171,8 +204,9 @@ def _call_out(view: CallView, names: dict[uuid.UUID, str]) -> CallOut:
         id=call.id,
         application_id=call.application_id,
         status=call.status.value,
-        bank_name=view.bank.name,
-        bank_version=view.version.version_number,
+        sources=list(view.sources),
+        bank_name=" + ".join(view.sources),
+        bank_version=next((q.bank_version for q in view.questions if q.bank_version), 0),
         called_at=call.called_at,
         created_by_name=names.get(call.created_by),
         notes=call.notes,
@@ -183,7 +217,12 @@ def _call_out(view: CallView, names: dict[uuid.UUID, str]) -> CallOut:
                 competency=q.competency,
                 guidance=q.guidance,
                 origin=q.origin,
-                general=q.id in view.general_ids,
+                source=q.source.value,
+                general=q.source.value == "GENERAL",
+                bank_id=q.bank_id,
+                bank_name=q.bank_name,
+                original_text=q.original_text,
+                omitted=q.omitted,
                 answer=answers[q.id].answer if q.id in answers else "",
                 notes=answers[q.id].notes if q.id in answers else "",
                 not_asked=answers[q.id].not_asked if q.id in answers else False,
@@ -354,7 +393,7 @@ def list_calls(
     "/applications/{application_id}/calls",
     response_model=CallOut,
     status_code=status.HTTP_201_CREATED,
-    summary="Abre una llamada con la versión vigente de un banco",
+    summary="Abre una llamada con las preguntas generales y las de los bancos elegidos",
 )
 def open_call(
     application_id: uuid.UUID,
@@ -365,7 +404,10 @@ def open_call(
 ) -> CallOut:
     with context.require_backend().transaction() as repos:
         view = context.phone_calls(repos).open_call(
-            principal.user, application_id, body.bank_id, ip=client_ip(request)
+            principal.user,
+            application_id,
+            [*body.bank_ids, *([body.bank_id] if body.bank_id else [])],
+            ip=client_ip(request),
         )
         names = _names(repos, {view.call.created_by})
     return _call_out(view, names)
@@ -394,6 +436,11 @@ def save_call(
             principal.user,
             call_id,
             answers=[answer.model_dump() for answer in body.answers],
+            questions=(
+                [question.model_dump() for question in body.questions]
+                if body.questions is not None
+                else None
+            ),
             notes=body.notes,
             called_at=body.called_at,
             close=body.close,
