@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProfileVersion, PromptVersion } from "@/lib/api/evaluation";
 import { makeUser, mockApi, problem, renderApp } from "@/test/helpers";
+import { VacancySteps } from "@/features/vacancies/vacancy-steps";
+import type { Vacancy } from "@/lib/api/vacancies";
 import { EvaluationWorkspace } from "./evaluation-workspace";
 
 const VACANCY_ID = "10000000-0000-0000-0000-000000000001";
@@ -136,7 +138,94 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const OVERVIEW_URL = `/api/v1/vacancies/${VACANCY_ID}/cv-batches`;
+const overview = (total: number, pending: number, approved = false) => ({
+  body: {
+    approved_prompt: approved ? { id: PROMPT_ID, version_number: 1, pass_threshold: "60.00", criteria: 5 } : null,
+    total_cvs: total,
+    pending_cvs: pending,
+    batches: [],
+  },
+});
+
+describe("VacancySteps", () => {
+  const vacancy = { id: VACANCY_ID, name: "Analista de Nómina" } as Vacancy;
+
+  it("dice cómo va cada paso, resalta el que sigue y abre la pantalla de cada uno", async () => {
+    mockApi({
+      [`GET ${PROFILE_URL}`]: { body: [makeProfile({ version_number: 2 })] },
+      [`GET ${PROMPTS_URL}`]: { body: [makePrompt()] },
+      [`GET ${OVERVIEW_URL}`]: overview(0, 0),
+    });
+    const onOpenEvaluation = vi.fn();
+    const onOpenCandidates = vi.fn();
+    const user = userEvent.setup();
+    renderApp(
+      <VacancySteps vacancy={vacancy} onOpenEvaluation={onOpenEvaluation} onOpenCandidates={onOpenCandidates} />,
+      { session: makeUser() },
+    );
+    // El perfil está listo; el prompt existe pero falta aprobarlo: es el paso que sigue.
+    const next = await screen.findByRole("button", {
+      name: "Paso 2: Prompt de evaluación. Borrador · falta aprobarlo. Es el paso que sigue.",
+    });
+    expect(next.getAttribute("aria-current")).toBe("step");
+    const names = screen.getAllByRole("button").map((button) => button.getAttribute("aria-label"));
+    expect(names).toEqual([
+      "Paso 1: Perfil de puesto. Listo · versión 2.",
+      "Paso 2: Prompt de evaluación. Borrador · falta aprobarlo. Es el paso que sigue.",
+      "Paso 3: Cargar y evaluar CV. Sin CV cargados.",
+      "Paso 4: Candidatos y etapas.",
+    ]);
+    for (const button of screen.getAllByRole("button")) await user.click(button);
+    expect(onOpenEvaluation.mock.calls.map(([, tab]) => tab)).toEqual(["profile", "prompt", "cv"]);
+    expect(onOpenCandidates).toHaveBeenCalledWith(vacancy);
+  });
+
+  it("con prompt aprobado y CV sin evaluar, el paso que sigue es evaluarlos", async () => {
+    mockApi({
+      [`GET ${PROFILE_URL}`]: { body: [makeProfile()] },
+      [`GET ${PROMPTS_URL}`]: { body: [makePrompt({ status: "APROBADO" })] },
+      [`GET ${OVERVIEW_URL}`]: overview(12, 5, true),
+    });
+    renderApp(<VacancySteps vacancy={vacancy} onOpenEvaluation={() => {}} onOpenCandidates={() => {}} />, {
+      session: makeUser(),
+    });
+    expect(
+      await screen.findByRole("button", {
+        name: "Paso 3: Cargar y evaluar CV. 12 CV cargados · 5 sin evaluar. Es el paso que sigue.",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Paso 2: Prompt de evaluación. Aprobado · versión 1." })).toBeTruthy();
+  });
+});
+
 describe("EvaluationWorkspace", () => {
+  it("se abre en la pestaña pedida y, sin prompt aprobado, lleva a aprobarlo", async () => {
+    mockApi({
+      [`GET ${PROFILE_URL}`]: { body: [makeProfile()] },
+      [`GET ${PROMPTS_URL}`]: { body: [makePrompt()] },
+      [`GET ${OVERVIEW_URL}`]: overview(2, 2),
+    });
+    const user = userEvent.setup();
+    renderApp(
+      <EvaluationWorkspace
+        vacancyId={VACANCY_ID}
+        vacancyName="Analista de Nómina"
+        canEdit
+        canApprove
+        initialTab="cv"
+        onBack={() => {}}
+      />,
+      { session: makeUser() },
+    );
+    // Los CV se cargan aquí mismo, aunque el prompt todavía no esté aprobado.
+    expect(await screen.findByRole("heading", { name: "Cargar CV" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Evaluación de CV" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText(/Ya hay 2 CV cargados, en espera/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Ir al prompt de evaluación" }));
+    expect(screen.getByRole("button", { name: "Prompt de evaluación" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("guarda el primer perfil convirtiendo cada línea en un requisito", async () => {
     let saved = false;
     const fetchMock = mockApi({

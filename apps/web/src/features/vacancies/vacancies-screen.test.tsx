@@ -318,7 +318,11 @@ describe("VacanciesScreen", () => {
     const user = userEvent.setup();
     renderApp(<VacanciesScreen />, { session: recruiter });
     await user.click(await screen.findByRole("button", { name: "Abrir Analista de Nómina" }));
-    await user.click(await screen.findByRole("button", { name: "Perfil, prompt y evaluación de CV" }));
+    // La guía de pasos va arriba del panel, antes de «Compartida con».
+    const panel = await screen.findByRole("complementary", { name: "Detalle de Analista de Nómina" });
+    const titles = within(panel).getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(titles.indexOf("Pasos de la vacante")).toBeLessThan(titles.indexOf("Compartida con"));
+    await user.click(await within(panel).findByRole("button", { name: /Paso 1: Perfil de puesto/ }));
     expect(await screen.findByRole("heading", { name: "Perfil y evaluación" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Guardar perfil" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Volver a vacantes" }));

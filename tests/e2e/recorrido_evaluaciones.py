@@ -30,7 +30,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch(); page = browser.new_page(viewport={"width": 1440, "height": 1000}); watch(page)
     login(page, "ana@demo.test")
     page.get_by_role("link", name="Vacantes", exact=True).click(); page.get_by_role("button", name="Abrir Analista de Nómina").click()
-    page.get_by_role("button", name="Perfil, prompt y evaluación de CV").click(); page.get_by_role("button", name="Evaluación de CV").click()
+    page.get_by_role("button", name="Paso 1: Perfil de puesto").click(); page.get_by_role("button", name="Evaluación de CV").click()
     page.get_by_role("button", name="Evaluar 4 CV").click(); expect(page.get_by_role("status").filter(has_text="terminó")).to_be_visible()
     page.get_by_role("button", name="Volver a vacantes").click()
     open_person(page)

@@ -18,7 +18,7 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Entrar").click()
     page.get_by_role("link", name="Vacantes", exact=True).click()
     page.get_by_role("button", name="Abrir Auxiliar Contable").click()
-    page.get_by_role("button", name="Perfil, prompt y evaluación de CV").click()
+    page.get_by_role("button", name="Paso 1: Perfil de puesto").click()
     expect(page.get_by_text("Todavía no hay perfil")).to_be_visible()
     page.get_by_role("button", name="Usar un documento ya cargado o pegar texto").click()
     page.get_by_label("Documento de la vacante").select_option(label="Perfil Auxiliar Contable.docx")

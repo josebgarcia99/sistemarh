@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   cardClass,
   dangerButtonClass,
@@ -23,7 +23,7 @@ import {
   isActive,
   startCvBatch,
 } from "@/lib/api/cv-batches";
-import { downloadUrl } from "@/lib/api/files";
+import { ACCEPTED_EXTENSIONS, downloadUrl, MAX_UPLOAD_BYTES, uploadFile } from "@/lib/api/files";
 
 type Feedback = { kind: "ok" | "error"; text: string } | null;
 
@@ -61,7 +61,19 @@ const plural = (amount: number, one: string, many: string) =>
   `${amount} ${amount === 1 ? one : many}`;
 
 /** Evaluación inicial de los CV de la vacante con el prompt aprobado. */
-export function CvEvaluationTab({ vacancyId, canEdit }: { vacancyId: string; canEdit: boolean }) {
+export function CvEvaluationTab({
+  vacancyId,
+  canEdit,
+  onOpenPrompt,
+  onOpenCandidates,
+}: {
+  vacancyId: string;
+  canEdit: boolean;
+  /** Lleva a la pestaña del prompt, cuando todavía no hay uno aprobado. */
+  onOpenPrompt?: () => void;
+  /** Lleva a los candidatos de la vacante. */
+  onOpenCandidates?: () => void;
+}) {
   const queryClient = useQueryClient();
   const overviewKey = ["vacancy", vacancyId, "cv-batches"];
   const { data: overview, error } = useQuery({
@@ -108,6 +120,17 @@ export function CvEvaluationTab({ vacancyId, canEdit }: { vacancyId: string; can
 
   return (
     <div className="flex flex-col gap-6">
+      {canEdit && (
+        <CvUpload
+          vacancyId={vacancyId}
+          onUploaded={() =>
+            Promise.all([
+              queryClient.invalidateQueries({ queryKey: overviewKey }),
+              queryClient.invalidateQueries({ queryKey: ["vacancy", vacancyId, "files"] }),
+            ])
+          }
+        />
+      )}
       <section className={`${cardClass} flex flex-col gap-4`}>
         <h2 className="text-2xl font-medium">Evaluar CV</h2>
         {prompt ? (
@@ -161,16 +184,22 @@ export function CvEvaluationTab({ vacancyId, canEdit }: { vacancyId: string; can
               <p className="text-ink-muted">Hay un lote en curso; espera a que termine.</p>
             )}
             {canEdit && !running && overview.total_cvs === 0 && (
-              <p className="text-ink-muted">
-                Carga los CV en los documentos de la vacante, con el tipo «Currículum».
-              </p>
+              <p className="text-ink-muted">Todavía no hay CV. Cárgalos arriba, en «Cargar CV».</p>
             )}
           </>
         ) : (
-          <p className="text-ink-muted">
-            Para evaluar CV hace falta un prompt aprobado. Créalo y apruébalo en «Prompt de
-            evaluación».
-          </p>
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-ink-muted">
+              Para evaluar CV hace falta un prompt aprobado.
+              {overview.total_cvs > 0 &&
+                ` Ya hay ${plural(overview.total_cvs, "CV cargado", "CV cargados")}, en espera.`}
+            </p>
+            {onOpenPrompt && (
+              <button type="button" className={primaryButtonClass} onClick={onOpenPrompt}>
+                Ir al prompt de evaluación
+              </button>
+            )}
+          </div>
         )}
         {feedback && (
           <p
@@ -185,6 +214,18 @@ export function CvEvaluationTab({ vacancyId, canEdit }: { vacancyId: string; can
           </p>
         )}
       </section>
+
+      {batches.length > 0 && onOpenCandidates && (
+        <section className={`${cardClass} flex flex-wrap items-center justify-between gap-4`}>
+          <p className="max-w-2xl text-ink-muted">
+            Las personas evaluadas ya están en «Candidatos y etapas», en la primera etapa. Ahí
+            decides quién avanza a llamada y sigues el proceso.
+          </p>
+          <button type="button" className={primaryButtonClass} onClick={onOpenCandidates}>
+            Ver candidatos y etapas
+          </button>
+        </section>
+      )}
 
       {batches.length > 0 && selected && (
         <section className={`${cardClass} flex flex-col gap-5`}>
@@ -226,6 +267,112 @@ export function CvEvaluationTab({ vacancyId, canEdit }: { vacancyId: string; can
         </section>
       )}
     </div>
+  );
+}
+
+/** Cuántos CV se pueden elegir de una vez. */
+const MAX_FILES = 100;
+
+/** Carga de CV: varios archivos de una vez, sin salir de la evaluación. */
+function CvUpload({
+  vacancyId,
+  onUploaded,
+}: {
+  vacancyId: string;
+  onUploaded: () => Promise<unknown>;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [problems, setProblems] = useState<string[]>([]);
+
+  async function upload(files: File[]) {
+    if (files.length === 0) return;
+    setDone(null);
+    setProblems([]);
+    if (files.length > MAX_FILES) {
+      setProblems([`Elige como máximo ${MAX_FILES} archivos por carga.`]);
+      return;
+    }
+    const failed: string[] = [];
+    let saved = 0;
+    let repeated = 0;
+    for (const [index, file] of files.entries()) {
+      setProgress(`Cargando ${index + 1} de ${files.length}…`);
+      const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+      if (!ACCEPTED_EXTENSIONS.includes(extension)) {
+        failed.push(`${file.name}: formato no permitido (se aceptan PDF, DOCX, DOC, JPG y PNG).`);
+        continue;
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        failed.push(`${file.name}: supera el límite de 20 MB.`);
+        continue;
+      }
+      try {
+        const result = await uploadFile(vacancyId, file, "CV");
+        saved += 1;
+        if (result.duplicates.length > 0) repeated += 1;
+      } catch (caught) {
+        failed.push(`${file.name}: ${describeError(caught)}`);
+      }
+    }
+    if (input.current) input.current.value = "";
+    await onUploaded();
+    setProgress(null);
+    setProblems(failed);
+    if (saved > 0) {
+      setDone(
+        `Se ${saved === 1 ? "cargó" : "cargaron"} ${plural(saved, "CV", "CV")}.` +
+          (repeated > 0
+            ? ` ${repeated === 1 ? "Uno ya estaba" : `${repeated} ya estaban`} en esta vacante; no se evalúan dos veces.`
+            : ""),
+      );
+    }
+  }
+
+  return (
+    <section className={`${cardClass} flex flex-col gap-3`}>
+      <h2 className="text-2xl font-medium">Cargar CV</h2>
+      <p className="text-ink-muted">
+        Puedes elegir varios archivos a la vez (PDF, DOCX, DOC, JPG o PNG, de hasta 20 MB cada
+        uno). Se guardan en los documentos de la vacante.
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <label htmlFor="cv-files" className="sr-only">
+          Archivos de CV
+        </label>
+        <input
+          id="cv-files"
+          ref={input}
+          type="file"
+          multiple
+          accept={ACCEPTED_EXTENSIONS.join(",")}
+          disabled={progress !== null}
+          className="min-h-11 max-w-full rounded-full border border-ink/15 bg-surface px-4 py-2"
+          onChange={(event) => upload(Array.from(event.target.files ?? []))}
+        />
+        {progress && (
+          <p role="status" className="text-ink-muted">
+            {progress}
+          </p>
+        )}
+      </div>
+      {done && (
+        <p role="status" className="rounded-2xl bg-accent-blue-soft px-4 py-3 text-accent-blue-ink">
+          {done}
+        </p>
+      )}
+      {problems.length > 0 && (
+        <div role="alert" className="rounded-2xl bg-accent-red-soft px-4 py-3 text-accent-red-ink">
+          <p>No se cargaron:</p>
+          <ul className="list-disc pl-5">
+            {problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }
 

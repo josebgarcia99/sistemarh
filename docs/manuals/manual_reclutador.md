@@ -41,7 +41,7 @@ En el detalle de la vacante, «Cargar documento» admite PDF, DOCX, DOC, JPG y P
 
 ## Perfil, prompt y evaluación de CV
 
-Desde la vacante, pulsa «Perfil, prompt y evaluación de CV». Tiene tres pestañas.
+Al abrir una vacante, arriba del panel está «Pasos de la vacante»: los cuatro pasos en orden (perfil de puesto, prompt de evaluación, cargar y evaluar CV, candidatos y etapas), cómo va cada uno y, resaltado, el que sigue. Pulsa un paso para abrir su pantalla. Los tres primeros son las tres pestañas de «Perfil y evaluación».
 
 ### 1. Perfil del puesto
 
@@ -57,10 +57,11 @@ Es la instrucción con la que la IA leerá los CV, con una rúbrica de criterios
 
 ### 3. Evaluación de CV
 
-1. Carga los CV en los documentos de la vacante.
+1. En «Cargar CV», elige los archivos: puedes seleccionar varios a la vez (hasta 100 por carga). Si alguno no entra, la pantalla dice cuál y por qué. También siguen sirviendo los que subas en los documentos de la vacante con el tipo CV.
 2. Pulsa «Evaluar N CV». El lote se procesa en segundo plano; puedes seguir trabajando.
 3. Al terminar, cada CV queda como **aceptado por IA**, **rechazado por IA** o **no evaluable** (por ejemplo, un archivo ilegible), con una calificación de 0 a 100, el nivel alcanzado en cada criterio y la evidencia tomada del propio CV.
 4. Descarga «Reporte_Evaluacion.xlsx» y los ZIP de aceptados, rechazados y no evaluables.
+5. «Ver candidatos y etapas» te lleva a las personas evaluadas para seguir el proceso.
 
 Qué conviene saber:
 
@@ -72,7 +73,7 @@ Qué conviene saber:
 
 ## Candidatos y etapas
 
-Desde la vacante, «Candidatos y etapas». Las personas evaluadas entran solas a la etapa «Revisión local RH» con la clasificación inicial de la IA. También puedes dar de alta a alguien a mano.
+Desde la vacante, el paso 4, «Candidatos y etapas» (o el botón «Ver candidatos y etapas» al terminar de evaluar los CV). Las personas evaluadas entran solas a la etapa «Revisión local RH» con la clasificación inicial de la IA. También puedes dar de alta a alguien a mano.
 
 ### Mover de etapa
 

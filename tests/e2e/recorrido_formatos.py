@@ -33,7 +33,7 @@ with sync_playwright() as p:
     login(page, "ana@demo.test")
     page.get_by_role("link", name="Vacantes", exact=True).click()
     page.get_by_role("button", name="Abrir Auxiliar Contable").click()
-    page.get_by_role("button", name="Perfil, prompt y evaluación de CV").click()
+    page.get_by_role("button", name="Paso 1: Perfil de puesto").click()
     expect(page.get_by_text("Todavía no hay perfil")).to_be_visible()
     # 1. Subir el formato llena los campos, sin IA.
     page.get_by_label("Formato del perfil").set_input_files(str(book))

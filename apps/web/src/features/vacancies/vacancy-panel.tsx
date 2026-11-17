@@ -37,6 +37,7 @@ import {
   WORK_MODE_LABELS,
 } from "@/lib/api/vacancies";
 import { VacancyForm } from "./vacancy-form";
+import { type EvaluationTab, VacancySteps } from "./vacancy-steps";
 
 const dateFormat = new Intl.DateTimeFormat("es-MX", {
   timeZone: "America/Mexico_City",
@@ -49,8 +50,8 @@ type Props = {
   onClose: () => void;
   /** Aviso que se muestra al abrir el panel (por ejemplo, tras crear la vacante). */
   initialNotice?: string;
-  /** Abre el perfil de puesto y el prompt de evaluación de la vacante. */
-  onOpenEvaluation?: (vacancy: Vacancy) => void;
+  /** Abre el perfil de puesto, el prompt o la evaluación de CV de la vacante. */
+  onOpenEvaluation?: (vacancy: Vacancy, tab: EvaluationTab) => void;
   /** Abre los candidatos de la vacante: etapas, movimientos y llamadas. */
   onOpenCandidates?: (vacancy: Vacancy) => void;
 };
@@ -216,6 +217,14 @@ export function VacancyPanel({
         </div>
       )}
 
+      {onOpenEvaluation && onOpenCandidates && (
+        <VacancySteps
+          vacancy={vacancy}
+          onOpenEvaluation={onOpenEvaluation}
+          onOpenCandidates={onOpenCandidates}
+        />
+      )}
+
       <section aria-labelledby="share-title" className="flex flex-col gap-3">
         <h3 id="share-title" className="text-lg font-medium">
           Compartida con
@@ -277,42 +286,6 @@ export function VacancyPanel({
           socioeconómicos: esos permisos se otorgan aparte, por persona.
         </p>
       </section>
-
-      {onOpenEvaluation && (
-        <section aria-labelledby="evaluation-title" className="flex flex-col gap-3">
-          <h3 id="evaluation-title" className="text-lg font-medium">
-            Evaluación de CV
-          </h3>
-          <p className="text-sm text-ink-muted">
-            Define el perfil de puesto y el prompt con el que la IA hará la revisión inicial.
-          </p>
-          <button
-            type="button"
-            className={`${secondaryButtonClass} self-start`}
-            onClick={() => onOpenEvaluation(vacancy)}
-          >
-            Perfil, prompt y evaluación de CV
-          </button>
-        </section>
-      )}
-
-      {onOpenCandidates && (
-        <section aria-labelledby="candidates-title" className="flex flex-col gap-3">
-          <h3 id="candidates-title" className="text-lg font-medium">
-            Candidatos
-          </h3>
-          <p className="text-sm text-ink-muted">
-            Las personas de esta vacante, su etapa, su historial y sus llamadas.
-          </p>
-          <button
-            type="button"
-            className={`${secondaryButtonClass} self-start`}
-            onClick={() => onOpenCandidates(vacancy)}
-          >
-            Candidatos y etapas
-          </button>
-        </section>
-      )}
 
       <VacancyDocuments
         vacancyId={vacancy.id}

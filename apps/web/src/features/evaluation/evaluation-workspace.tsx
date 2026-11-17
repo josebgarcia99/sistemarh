@@ -36,6 +36,10 @@ type Props = {
   /** Responsable o administrador: aprueba y archiva. */
   canApprove: boolean;
   onBack: () => void;
+  /** Pestaña con la que se abre. */
+  initialTab?: "profile" | "prompt" | "cv";
+  /** Lleva a los candidatos de la vacante, ya con los CV evaluados. */
+  onOpenCandidates?: () => void;
 };
 const STATUS_STYLES: Record<PromptStatus, string> = {
   BORRADOR: "bg-neutral-soft text-neutral-ink",
@@ -45,8 +49,16 @@ const STATUS_STYLES: Record<PromptStatus, string> = {
 };
 
 /** Perfil de puesto, prompt de evaluación y evaluación de CV de una vacante. */
-export function EvaluationWorkspace({ vacancyId, vacancyName, canEdit, canApprove, onBack }: Props) {
-  const [tab, setTab] = useState<"profile" | "prompt" | "cv">("profile");
+export function EvaluationWorkspace({
+  vacancyId,
+  vacancyName,
+  canEdit,
+  canApprove,
+  onBack,
+  initialTab = "profile",
+  onOpenCandidates,
+}: Props) {
+  const [tab, setTab] = useState<"profile" | "prompt" | "cv">(initialTab);
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -54,8 +66,8 @@ export function EvaluationWorkspace({ vacancyId, vacancyName, canEdit, canApprov
           <p className="text-sm text-ink-muted">{vacancyName}</p>
           <h1 className="text-4xl font-medium tracking-tight sm:text-5xl">Perfil y evaluación</h1>
           <p className="mt-2 max-w-3xl text-ink-muted">
-            El perfil describe el puesto. De él sale el prompt con el que la IA hace la revisión
-            inicial de los CV; solo se usa una versión aprobada.
+            Van en orden: 1) el perfil describe el puesto; 2) de él sale el prompt, que se ajusta
+            y se aprueba; 3) con el prompt aprobado se cargan y se evalúan los CV.
           </p>
         </div>
         <button type="button" className={secondaryButtonClass} onClick={onBack}>
@@ -69,7 +81,7 @@ export function EvaluationWorkspace({ vacancyId, vacancyName, canEdit, canApprov
             ["prompt", "Prompt de evaluación"],
             ["cv", "Evaluación de CV"],
           ] as const
-        ).map(([value, label]) => (
+        ).map(([value, label], index) => (
           <button
             key={value}
             type="button"
@@ -79,6 +91,8 @@ export function EvaluationWorkspace({ vacancyId, vacancyName, canEdit, canApprov
               tab === value ? "bg-ink text-white" : "border border-line bg-surface"
             }`}
           >
+            {/* El número orienta a la vista; el nombre del botón no cambia. */}
+            <span aria-hidden="true">{index + 1}. </span>
             {label}
           </button>
         ))}
@@ -87,7 +101,14 @@ export function EvaluationWorkspace({ vacancyId, vacancyName, canEdit, canApprov
       {tab === "prompt" && (
         <PromptTab vacancyId={vacancyId} canEdit={canEdit} canApprove={canApprove} />
       )}
-      {tab === "cv" && <CvEvaluationTab vacancyId={vacancyId} canEdit={canEdit} />}
+      {tab === "cv" && (
+        <CvEvaluationTab
+          vacancyId={vacancyId}
+          canEdit={canEdit}
+          onOpenPrompt={() => setTab("prompt")}
+          onOpenCandidates={onOpenCandidates}
+        />
+      )}
     </>
   );
 }

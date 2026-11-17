@@ -33,7 +33,7 @@ with sync_playwright() as p:
     print("1 inicio: tablero propio con 2 vacantes y nada en proceso")
     # 2. Evaluar los CV
     page.get_by_role("link", name="Vacantes", exact=True).click(); page.get_by_role("button", name="Abrir Analista de Nómina").click()
-    page.get_by_role("button", name="Perfil, prompt y evaluación de CV").click(); page.get_by_role("button", name="Evaluación de CV").click()
+    page.get_by_role("button", name="Paso 1: Perfil de puesto").click(); page.get_by_role("button", name="Evaluación de CV").click()
     page.get_by_role("button", name="Evaluar 4 CV").click(); expect(page.get_by_role("status").filter(has_text="terminó")).to_be_visible()
     page.get_by_role("button", name="Volver a vacantes").click()
     # 3. Contratación

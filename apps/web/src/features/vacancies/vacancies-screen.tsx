@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/styles";
 import { useSession } from "@/features/auth/use-session";
 import { EvaluationWorkspace } from "@/features/evaluation/evaluation-workspace";
+import type { EvaluationTab } from "./vacancy-steps";
 import { CandidatesWorkspace } from "@/features/recruitment/candidates-workspace";
 import { describeError } from "@/lib/api/client";
 import {
@@ -59,7 +60,9 @@ export function VacanciesScreen() {
   // Aviso de alta: se muestra dentro del panel de la vacante recién creada.
   const [created, setCreated] = useState<{ id: string; message: string } | null>(null);
   // Vacante cuyo perfil y prompt se están editando; ocupa toda la pantalla.
-  const [evaluating, setEvaluating] = useState<Vacancy | null>(null);
+  const [evaluating, setEvaluating] = useState<{ vacancy: Vacancy; tab: EvaluationTab } | null>(
+    null,
+  );
   // Vacante cuyos candidatos se están gestionando; también ocupa toda la pantalla.
   const [recruiting, setRecruiting] = useState<Vacancy | null>(null);
 
@@ -88,13 +91,19 @@ export function VacanciesScreen() {
   if (evaluating) {
     return (
       <EvaluationWorkspace
-        vacancyId={evaluating.id}
-        vacancyName={evaluating.name}
-        canEdit={evaluating.my_access !== "LECTURA"}
+        vacancyId={evaluating.vacancy.id}
+        vacancyName={evaluating.vacancy.name}
+        initialTab={evaluating.tab}
+        canEdit={evaluating.vacancy.my_access !== "LECTURA"}
         canApprove={
-          evaluating.my_access === "RESPONSABLE" || evaluating.my_access === "ADMINISTRADOR"
+          evaluating.vacancy.my_access === "RESPONSABLE" ||
+          evaluating.vacancy.my_access === "ADMINISTRADOR"
         }
         onBack={() => setEvaluating(null)}
+        onOpenCandidates={() => {
+          setRecruiting(evaluating.vacancy);
+          setEvaluating(null);
+        }}
       />
     );
   }
@@ -281,7 +290,7 @@ export function VacanciesScreen() {
               key={selectedId}
               vacancyId={selectedId}
               initialNotice={created?.id === selectedId ? created.message : undefined}
-              onOpenEvaluation={setEvaluating}
+              onOpenEvaluation={(vacancy, tab) => setEvaluating({ vacancy, tab })}
               onOpenCandidates={setRecruiting}
               onClose={() => setSelectedId(null)}
             />

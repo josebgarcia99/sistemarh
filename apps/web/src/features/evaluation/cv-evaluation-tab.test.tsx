@@ -115,6 +115,66 @@ describe("CvEvaluationTab", () => {
     expect(screen.queryByRole("button", { name: /Evaluar/ })).toBeNull();
   });
 
+  it("carga varios CV de una vez, avisa de los que no entran y actualiza el conteo", async () => {
+    const FILES_URL = `/api/v1/vacancies/${VACANCY_ID}/files`;
+    const stored = (name: string) => ({
+      id: "30000000-0000-0000-0000-000000000001",
+      vacancy_id: VACANCY_ID,
+      document_type: "CV",
+      sensitive: false,
+      original_name: name,
+      content_type: "application/pdf",
+      size_bytes: 1024,
+      sha256: "a".repeat(64),
+      malware_scan: "LIMPIO",
+      encrypted: false,
+      uploaded_by: "00000000-0000-0000-0000-000000000002",
+      uploaded_by_name: "Reclutadora de Prueba",
+      created_at: "2026-11-11T18:00:00Z",
+    });
+    let uploaded = 0;
+    const fetchMock = mockApi({
+      [`GET ${OVERVIEW_URL}`]: () => ({
+        body: makeOverview({ total_cvs: uploaded, pending_cvs: uploaded }),
+      }),
+      [`POST ${FILES_URL}`]: ({ url }) => {
+        uploaded += 1;
+        const name = new URL(url, "http://prueba").searchParams.get("filename") ?? "";
+        // El segundo ya estaba en la vacante.
+        return { status: 201, body: { file: stored(name), duplicates: uploaded === 2 ? [stored("viejo.pdf")] : [] } };
+      },
+    });
+    // Sin filtrar por «accept», para comprobar que la pantalla rechaza el formato.
+    const user = userEvent.setup({ applyAccept: false });
+    renderTab();
+    expect(await screen.findByText(/Todavía no hay CV/)).toBeTruthy();
+    const file = (name: string) => new File(["contenido ficticio"], name);
+    await user.upload(screen.getByLabelText("Archivos de CV"), [file("ana.pdf"), file("beto.docx"), file("notas.txt")]);
+
+    expect(await screen.findByText(/Se cargaron 2 CV\. Uno ya estaba en esta vacante/)).toBeTruthy();
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("notas.txt: formato no permitido");
+    const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST").map(([url]) => String(url));
+    expect(posts).toHaveLength(2);
+    expect(posts.every((url) => url.includes("document_type=CV"))).toBe(true);
+    // El conteo se actualiza y ya se pueden evaluar.
+    expect(await screen.findByRole("button", { name: "Evaluar 2 CV" })).toBeTruthy();
+  });
+
+  it("con CV evaluados ofrece pasar a los candidatos", async () => {
+    mockApi({
+      [`GET ${OVERVIEW_URL}`]: { body: makeOverview({ pending_cvs: 0, batches: [makeBatch()] }) },
+      [`GET ${BATCH_URL}`]: { body: { batch: makeBatch(), items: ITEMS } },
+    });
+    const onOpenCandidates = vi.fn();
+    const user = userEvent.setup();
+    renderApp(<CvEvaluationTab vacancyId={VACANCY_ID} canEdit onOpenCandidates={onOpenCandidates} />, {
+      session: makeUser(),
+    });
+    await user.click(await screen.findByRole("button", { name: "Ver candidatos y etapas" }));
+    expect(onOpenCandidates).toHaveBeenCalledOnce();
+  });
+
   it("inicia un lote con los CV pendientes y muestra los resultados", async () => {
     let created = false;
     const batch = makeBatch();
