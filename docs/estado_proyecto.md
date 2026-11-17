@@ -28,6 +28,8 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 
 **Síntesis que relaciona las etapas (17 de noviembre de 2026, rama `pruebas`).** A petición del responsable: la síntesis del expediente añade «Qué aportó cada etapa frente a las anteriores» y «Coincidencias entre fuentes». La IA razona con los datos y cita cada fuente, pero no valora ni decide; el servidor sigue descartando cualquier puntuación o recomendación. Sin cambios de base de datos. No se ha probado con un modelo real: hay que revisar con casos sintéticos que respete el «describe, no valores».
 
+**Estudio, psicometría y preguntas por etapa (17 de noviembre de 2026, rama `pruebas`).** A petición del responsable: (1) el formato lleno del estudio y el reporte de psicometría se adjuntan en la propia evaluación; (2) el estudio admite hasta 20 fotografías adicionales, con título y descripción propuesta por la IA, que entran a la síntesis y al reporte como las del formato; (3) en psicometría la IA ya no solo transcribe: resume el reporte del profesional y explica qué significa cada resultado según el propio reporte, sin diagnosticar ni declarar aptitud; (4) los análisis de psicometría, prueba técnica y referencias proponen preguntas para la siguiente etapa. Sin cambios de base de datos. La lectura del formato del estudio sigue siendo con IA y sin verificar: una lectura exacta del Excel, sin IA, requiere un formato lleno de ejemplo que todavía no se ha recibido. Nada de esto se ha probado con un modelo real.
+
 ## Funcionalidades terminadas
 
 | Elemento | Detalle |

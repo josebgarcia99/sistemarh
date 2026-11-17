@@ -285,6 +285,16 @@ def test_psicometria_estados_validacion_profesional_y_resumen_del_documento(
             {
                 "resumen": "El reporte documenta dos escalas.",
                 "resultados_documentados": ["Razonamiento: percentil 70"],
+                "interpretacion": [
+                    "Razonamiento, percentil 70: el reporte lo describe como por encima del "
+                    "promedio de su grupo de comparación."
+                ],
+                "preguntas_para_la_siguiente_etapa": [
+                    "Cuéntame de un problema de nómina que resolviste paso a paso.",
+                    "Cuéntame de un problema de nómina que resolviste paso a paso.",  # repetida
+                    *[f"Pregunta sobrante {n}" for n in range(1, 9)],
+                ],
+                # Nada de esto se conserva.
                 "diagnostico": "Ansiedad",
                 "apto": True,
             }
@@ -297,11 +307,23 @@ def test_psicometria_estados_validacion_profesional_y_resumen_del_documento(
     assert summary["resumen"].startswith("El reporte") and set(summary) == {
         "resumen",
         "resultados_documentados",
+        "interpretacion",
         "datos_no_legibles",
         "advertencias",
+        "preguntas_para_la_siguiente_etapa",
     }
+    # Explica lo que dice el reporte del profesional y propone qué preguntar después.
+    assert summary["interpretacion"][0].startswith("Razonamiento, percentil 70: el reporte")
+    assert len(summary["preguntas_para_la_siguiente_etapa"]) == assistant.MAX_STAGE_QUESTIONS
     _, system, user = fake.prompts[0]
     assert system == assistant.PSYCHOMETRIC_SYSTEM and "percentil 70" in user
+    rules_text = " ".join(system.split())
+    assert "ya fue aplicada e interpretada por un profesional" in rules_text
+    assert "no agregues significados que no se apoyen en su texto" in rules_text
+    assert "consúltalo con el profesional" in rules_text
+    assert "No diagnostiques ninguna condición psicológica ni de salud" in rules_text
+    assert "No declares si la persona es apta, no apta" in rules_text
+    assert "nunca de edad, estado civil, hijos, embarazo, religión, salud" in rules_text
     assert recruiter.post(url).status_code == 503
     test = recruiter.get(f"{API}/assessments/{test['id']}").json()
     assert test["ai_summary"]["resumen"].startswith("El reporte")  # el fallo no borra el anterior

@@ -400,7 +400,55 @@ def study(data: dict[str, Any], status: str, version: FormTemplateVersion) -> di
         "performed_by": line(data.get("performed_by"), 200),
         "notes": block(data.get("notes")),
         "answers": answers,
+        "extra_photos": _extra_photos(data.get("extra_photos")),
     }
+
+
+MAX_EXTRA_PHOTOS = 20
+
+
+def _extra_photos(raw: object) -> list[dict[str, Any]]:
+    """Fotografías que se agregan además de las que pide el formulario. Cada una
+    lleva su título y, si se quiere, la descripción de lo que se observa."""
+    rows = [row for row in (raw if isinstance(raw, list) else []) if isinstance(row, dict)]
+    photos = []
+    for number, row in enumerate(rows, start=1):
+        if not row.get("file_id"):
+            continue
+        try:
+            file_id = str(uuid.UUID(str(row["file_id"])))
+        except ValueError as error:
+            raise RuleError(f"Fotografía adicional {number}: el archivo no es válido.") from error
+        description = block(row.get("description"), MAX_DESCRIPTION)
+        photos.append(
+            {
+                "file_id": file_id,
+                "title": line(row.get("title"), 120),
+                "description": description,
+                # Como cualquier dato propuesto por la IA, no cuenta como verificado.
+                "description_source": "IA"
+                if description and row.get("description_source") == "IA"
+                else "MANUAL",
+            }
+        )
+    if len(photos) > MAX_EXTRA_PHOTOS:
+        raise RuleError(f"Se admiten como máximo {MAX_EXTRA_PHOTOS} fotografías adicionales.")
+    if len({photo["file_id"] for photo in photos}) != len(photos):
+        raise RuleError("Una fotografía adicional está repetida.")
+    return photos
+
+
+def extra_photo_notes(photos: object) -> list[PhotoNote]:
+    """Descripciones de las fotografías adicionales, con su título."""
+    return [
+        PhotoNote(
+            photo.get("title") or f"Fotografía adicional {number}",
+            str(photo["description"]),
+            photo.get("description_source") == "IA",
+        )
+        for number, photo in enumerate(photos if isinstance(photos, list) else [], start=1)
+        if isinstance(photo, dict) and photo.get("description")
+    ]
 
 
 def photo_notes(version: FormTemplateVersion, answers: dict[str, Any]) -> list[PhotoNote]:

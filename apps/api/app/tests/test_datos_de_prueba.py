@@ -77,6 +77,14 @@ def test_carga_una_vacante_con_personas_en_cada_etapa(context, recruiter, admin)
     assert kinds["ESTUDIO_SOCIOECONOMICO"]["status"] == "EN_PROCESO"
     assert kinds["REFERENCIAS"]["ai_summary"]["sin_confirmar"]
     assert kinds["PRUEBA_TECNICA"]["score"] == "88.00"
+    # La psicometría validada trae su reporte, con el resumen y lo que significa según el reporte.
+    psychometric = kinds["PSICOMETRIA"]
+    assert psychometric["file_id"] and psychometric["ai_summary"]["interpretacion"]
+    assert psychometric["ai_summary"]["preguntas_para_la_siguiente_etapa"]
+    assert kinds["REFERENCIAS"]["ai_summary"]["preguntas_para_la_siguiente_etapa"]
+    # Y el estudio, una fotografía adicional de ejemplo con su descripción.
+    [extra] = kinds["ESTUDIO_SOCIOECONOMICO"]["data"]["extra_photos"]
+    assert extra["title"].startswith("Calle de acceso") and extra["description"]
     synthesis = recruiter.get(f"{API}/applications/{mariana}/syntheses").json()
     assert synthesis["latest"]["result"]["preguntas_sugeridas"]
     call = recruiter.get(f"{API}/applications/{mariana}/calls").json()[0]

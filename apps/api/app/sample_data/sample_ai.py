@@ -52,6 +52,30 @@ class SampleAi:
         )
 
     def _answer(self, system: str, user: str) -> dict[str, Any] | None:  # noqa: PLR0911
+        if system.startswith("Recibes el texto del reporte de una prueba psicométrica"):
+            return {
+                "resumen": EXAMPLE + "el reporte de la Prueba Inventada de Habilidades documenta "
+                "tres escalas y concluye que el perfil es compatible con tareas de detalle.",
+                "resultados_documentados": [
+                    "Atención al detalle: percentil 80.",
+                    "Razonamiento numérico: percentil 65.",
+                    "Trabajo bajo presión: percentil 40.",
+                ],
+                "interpretacion": [
+                    "Atención al detalle, percentil 80: el reporte lo describe como alto frente "
+                    "a su grupo de comparación.",
+                    "Razonamiento numérico, percentil 65: el reporte lo ubica por encima del "
+                    "promedio.",
+                    "Trabajo bajo presión, percentil 40: el reporte lo ubica en el rango medio "
+                    "y sugiere explorarlo en entrevista.",
+                ],
+                "datos_no_legibles": [],
+                "advertencias": ["El reporte no indica la fecha de aplicación."],
+                "preguntas_para_la_siguiente_etapa": [
+                    "Cuéntame de un cierre de nómina con poco tiempo: ¿qué hiciste primero?",
+                    "¿Cómo revisas tu propio trabajo antes de entregarlo?",
+                ],
+            }
         if system.startswith("Recibes el material de una prueba"):
             return {
                 "resumen": EXAMPLE + "calculó bien 9 de 10 recibos; falló uno con incapacidad.",
@@ -60,6 +84,9 @@ class SampleAi:
                 ],
                 "datos_no_legibles": [],
                 "advertencias": ["La prueba no cubrió finiquitos."],
+                "preguntas_para_la_siguiente_etapa": [
+                    "¿Cómo calculas un recibo cuando hay una incapacidad a media quincena?"
+                ],
             }
         if system.startswith("Recibes las notas de una entrevista"):
             return {
@@ -88,6 +115,9 @@ class SampleAi:
                 "discrepancias_verificables": [],
                 "sin_confirmar": [
                     "La referencia 2 no se localizó: nadie confirma el empleo de 2018 a 2020."
+                ],
+                "preguntas_para_la_siguiente_etapa": [
+                    "¿Quién más puede confirmar tu empleo de 2018 a 2020?"
                 ],
             }
         if system.startswith("Recibes el expediente"):

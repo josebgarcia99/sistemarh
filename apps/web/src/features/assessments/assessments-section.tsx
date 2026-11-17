@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import {
   cardClass,
   dangerButtonClass,
@@ -121,6 +121,8 @@ const EMPTY_REFERENCE: Row = {
 };
 const SUMMARY_LABELS: Record<string, string> = {
   resultados_documentados: "Resultados que constan en el documento",
+  interpretacion: "Qué significa, según el reporte",
+  preguntas_para_la_siguiente_etapa: "Preguntas para la siguiente etapa",
   datos_no_legibles: "Datos que no se pudieron leer",
   advertencias: "Avisos",
   competencias_observadas: "Competencias observadas",
@@ -374,6 +376,17 @@ function AssessmentEditor({
   const [answers, setAnswers] = useState<Record<string, Answer>>(
     () => (item.data.answers as Record<string, Answer>) ?? {},
   );
+  const [extraPhotos, setExtraPhotos] = useState<ExtraPhoto[]>(
+    () => (item.data.extra_photos as ExtraPhoto[] | undefined) ?? [],
+  );
+  const attachInput = useRef<HTMLInputElement>(null);
+  // Las fotografías adicionales van justo después del apartado de fotografías del
+  // formato; si el formulario no tiene uno, al final.
+  const sections = item.form ?? [];
+  const photoSection = sections.findLastIndex((section) =>
+    section.fields.some((field) => field.type === "DOCUMENTO" && /fotograf/i.test(field.label)),
+  );
+  const extraPhotosAfter = photoSection >= 0 ? photoSection : sections.length - 1;
   const [reading, setReading] = useState<Digitization | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
@@ -396,7 +409,7 @@ function AssessmentEditor({
         rubric: rubric.map((row) => ({ ...row, points: row.points === "" ? null : row.points })),
       };
     }
-    if (kind === "ESTUDIO_SOCIOECONOMICO") return { ...values, answers };
+    if (kind === "ESTUDIO_SOCIOECONOMICO") return { ...values, answers, extra_photos: extraPhotos };
     if (kind === "REFERENCIAS") return { ...values, references };
     return values;
   }
@@ -424,6 +437,39 @@ function AssessmentEditor({
         }),
       "Evaluación guardada.",
     );
+  /** Adjunta un archivo aquí mismo, sin pasar por los documentos de la vacante. */
+  async function attach(file: File) {
+    const type = KIND_DOCUMENT[kind];
+    const allowed = acceptedExtensions(type);
+    const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+    if (!allowed.includes(extension)) {
+      return setFeedback({
+        kind: "error",
+        text: `Formato no permitido. Se aceptan ${allowed.map((item) => item.slice(1).toUpperCase()).join(", ")}.`,
+      });
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return setFeedback({ kind: "error", text: "El archivo supera el límite de 20 MB." });
+    }
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const result = await uploadFile(vacancyId, file, type);
+      await filesClient.invalidateQueries({ queryKey: ["vacancy", vacancyId, "files"] });
+      setFileId(result.file.id);
+      setFeedback({
+        kind: "ok",
+        text:
+          kind === "ESTUDIO_SOCIOECONOMICO"
+            ? "Archivo adjuntado. Pulsa «Leer el formato con IA» para llenar los campos, y guarda."
+            : "Archivo adjuntado. Guarda para conservarlo.",
+      });
+    } catch (caught) {
+      setFeedback({ kind: "error", text: describeError(caught) });
+    } finally {
+      setBusy(false);
+    }
+  }
   async function digitize() {
     setBusy(true);
     setFeedback(null);
@@ -450,6 +496,19 @@ function AssessmentEditor({
   const setRow = (rows: Row[], set: (rows: Row[]) => void, index: number, patch: Row) =>
     set(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
 
+  const extraPhotosBlock = (
+          <ExtraPhotos
+            photos={extraPhotos}
+            canEdit={canEdit}
+            documents={documents.map((file) => ({ id: file.id, name: file.original_name }))}
+            assessmentId={item.id}
+            vacancyId={vacancyId}
+            onUploaded={() =>
+              filesClient.invalidateQueries({ queryKey: ["vacancy", vacancyId, "files"] })
+            }
+            onChange={setExtraPhotos}
+          />
+  );
   return (
     <div className="mt-4 flex flex-col gap-4 border-t border-line pt-4">
       {kind === "PSICOMETRIA" && (
@@ -485,7 +544,7 @@ function AssessmentEditor({
           <input id={`date-${item.id}`} type="date" className={fieldClass} readOnly={!canEdit} value={date} onChange={(event) => setDate(event.target.value)} />
         </Labeled>
         {kind !== "ENTREVISTA" && kind !== "REFERENCIAS" && (
-          <Labeled id={`file-${item.id}`} label={kind === "ESTUDIO_SOCIOECONOMICO" ? "Formulario escaneado" : "Documento"}>
+          <Labeled id={`file-${item.id}`} label={kind === "ESTUDIO_SOCIOECONOMICO" ? "Formato del estudio (Excel, PDF, Word o escaneado)" : "Documento"}>
             <select id={`file-${item.id}`} className={fieldClass} disabled={!canEdit} value={fileId} onChange={(event) => setFileId(event.target.value)}>
               <option value="">Sin documento</option>
               {documents.map((file) => (
@@ -494,6 +553,26 @@ function AssessmentEditor({
                 </option>
               ))}
             </select>
+            {canEdit && (
+              <>
+                <input
+                  ref={attachInput}
+                  type="file"
+                  aria-label={kind === "ESTUDIO_SOCIOECONOMICO" ? "Adjuntar el formato del estudio" : "Adjuntar el documento"}
+                  accept={acceptedExtensions(KIND_DOCUMENT[kind]).join(",")}
+                  className="sr-only"
+                  tabIndex={-1}
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) await attach(file);
+                  }}
+                />
+                <button type="button" className={`${secondaryButtonClass} self-start`} disabled={busy} onClick={() => attachInput.current?.click()}>
+                  Adjuntar archivo
+                </button>
+              </>
+            )}
           </Labeled>
         )}
       </div>
@@ -633,11 +712,12 @@ function AssessmentEditor({
           {canEdit && (
             <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-white/60 px-4 py-3">
               <button type="button" className={secondaryButtonClass} disabled={busy || (!fileId && documents.length === 0)} onClick={digitize}>
-                Leer el formulario escaneado con IA
+                Leer el formato con IA
               </button>
               <p className="flex-[1_1_260px] text-sm text-ink-muted">
-                Elige arriba el formulario escaneado. La IA copia los datos que encuentre; no
-                guarda nada y nada queda verificado hasta que tú lo marques.
+                Adjunta arriba el formato lleno (Excel, PDF, Word o escaneado). La IA copia a
+                cada campo los datos que encuentre; no guarda nada y nada queda verificado hasta
+                que tú lo marques.
               </p>
             </div>
           )}
@@ -647,8 +727,9 @@ function AssessmentEditor({
               {reading.missing.length > 0 && <p>No aparece en el documento: {reading.missing.join(", ")}.</p>}
             </div>
           )}
-          {item.form.map((section) => (
-            <fieldset key={section.title} className="grid min-w-0 gap-3 md:grid-cols-2">
+          {item.form.map((section, position) => (
+            <Fragment key={section.title}>
+            <fieldset className="grid min-w-0 gap-3 md:grid-cols-2">
               <legend className="font-medium">{section.title}</legend>
               {section.fields.map((field) => (
                 <StudyField
@@ -671,7 +752,10 @@ function AssessmentEditor({
                 />
               ))}
             </fieldset>
+            {position === extraPhotosAfter && extraPhotosBlock}
+            </Fragment>
           ))}
+          {sections.length === 0 && extraPhotosBlock}
         </>
       )}
 
@@ -687,7 +771,9 @@ function AssessmentEditor({
                 ? "Organizar con IA"
                 : kind === "REFERENCIAS"
                   ? "Analizar con IA"
-                  : "Resumir con IA"}
+                  : kind === "PSICOMETRIA"
+                    ? "Resumir e interpretar con IA"
+                    : "Resumir con IA"}
             </button>
           )}
         </div>
@@ -908,6 +994,197 @@ function StudyField({
  * adjunta ahí mismo. Si es una imagen, la IA puede proponer una descripción de
  * lo que se observa; la persona la revisa antes de guardar.
  */
+type ExtraPhoto = {
+  file_id: string;
+  title: string;
+  description: string;
+  description_source: "IA" | "MANUAL";
+};
+const MAX_EXTRA_PHOTOS = 20;
+const PHOTO_EXTENSIONS = [".jpg", ".jpeg", ".png"];
+
+/**
+ * Fotografías que se agregan además de las que pide el formato. Cada una lleva
+ * su título y la descripción de lo que se observa, que la IA puede proponer.
+ */
+function ExtraPhotos({
+  photos,
+  canEdit,
+  documents,
+  assessmentId,
+  vacancyId,
+  onUploaded,
+  onChange,
+}: {
+  photos: ExtraPhoto[];
+  canEdit: boolean;
+  documents: { id: string; name: string }[];
+  assessmentId: string;
+  vacancyId: string;
+  onUploaded: () => Promise<void>;
+  onChange: (photos: ExtraPhoto[]) => void;
+}) {
+  const picker = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<Feedback>(null);
+  // Nombres de lo recién subido, mientras la lista de documentos se actualiza.
+  const [names, setNames] = useState<Record<string, string>>({});
+  const nameOf = (id: string) =>
+    documents.find((file) => file.id === id)?.name ?? names[id] ?? "Fotografía";
+  const set = (index: number, change: Partial<ExtraPhoto>) =>
+    onChange(photos.map((photo, position) => (position === index ? { ...photo, ...change } : photo)));
+
+  async function add(files: File[]) {
+    if (files.length === 0) return;
+    if (photos.length + files.length > MAX_EXTRA_PHOTOS) {
+      return setFeedback({
+        kind: "error",
+        text: `Se admiten como máximo ${MAX_EXTRA_PHOTOS} fotografías adicionales.`,
+      });
+    }
+    setBusy(true);
+    setFeedback(null);
+    const added: ExtraPhoto[] = [];
+    const uploaded: Record<string, string> = {};
+    const failed: string[] = [];
+    for (const file of files) {
+      const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+      if (!PHOTO_EXTENSIONS.includes(extension)) {
+        failed.push(`${file.name}: solo se aceptan fotos JPG o PNG.`);
+      } else if (file.size > MAX_UPLOAD_BYTES) {
+        failed.push(`${file.name}: supera el límite de 20 MB.`);
+      } else {
+        try {
+          const result = await uploadFile(vacancyId, file, "ESTUDIO_SOCIOECONOMICO");
+          if (
+            photos.some((photo) => photo.file_id === result.file.id) ||
+            added.some((photo) => photo.file_id === result.file.id)
+          ) {
+            failed.push(`${file.name}: ya está entre las fotografías adicionales.`);
+          } else {
+            uploaded[result.file.id] = result.file.original_name;
+            added.push({ file_id: result.file.id, title: "", description: "", description_source: "MANUAL" });
+          }
+        } catch (caught) {
+          failed.push(`${file.name}: ${describeError(caught)}`);
+        }
+      }
+    }
+    setNames((current) => ({ ...current, ...uploaded }));
+    await onUploaded();
+    onChange([...photos, ...added]);
+    setBusy(false);
+    setFeedback(
+      failed.length > 0
+        ? { kind: "error", text: `No se agregaron: ${failed.join(" ")}` }
+        : {
+            kind: "ok",
+            text: `${added.length === 1 ? "Fotografía agregada" : `${added.length} fotografías agregadas`}. Guarda el estudio para conservarlas.`,
+          },
+    );
+  }
+
+  async function describe(index: number) {
+    const photo = photos[index];
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const proposal = await describePhoto(assessmentId, photo.file_id, null, photo.title);
+      set(index, { description: proposal.description, description_source: "IA" });
+      setFeedback({
+        kind: "ok",
+        text:
+          "La IA propuso una descripción. Revísala y corrígela: todavía no se ha guardado." +
+          (proposal.unclear.length > 0 ? ` No distingue: ${proposal.unclear.join("; ")}.` : ""),
+      });
+    } catch (caught) {
+      setFeedback({ kind: "error", text: describeError(caught) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!canEdit && photos.length === 0) return null;
+  return (
+    <fieldset className="flex min-w-0 flex-col gap-3">
+      <legend className="font-medium">Fotografías adicionales</legend>
+      <p className="text-sm text-ink-muted">
+        Además de las que pide el formato, puedes agregar hasta {MAX_EXTRA_PHOTOS} fotografías. La
+        IA describe solo lo que se ve; no saca conclusiones sobre la persona ni califica la
+        vivienda. Cada foto se envía reducida y sin fecha ni ubicación.
+      </p>
+      <ol aria-label="Fotografías adicionales" className="flex flex-col gap-3">
+        {photos.map((photo, index) => {
+          const number = index + 1;
+          return (
+            <li key={photo.file_id} className="flex min-w-0 flex-col gap-2 rounded-3xl bg-white/60 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <a className="underline underline-offset-4" href={downloadUrl(photo.file_id)} target="_blank" rel="noreferrer">
+                  {number}. {nameOf(photo.file_id)}
+                </a>
+                {canEdit && (
+                  <button type="button" className={dangerButtonClass} aria-label={`Quitar la fotografía adicional ${number}`} onClick={() => onChange(photos.filter((_, position) => position !== index))}>
+                    Quitar
+                  </button>
+                )}
+              </div>
+              <Labeled id={`extra-title-${assessmentId}-${index}`} label={`Título de la fotografía adicional ${number}`}>
+                <input id={`extra-title-${assessmentId}-${index}`} className={fieldClass} maxLength={120} placeholder="Por ejemplo: patio, cocina, calle de acceso" readOnly={!canEdit} value={photo.title} onChange={(event) => set(index, { title: event.target.value })} />
+              </Labeled>
+              <Labeled id={`extra-description-${assessmentId}-${index}`} label={`Descripción de lo que se observa: fotografía adicional ${number}`}>
+                <textarea
+                  id={`extra-description-${assessmentId}-${index}`}
+                  rows={3}
+                  maxLength={2000}
+                  className={areaClass}
+                  readOnly={!canEdit}
+                  value={photo.description}
+                  onChange={(event) =>
+                    // Al escribir a mano, deja de contar como propuesta por la IA.
+                    set(index, { description: event.target.value, description_source: "MANUAL" })
+                  }
+                />
+              </Labeled>
+              <div className="flex flex-wrap items-center gap-3">
+                {canEdit && (
+                  <button type="button" className={secondaryButtonClass} disabled={busy} aria-label={`Describir con IA: fotografía adicional ${number}`} onClick={() => describe(index)}>
+                    {busy ? "Trabajando…" : "Describir con IA"}
+                  </button>
+                )}
+                {photo.description && photo.description_source === "IA" && (
+                  <span className={`${pillClass} bg-neutral-soft text-neutral-ink`}>Descripción propuesta por la IA</span>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      {canEdit && photos.length < MAX_EXTRA_PHOTOS && (
+        <>
+          <input
+            ref={picker}
+            type="file"
+            multiple
+            aria-label="Agregar fotografías adicionales"
+            accept={PHOTO_EXTENSIONS.join(",")}
+            className="sr-only"
+            tabIndex={-1}
+            onChange={async (event) => {
+              const files = Array.from(event.target.files ?? []);
+              event.target.value = "";
+              await add(files);
+            }}
+          />
+          <button type="button" className={`${secondaryButtonClass} self-start`} disabled={busy} onClick={() => picker.current?.click()}>
+            {busy ? "Trabajando…" : "Agregar fotografías"}
+          </button>
+        </>
+      )}
+      <FeedbackLine feedback={feedback} />
+    </fieldset>
+  );
+}
+
 function StudyDocument({
   id,
   field,

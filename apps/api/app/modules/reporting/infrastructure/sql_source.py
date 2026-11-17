@@ -153,7 +153,9 @@ class SqlReportingSource:
         )
         found: dict[uuid.UUID, list[str]] = {}
         for application_id, data, sections in rows:
-            answers = json.loads(data).get("answers") or {}
+            stored = json.loads(data)
+            answers = stored.get("answers") or {}
+            extra = stored.get("extra_photos") or []
             for section in json.loads(sections):
                 for item in section["fields"]:
                     entry = answers.get(item["id"]) or {}
@@ -161,6 +163,12 @@ class SqlReportingSource:
                         found.setdefault(application_id, []).append(
                             f"{item['label']}: {entry['description']}"
                         )
+            for number, photo in enumerate(extra, start=1):
+                if photo.get("description"):
+                    found.setdefault(application_id, []).append(
+                        f"{photo.get('title') or f'Fotografía adicional {number}'}: "
+                        f"{photo['description']}"
+                    )
         return {application_id: "\n".join(lines) for application_id, lines in found.items()}
 
     @staticmethod

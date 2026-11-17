@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Assessment, AssessmentList } from "@/lib/api/assessments";
@@ -201,9 +201,15 @@ describe("AssessmentsSection", () => {
         { ...FIELD, id: "domicilio", label: "Domicilio declarado", type: "PARRAFO" },
       ] }],
     });
+    let stored = [file("f9", "estudio escaneado.pdf", "ESTUDIO_SOCIOECONOMICO"), file("f1", "cv.pdf", "CV")];
     const fetchMock = mockApi({
       [`GET ${LIST_URL}`]: { body: list([study]) },
-      [`GET ${FILES_URL}`]: { body: [file("f9", "estudio escaneado.pdf", "ESTUDIO_SOCIOECONOMICO"), file("f1", "cv.pdf", "CV")] },
+      [`GET ${FILES_URL}`]: () => ({ body: stored }),
+      [`POST ${FILES_URL}`]: () => {
+        const format = file("f12", "estudio lleno.xlsx", "ESTUDIO_SOCIOECONOMICO");
+        stored = [...stored, format];
+        return { status: 201, body: { file: format, duplicates: [] } };
+      },
       ["POST /api/v1/assessments/e-ESTUDIO_SOCIOECONOMICO/digitization"]: {
         body: { values: { visita: "2026-11-10", domicilio: "Calle Inventada 123" }, illegible: ["Persona que atendió"], missing: [] },
       },
@@ -214,13 +220,19 @@ describe("AssessmentsSection", () => {
     await user.click(await screen.findByRole("button", { name: /Estudio socioeconómico/ }));
     expect(screen.getByText(/El sistema no lo puntúa/)).toBeTruthy();
     // Solo se ofrecen documentos del tipo que corresponde.
-    const picker = await screen.findByLabelText("Formulario escaneado");
+    const picker = (await screen.findByLabelText("Formato del estudio (Excel, PDF, Word o escaneado)")) as HTMLSelectElement;
     await within(picker).findByRole("option", { name: "estudio escaneado.pdf" });
     expect(within(picker).queryByRole("option", { name: "cv.pdf" })).toBeNull();
-    await user.selectOptions(picker, "f9");
-    await user.click(screen.getByRole("button", { name: "Leer el formulario escaneado con IA" }));
+    // El formato lleno se adjunta aquí mismo y queda elegido para leerlo.
+    await user.upload(screen.getByLabelText("Adjuntar el formato del estudio"), new File(["xlsx"], "estudio lleno.xlsx"));
+    expect((await screen.findByRole("status")).textContent).toContain("Archivo adjuntado");
+    const upload = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/files?") && init?.method === "POST");
+    expect(String(upload?.[0])).toContain("document_type=ESTUDIO_SOCIOECONOMICO");
+    expect(picker.value).toBe("f12");
+    await user.click(screen.getByRole("button", { name: "Leer el formato con IA" }));
+    expect(sent(fetchMock, "POST", "/digitization")).toEqual({ file_id: "f12" });
 
-    expect((await screen.findByRole("status")).textContent).toContain("todavía no se ha guardado");
+    expect(await screen.findByText(/todavía no se ha guardado/)).toBeTruthy();
     expect(screen.getByText("No se pudo leer: Persona que atendió.")).toBeTruthy();
     expect((screen.getByLabelText("Fecha de la visita (obligatorio)") as HTMLInputElement).value).toBe("2026-11-10");
     expect(screen.getAllByText("Leído por la IA")).toHaveLength(2);
@@ -233,6 +245,90 @@ describe("AssessmentsSection", () => {
       visita: { value: "2026-11-10", verified: true, source: "IA" },
       domicilio: { value: "Calle Inventada 123", verified: false, source: "IA" },
     });
+  });
+
+  it("agrega fotografías adicionales al estudio, la IA las describe y se guardan con su título", async () => {
+    const study = make("ESTUDIO_SOCIOECONOMICO", { status: "EN_PROCESO", form: [] });
+    let count = 0;
+    let stored: ReturnType<typeof file>[] = [];
+    const fetchMock = mockApi({
+      [`GET ${LIST_URL}`]: { body: list([study]) },
+      [`GET ${FILES_URL}`]: () => ({ body: stored }),
+      [`POST ${FILES_URL}`]: ({ url }) => {
+        count += 1;
+        const name = new URL(url, "http://prueba").searchParams.get("filename") ?? "";
+        const photo = file(`p${count}`, name, "ESTUDIO_SOCIOECONOMICO");
+        stored = [...stored, photo];
+        return { status: 201, body: { file: photo, duplicates: [] } };
+      },
+      ["POST /api/v1/assessments/e-ESTUDIO_SOCIOECONOMICO/photo-descriptions"]: {
+        body: { description: "Patio con piso de cemento y un lavadero.", unclear: [] },
+      },
+      ["PUT /api/v1/assessments/e-ESTUDIO_SOCIOECONOMICO"]: { body: { ...study, version: 2 } },
+    });
+    const user = userEvent.setup({ applyAccept: false });
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: /Estudio socioeconómico/ }));
+    const extra = within(await screen.findByRole("group", { name: "Fotografías adicionales" }));
+    // Varias de una vez; lo que no es foto se rechaza y se avisa.
+    await user.upload(extra.getByLabelText("Agregar fotografías adicionales"), [
+      new File(["a"], "patio.jpg"),
+      new File(["b"], "cocina.png"),
+      new File(["c"], "notas.pdf"),
+    ]);
+    expect((await extra.findByRole("alert")).textContent).toContain("notas.pdf: solo se aceptan fotos JPG o PNG.");
+    expect(extra.getAllByRole("listitem")).toHaveLength(2);
+    expect(extra.getByRole("link", { name: "1. patio.jpg" })).toBeTruthy();
+
+    await user.type(extra.getByLabelText("Título de la fotografía adicional 1"), "Patio");
+    await user.click(extra.getByRole("button", { name: "Describir con IA: fotografía adicional 1" }));
+    const description = (await extra.findByLabelText(
+      "Descripción de lo que se observa: fotografía adicional 1",
+    )) as HTMLTextAreaElement;
+    await waitFor(() => expect(description.value).toBe("Patio con piso de cemento y un lavadero."));
+    expect(sent(fetchMock, "POST", "/photo-descriptions")).toEqual({ file_id: "p1", field_id: null, title: "Patio" });
+    expect(extra.getByText("Descripción propuesta por la IA")).toBeTruthy();
+    // La segunda se describe a mano y la primera se conserva como propuesta de la IA.
+    await user.type(extra.getByLabelText("Descripción de lo que se observa: fotografía adicional 2"), "Cocina con estufa.");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByText("Evaluación guardada.");
+    expect(sent(fetchMock, "PUT", "/e-ESTUDIO_SOCIOECONOMICO").data.extra_photos).toEqual([
+      { file_id: "p1", title: "Patio", description: "Patio con piso de cemento y un lavadero.", description_source: "IA" },
+      { file_id: "p2", title: "", description: "Cocina con estufa.", description_source: "MANUAL" },
+    ]);
+    await user.click(extra.getByRole("button", { name: "Quitar la fotografía adicional 2" }));
+    expect(extra.getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("en psicometría la IA resume, explica lo que dice el reporte y propone preguntas", async () => {
+    const test = make("PSICOMETRIA", {
+      status: "PRESENTADA",
+      file_id: "f3",
+      data: { instrument: "Prueba Inventada" },
+      ai_summary: {
+        resumen: "El reporte documenta dos escalas.",
+        resultados_documentados: ["Razonamiento: percentil 70"],
+        interpretacion: ["Razonamiento, percentil 70: el reporte lo describe como por encima del promedio."],
+        datos_no_legibles: [],
+        advertencias: [],
+        preguntas_para_la_siguiente_etapa: ["Cuéntame de un problema de nómina que resolviste paso a paso."],
+      },
+      ai_summary_at: "2026-11-15T18:00:00Z",
+    });
+    mockApi({
+      [`GET ${LIST_URL}`]: { body: list([test]) },
+      [`GET ${FILES_URL}`]: { body: [file("f3", "reporte.pdf", "PSICOMETRIA")] },
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: /Prueba psicométrica/ }));
+    expect(screen.getByRole("button", { name: "Resumir e interpretar con IA" })).toBeTruthy();
+    expect(screen.getByLabelText("Adjuntar el documento")).toBeTruthy();
+    const panel = within(screen.getByRole("region", { name: "Resumen de la IA" }));
+    expect(panel.getByText("Qué significa, según el reporte")).toBeTruthy();
+    expect(panel.getByText(/por encima del promedio/)).toBeTruthy();
+    expect(panel.getByText("Preguntas para la siguiente etapa")).toBeTruthy();
+    expect(panel.getByText(/No es un diagnóstico ni una recomendación/)).toBeTruthy();
   });
 
   it("captura las tablas del formato y marca lo que solo anota una persona", async () => {
@@ -320,7 +416,7 @@ describe("AssessmentsSection", () => {
     expect(description.value).toBe("Fachada de dos niveles con portón metálico.");
     expect(screen.getByText("Descripción propuesta por la IA")).toBeTruthy();
     expect(screen.getByText("La IA no distingue: El número exterior.")).toBeTruthy();
-    expect(sent(fetchMock, "POST", "/photo-descriptions")).toEqual({ file_id: "f10", field_id: "fachada" });
+    expect(sent(fetchMock, "POST", "/photo-descriptions")).toEqual({ file_id: "f10", field_id: "fachada", title: null });
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
 
     // La persona corrige el texto: deja de contar como propuesto por la IA.

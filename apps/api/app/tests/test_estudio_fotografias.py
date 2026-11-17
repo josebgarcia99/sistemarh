@@ -418,3 +418,82 @@ def test_el_reporte_de_postulaciones_lleva_las_fotos_solo_para_quien_tiene_el_pe
     header, rows, about = export(stranger)
     assert column not in header and "Datos sensibles" not in about
     assert "Fachada" not in " ".join(str(v) for row in rows.values() for v in row)
+
+
+def test_fotografias_adicionales_se_guardan_se_describen_y_entran_a_la_sintesis_y_al_reporte(
+    ana, recruiter, admin, vacancy_id, providers
+):
+    study = _study_with_photo(recruiter, vacancy_id, ana)
+    answers = {key: value for key, value in study["data"]["answers"].items()}
+    assert study["data"]["extra_photos"] == []
+    patio = upload(
+        recruiter, vacancy_id, "patio.jpg", photo(), document_type="ESTUDIO_SOCIOECONOMICO"
+    )
+    cocina = upload(
+        recruiter, vacancy_id, "cocina.jpg", photo(), document_type="ESTUDIO_SOCIOECONOMICO"
+    )
+    cv = upload(recruiter, vacancy_id, "otro.pdf", pdf_cv("Documento ficticio"))
+
+    def save(extra):
+        return update(
+            recruiter, study, status="EN_PROCESO", data={"answers": answers, "extra_photos": extra}
+        )
+
+    # Solo fotografías del estudio de esta vacante, sin repetir y con un máximo.
+    assert "no es válido" in save([{"file_id": "no-es-un-id"}]).json()["detail"]
+    assert "no es un estudio socioeconómico" in save([{"file_id": cv["id"]}]).json()["detail"]
+    repeated = save([{"file_id": patio["id"]}, {"file_id": patio["id"]}])
+    assert repeated.status_code == 422 and "repetida" in repeated.json()["detail"]
+    many = save([{"file_id": patio["id"]}] + [{"file_id": cocina["id"]}] * 20)
+    assert many.status_code == 422
+
+    # La IA describe una adicional con el título que le puso la persona.
+    assign(admin, "DESCRIPCION_FOTOGRAFIAS", "SINTESIS_EXPEDIENTES")
+    fake = providers[ProviderCode.ANTHROPIC]
+    fake.prompts, fake.images = [], []
+    fake.script = [reply({"descripcion": "Patio con piso de cemento y un lavadero."})]
+    described = recruiter.post(
+        f"{API}/assessments/{study['id']}/photo-descriptions",
+        json={"file_id": patio["id"], "title": "  Patio   trasero "},
+    )
+    assert described.status_code == 200, described.text
+    assert "«Patio trasero»" in fake.prompts[0][2] and len(fake.images) == 1
+
+    saved = save(
+        [
+            {
+                "file_id": patio["id"],
+                "title": "Patio trasero",
+                "description": described.json()["description"],
+                "description_source": "IA",
+            },
+            {"file_id": cocina["id"], "title": "", "description": "Cocina con estufa."},
+            {"file_id": "", "title": "fila vacía"},
+        ]
+    )
+    assert saved.status_code == 200, saved.text
+    extra = saved.json()["data"]["extra_photos"]
+    assert [(p["title"], p["description_source"]) for p in extra] == [
+        ("Patio trasero", "IA"),
+        ("", "MANUAL"),
+    ]
+
+    # Entran a la síntesis junto con las del formulario, con su título…
+    fake.prompts = []
+    fake.script = [reply({"observaciones_humanas": ["Patio con lavadero (fotografía)"]})]
+    synthesis = recruiter.post(f"{API}/applications/{ana}/syntheses")
+    assert "4 fotografías del estudio" in synthesis.json()["sources"]
+    sent = fake.prompts[0][2]
+    assert "- Patio trasero (propuesta por la IA y revisada): Patio con piso de cemento" in sent
+    assert "- Fotografía adicional 2 (escrita a mano): Cocina con estufa." in sent
+    # …y al reporte de postulaciones.
+    from openpyxl import load_workbook
+
+    made = recruiter.post(f"{API}/reports/exports", json={"kind": "POSTULACIONES"})
+    content = recruiter.get(f"{API}/reports/exports/{made.json()['id']}/download").content
+    sheet = load_workbook(io.BytesIO(content))["Postulaciones"]
+    rows = {row[0]: row for row in sheet.iter_rows(min_row=2, values_only=True)}
+    assert rows["Ana Pérez Ficticia"][-1].endswith(
+        "Patio trasero: Patio con piso de cemento y un lavadero.\n"
+        "Fotografía adicional 2: Cocina con estufa."
+    )

@@ -188,6 +188,22 @@ PSYCHOMETRIC = {
     "professional_license": "0000000",
     "validation_note": "Interpretación de ejemplo, sin valor real.",
 }
+# Reporte inventado que se adjunta a la psicometría validada, para ver el resumen.
+PSYCHOMETRIC_REPORT = [
+    "Reporte ficticio de la Prueba Inventada de Habilidades (datos de prueba).",
+    "Atención al detalle: percentil 80. Rango alto frente al grupo de comparación.",
+    "Razonamiento numérico: percentil 65. Por encima del promedio.",
+    "Trabajo bajo presión: percentil 40. Rango medio; se sugiere explorarlo en entrevista.",
+    "Conclusión del profesional: perfil compatible con tareas de detalle.",
+    "Interpretó: Psic. Ficticia Responsable.",
+]
+# Fotografía adicional del estudio: una imagen de un solo color, con su descripción.
+EXTRA_PHOTO = {
+    "title": "Calle de acceso (imagen de ejemplo)",
+    "description": "Ejemplo de los datos de prueba: la imagen es un rectángulo de color, no una "
+    "fotografía real. Aquí iría la descripción de lo que se observa.",
+}
+
 REFERENCES = [
     {
         "type": "LABORAL",

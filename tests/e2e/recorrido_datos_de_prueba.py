@@ -42,6 +42,12 @@ with sync_playwright() as p:
     evaluaciones = page.get_by_role("list", name="Evaluaciones")
     for kind in ("Prueba psicométrica", "Entrevista con gerente", "Prueba técnica", "Referencias laborales y personales", "Estudio socioeconómico"):
         expect(evaluaciones.get_by_role("button", name=kind).first).to_be_visible()
+    # La psicometría validada trae su reporte, con lo que significa según el propio reporte
+    evaluaciones.get_by_role("button", name="Prueba psicométrica").click()
+    psico = page.get_by_role("region", name="Resumen de la IA")
+    expect(psico).to_contain_text("Qué significa, según el reporte"); expect(psico).to_contain_text("Preguntas para la siguiente etapa")
+    psico.screenshot(path=f"{SHOTS}/dp4_psicometria.png")
+    evaluaciones.get_by_role("button", name="Prueba psicométrica").click()
     evaluaciones.get_by_role("button", name="Referencias laborales y personales").click()
     expect(page.get_by_role("region", name="Resumen de la IA")).to_contain_text("Sin confirmar")
     expect(page.get_by_text("Preguntas sugeridas para la siguiente etapa")).to_be_visible()

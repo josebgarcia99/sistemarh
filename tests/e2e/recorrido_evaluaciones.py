@@ -4,12 +4,20 @@ Se ejecuta con ``python tests/e2e/run.py``, sobre el modo demostración.
 """
 
 # ruff: noqa
-import os, re, tempfile
+import os, re, tempfile, zipfile
 from PIL import Image
 from playwright.sync_api import sync_playwright, expect
 from comun import BASE, PW, SHOTS
 # Fotografía inventada (un rectángulo de color) para adjuntarla al estudio.
 FOTO = os.path.join(tempfile.mkdtemp(prefix="reclu-foto-"), "localizacion.jpg"); Image.new("RGB", (800, 600), (120, 150, 180)).save(FOTO)
+# Otras dos fotografías inventadas, para agregarlas como adicionales.
+PATIO = os.path.join(os.path.dirname(FOTO), "patio.jpg"); Image.new("RGB", (640, 480), (150, 170, 140)).save(PATIO)
+COCINA = os.path.join(os.path.dirname(FOTO), "cocina.png"); Image.new("RGB", (640, 480), (190, 170, 150)).save(COCINA)
+# Formato del estudio lleno (inventado), para adjuntarlo en el propio estudio.
+FORMATO = os.path.join(os.path.dirname(FOTO), "Estudio lleno ficticio.docx")
+with zipfile.ZipFile(FORMATO, "w", zipfile.ZIP_DEFLATED) as z:
+    z.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>')
+    z.writestr("word/document.xml", '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Estudio socioeconómico ficticio. Fecha de aplicación: 10 de noviembre de 2026.</w:t></w:r></w:p></w:body></w:document>')
 errors = []
 def login(page, email):
     page.goto(BASE + "/login")
@@ -69,14 +77,19 @@ with sync_playwright() as p:
     sec.get_by_label("Interpretación del profesional").fill("Dentro de lo esperado.")
     sec.get_by_role("button", name="Guardar", exact=True).last.click()
     expect(sec.get_by_role("status").filter(has_text="Evaluación guardada")).to_be_visible()
-    sec.get_by_role("button", name="Resumir con IA").last.click()
-    expect(sec.get_by_role("region", name="Resumen de la IA").last).to_contain_text("Resultado simulado"); print("3 psicometría: validar exige al profesional; la IA resume el documento cifrado")
+    sec.get_by_role("button", name="Resumir e interpretar con IA").click()
+    psico = sec.get_by_role("region", name="Resumen de la IA").last
+    expect(psico).to_contain_text("Resultado simulado"); expect(psico).to_contain_text("Qué significa, según el reporte"); expect(psico).to_contain_text("Preguntas para la siguiente etapa")
+    print("3 psicometría: validar exige al profesional; la IA resume el reporte cifrado, explica lo que dice y propone preguntas")
     # 4. Estudio socioeconómico con digitalización
     sec.get_by_role("button", name="Registrar evaluación").click()
     sec.get_by_label("Tipo de evaluación").select_option("ESTUDIO_SOCIOECONOMICO")
     sec.get_by_role("button", name="Registrar", exact=True).click()
-    sec.get_by_label("Formulario escaneado", exact=True).first.select_option(label="Estudio escaneado ficticio.docx")
-    sec.get_by_role("button", name="Leer el formulario escaneado con IA").click()
+    # El formato lleno se adjunta en el propio estudio y queda elegido para leerlo.
+    sec.get_by_label("Adjuntar el formato del estudio").set_input_files(FORMATO)
+    expect(sec.get_by_role("status").filter(has_text="Archivo adjuntado")).to_be_visible()
+    expect(sec.get_by_label("Formato del estudio (Excel, PDF, Word o escaneado)", exact=True).locator("option:checked")).to_have_text("Estudio lleno ficticio.docx")
+    sec.get_by_role("button", name="Leer el formato con IA").click()
     expect(sec.get_by_role("status").filter(has_text="todavía no se ha guardado")).to_be_visible()
     expect(sec.get_by_text("Leído por la IA").first).to_be_visible()
     v = sec.get_by_role("checkbox", name="Fecha de aplicación: verificado"); expect(v).not_to_be_checked(); v.check()
@@ -89,9 +102,21 @@ with sync_playwright() as p:
     desc.fill("Fachada de dos niveles, pintura clara y portón metálico."); expect(sec.get_by_text("Descripción propuesta por la IA")).to_have_count(0)
     sec.get_by_label("Adjuntar archivo: Fotografía: localización").set_input_files(FOTO)
     expect(sec.get_by_text("Archivo adjuntado")).to_be_visible(); expect(sec.get_by_label("Fotografía: localización", exact=True)).to_have_value(re.compile(".+")); print("4b fotos: se elige o se adjunta una foto; la IA propone la descripción y la persona la corrige")
+    # 4c. Fotografías adicionales: varias de una vez, con título y descripción de la IA
+    extra = sec.get_by_role("group", name="Fotografías adicionales")
+    extra.get_by_label("Agregar fotografías adicionales").set_input_files([PATIO, COCINA])
+    expect(extra.get_by_role("status").filter(has_text="2 fotografías agregadas")).to_be_visible()
+    expect(extra.get_by_role("listitem")).to_have_count(2)
+    extra.get_by_label("Título de la fotografía adicional 1").fill("Patio trasero")
+    extra.get_by_role("button", name="Describir con IA: fotografía adicional 1").click()
+    expect(extra.get_by_label("Descripción de lo que se observa: fotografía adicional 1")).to_have_value(re.compile("Descripción simulada"))
+    extra.get_by_label("Descripción de lo que se observa: fotografía adicional 2").fill("Cocina con estufa y alacena.")
+    extra.screenshot(path=f"{SHOTS}/f6_5_fotos_adicionales.png")
+    print("4c fotos adicionales: se agregan dos, una la describe la IA y otra la persona")
     sec.get_by_label("Estado", exact=True).last.select_option("EN_PROCESO")
     sec.get_by_role("button", name="Guardar", exact=True).last.click()
     expect(sec.get_by_role("status").filter(has_text="Evaluación guardada")).to_be_visible(); print("4 estudio: la IA llena campos sin verificar; la persona marca lo verificado")
+    expect(extra.get_by_role("listitem")).to_have_count(2)
     page.screenshot(path=f"{SHOTS}/f6_1_evaluaciones.png", full_page=True)
     # 5. Expediente por etapas y síntesis
     dossier = page.get_by_role("region", name="Expediente por etapas")

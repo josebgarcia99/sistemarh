@@ -112,6 +112,9 @@ def test_la_ia_ordena_las_referencias_y_las_contrasta_con_el_cv(ana, recruiter, 
                     "El CV indica hasta 2024; la referencia indicó hasta 2023."
                 ],
                 "sin_confirmar": ["Vecino Ficticio Dos no fue localizado."],
+                "preguntas_para_la_siguiente_etapa": [
+                    "¿En qué mes de 2023 o 2024 dejaste ese empleo?"
+                ],
                 # Nada de esto se conserva.
                 "recomendacion": "Contratar",
                 "confiabilidad": "alta",
@@ -128,7 +131,11 @@ def test_la_ia_ordena_las_referencias_y_las_contrasta_con_el_cv(ana, recruiter, 
         "coincidencias_con_cv",
         "discrepancias_verificables",
         "sin_confirmar",
+        "preguntas_para_la_siguiente_etapa",
     }
+    assert summary["preguntas_para_la_siguiente_etapa"] == [
+        "¿En qué mes de 2023 o 2024 dejaste ese empleo?"
+    ]
     assert summary["discrepancias_verificables"] == [
         "El CV indica hasta 2024; la referencia indicó hasta 2023."
     ]

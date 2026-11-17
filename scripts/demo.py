@@ -140,14 +140,15 @@ class SimulatedProvider:
         tokens = len(system + user) // 4 + 50
         simulated = None
         note = "Respuesta simulada del modo demostración: no la produjo ningún modelo real."
-        if system.startswith(
-            ("Recibes el texto de un reporte", "Recibes el material de una prueba")
-        ):
+        if system.startswith(("Recibes el texto del reporte", "Recibes el material de una prueba")):
             simulated = {
                 "resumen": note,
                 "resultados_documentados": ["Resultado simulado tomado del documento."],
+                # Solo la psicometría lleva interpretación; en otra prueba se descarta.
+                "interpretacion": ["Resultado simulado: lo que el reporte diría que significa."],
                 "datos_no_legibles": [],
                 "advertencias": ["Resumen simulado: revisa el documento original."],
+                "preguntas_para_la_siguiente_etapa": ["Pregunta simulada para la siguiente etapa."],
             }
         elif system.startswith("Recibes las notas de una entrevista"):
             simulated = {
@@ -165,6 +166,7 @@ class SimulatedProvider:
                 "coincidencias_con_cv": ["Coincidencia simulada con un empleo del CV."],
                 "discrepancias_verificables": [],
                 "sin_confirmar": ["Empleo del CV que ninguna referencia confirma (simulado)."],
+                "preguntas_para_la_siguiente_etapa": ["Pregunta simulada para la siguiente etapa."],
             }
         elif system.startswith("Recibes el texto de un formulario"):
             # "Lectura" inventada: un valor de ejemplo por campo, según su tipo.

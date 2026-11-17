@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { apiFetch } from "./client";
+import type { DocumentType } from "./files";
 
 export const kindSchema = z.enum([
   "PSICOMETRIA",
@@ -17,7 +18,7 @@ export const KIND_LABELS: Record<Kind, string> = {
   REFERENCIAS: "Referencias laborales y personales",
 };
 /** Tipo de documento de la vacante que se adjunta a cada evaluación. */
-export const KIND_DOCUMENT: Record<Kind, string> = {
+export const KIND_DOCUMENT: Record<Kind, DocumentType> = {
   PSICOMETRIA: "PSICOMETRIA",
   ENTREVISTA: "ADJUNTO",
   PRUEBA_TECNICA: "PRUEBA_TECNICA",
@@ -259,10 +260,11 @@ const photoDescriptionSchema = z.object({
 export type PhotoDescription = z.infer<typeof photoDescriptionSchema>;
 
 /** La IA describe lo que se ve en una fotografía del estudio. No guarda nada. */
-export function describePhoto(id: string, fileId: string, fieldId: string) {
+export function describePhoto(id: string, fileId: string, fieldId: string | null, title?: string) {
   return apiFetch(`/assessments/${id}/photo-descriptions`, {
     method: "POST",
-    body: { file_id: fileId, field_id: fieldId },
+    // Una fotografía adicional no pertenece a un campo: viaja con su título.
+    body: { file_id: fileId, field_id: fieldId, title: title || null },
     schema: photoDescriptionSchema,
   });
 }

@@ -289,7 +289,10 @@ class AssessmentService:
                 if version is None:
                     raise rules.RuleError("El formulario del estudio ya no existe.")
                 clean = rules.study(data, status, version)
-                for document_id in rules.document_field_ids(version, clean["answers"]):
+                attached = rules.document_field_ids(version, clean["answers"]) + [
+                    photo["file_id"] for photo in clean["extra_photos"]
+                ]
+                for document_id in attached:
                     if not self._documents.belongs(
                         assessment.vacancy_id, uuid.UUID(document_id), kind
                     ):
@@ -553,6 +556,7 @@ class AssessmentService:
         file_id: uuid.UUID,
         *,
         field_id: str | None = None,
+        title: str | None = None,
         ip: str | None = None,
     ) -> AiOutcome:
         """Pide a la IA que describa lo que se ve en una fotografía del estudio.
@@ -569,8 +573,10 @@ class AssessmentService:
                 "Elige una fotografía de tipo «Estudio socioeconómico» cargada en esta vacante."
             )
         version = self._repo.template_version(assessment.template_version_id)  # type: ignore[arg-type]
+        # El apartado del formulario o, en una fotografía adicional, su título.
         label = next(
-            (item.label for item in (version.fields if version else ()) if item.id == field_id), ""
+            (item.label for item in (version.fields if version else ()) if item.id == field_id),
+            " ".join((title or "").split())[:120],
         )
         try:
             photo = self._documents.read_photo(assessment.vacancy_id, file_id)
@@ -657,6 +663,7 @@ class AssessmentService:
                     version = self._repo.template_version(item.template_version_id)  # type: ignore[arg-type]
                     if version is not None:
                         photos += rules.photo_notes(version, item.data.get("answers") or {})
+                    photos += rules.extra_photo_notes(item.data.get("extra_photos"))
         # Referencias contactadas: lo que dijeron terceros sobre la persona.
         told = [
             row

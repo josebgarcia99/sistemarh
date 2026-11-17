@@ -85,6 +85,15 @@ def _blank_pdf() -> bytes:
     return bytes(out)
 
 
+def _sample_picture() -> bytes:
+    """Imagen de un solo color: ocupa el lugar de una fotografía, sin serlo."""
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (640, 420), (176, 190, 197)).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def load(context: AppContext, owner_email: str, *, allow_production: bool = False) -> Summary:
     if context.settings.environment is Environment.PRODUCTION and not allow_production:
         raise ConflictError(
@@ -163,29 +172,48 @@ class _Loader:
         review = setup.submit(self._owner, draft.id, expected_revision=draft.revision)
         setup.approve(self._owner, review.id, expected_revision=review.revision)
 
-    def _upload_cvs(self, vacancy_id: uuid.UUID) -> None:
+    def _upload(
+        self, vacancy_id: uuid.UUID, document_type: DocumentType, name: str, data: bytes
+    ) -> uuid.UUID:
         files = self._context.file_service(self._repos)
         pipeline = self._context.upload_pipeline()
-        uploads = [
-            (f"CV {person.name}.docx", _docx(person.cv_lines(number)))
-            for number, person in enumerate(content.PEOPLE, start=1)
-        ]
-        uploads.append((content.SCANNED_CV, _blank_pdf()))
-        for name, data in uploads:
-            asset = files.begin_upload(
-                self._owner,
-                vacancy_id=vacancy_id,
-                document_type=DocumentType.CV,
-                original_name=name,
-                declared_size=len(data),
+        asset = files.begin_upload(
+            self._owner,
+            vacancy_id=vacancy_id,
+            document_type=document_type,
+            original_name=name,
+            declared_size=len(data),
+        )
+        receiver = pipeline.receiver(asset)
+        receiver.write(data)
+        receiver.close()
+        outcome = pipeline.store(asset, receiver)
+        files.finish_upload(self._owner, asset.id, outcome)
+        if outcome.status is not FileStatus.CONFIRMADO:
+            raise ConflictError(f"No se pudo guardar «{name}» en el almacenamiento.")
+        return asset.id
+
+    def _upload_cvs(self, vacancy_id: uuid.UUID) -> None:
+        for number, person in enumerate(content.PEOPLE, start=1):
+            self._upload(
+                vacancy_id,
+                DocumentType.CV,
+                f"CV {person.name}.docx",
+                _docx(person.cv_lines(number)),
             )
-            receiver = pipeline.receiver(asset)
-            receiver.write(data)
-            receiver.close()
-            outcome = pipeline.store(asset, receiver)
-            files.finish_upload(self._owner, asset.id, outcome)
-            if outcome.status is not FileStatus.CONFIRMADO:
-                raise ConflictError(f"No se pudo guardar «{name}» en el almacenamiento.")
+        self._upload(vacancy_id, DocumentType.CV, content.SCANNED_CV, _blank_pdf())
+
+    def _optional_upload(
+        self, vacancy_id: uuid.UUID, document_type: DocumentType, name: str, data: bytes
+    ) -> uuid.UUID | None:
+        """Un adjunto de apoyo (reporte o fotografía). Si no se puede guardar, por
+        ejemplo sin clave maestra para cifrarlo, se avisa y se sigue sin él."""
+        try:
+            return self._upload(vacancy_id, document_type, name, data)
+        except AppError as error:
+            assert self._summary is not None
+            self._summary.warnings.append(f"{name}: {error.detail}")
+            return None
 
     def _evaluate(self, vacancy_id: uuid.UUID) -> None:
         """Lo mismo que el trabajo en segundo plano, pero dentro de esta transacción."""
@@ -256,7 +284,7 @@ class _Loader:
                     self._guarded(
                         person.name,
                         lambda s=stage, f=final, p=person, a=application: self._records(
-                            a.id, s.kind.value, p, bank.bank.id, last=f
+                            vacancy_id, a.id, s.kind.value, p, bank.bank.id, last=f
                         ),
                     )
             if person.stage in ("PRUEBA_TECNICA", "ESTUDIO_SOCIOECONOMICO", "RESULTADO"):
@@ -284,6 +312,7 @@ class _Loader:
 
     def _records(
         self,
+        vacancy_id: uuid.UUID,
         application_id: uuid.UUID,
         stage: str,
         person: content.Person,
@@ -300,13 +329,32 @@ class _Loader:
             self._call(application_id, bank_id, finished=not pending or person.level < 3)
         elif stage == "PSICOMETRIA":
             data = dict(content.PSYCHOMETRIC)
-            assessments.create(
-                owner,
-                application_id,
-                Kind.PSICOMETRIA,
-                status="PENDIENTE" if pending else "VALIDADA",
-                data={"instrument": data["instrument"]} if pending else data,
-            )
+            if pending:
+                assessments.create(
+                    owner,
+                    application_id,
+                    Kind.PSICOMETRIA,
+                    status="PENDIENTE",
+                    data={"instrument": data["instrument"]},
+                )
+            else:
+                # Con su reporte adjunto, para ver el resumen y la interpretación.
+                report = self._optional_upload(
+                    vacancy_id,
+                    DocumentType.PSICOMETRIA,
+                    f"Reporte psicométrico {person.name}.docx",
+                    _docx([*content.PSYCHOMETRIC_REPORT, f"Persona evaluada: {person.name}."]),
+                )
+                done = assessments.create(
+                    owner,
+                    application_id,
+                    Kind.PSICOMETRIA,
+                    status="VALIDADA",
+                    data=data,
+                    file_id=report,
+                )
+                if report is not None:
+                    assessments.summarize(owner, done.id)
         elif stage == "ENTREVISTA":
             if pending:
                 data: dict[str, Any] = {"interviewer": content.INTERVIEW["interviewer"]}
@@ -380,6 +428,12 @@ class _Loader:
                 for item in version.fields:
                     if item.label == "Nombre completo":
                         answers[item.id] = {"value": person.name}
+            picture = self._optional_upload(
+                vacancy_id,
+                DocumentType.ESTUDIO_SOCIOECONOMICO,
+                f"Fotografía de ejemplo {person.name}.png",
+                _sample_picture(),
+            )
             assessments.create(
                 owner,
                 application_id,
@@ -389,6 +443,9 @@ class _Loader:
                     "performed_by": "Analista de estudios (datos de prueba)",
                     "notes": "Estudio inventado de los datos de prueba.",
                     "answers": answers,
+                    "extra_photos": [{"file_id": str(picture), **content.EXTRA_PHOTO}]
+                    if picture
+                    else [],
                 },
                 template_id=template.id,
             )

@@ -149,6 +149,8 @@ class PhotoDescriptionIn(BaseModel):
     file_id: uuid.UUID
     # Campo del formulario al que pertenece la fotografía (da contexto a la IA).
     field_id: str | None = Field(default=None, max_length=40)
+    # En una fotografía adicional, el título que le puso la persona.
+    title: str | None = Field(default=None, max_length=120)
 
 
 class PhotoDescriptionOut(BaseModel):
@@ -507,6 +509,7 @@ def describe_study_photo(
             assessment_id,
             body.file_id,
             field_id=body.field_id,
+            title=body.title,
             ip=client_ip(request),
         )
     if outcome.content is None:
