@@ -23,6 +23,8 @@ npm run dev
 
 Abre http://localhost:3000. La primera terminal muestra los tres usuarios de ejemplo y la contraseña, que cambia en cada arranque.
 
+**Para ver el flujo completo de una vez.** Entra como `ana@demo.test` o como la administradora y abre la vacante «Analista de Nómina · DATOS DE PRUEBA»: trae diez personas inventadas repartidas en las etapas, con llamadas, evaluaciones, referencias y síntesis de ejemplo. Se carga sola al arrancar el modo demostración (con `DEMO_SAMPLE_DATA=0` no se carga). Si no aparece, el código no está al día: `git pull` en la rama `pruebas` y vuelve a arrancar.
+
 **Para probar el puesto de analista de estudios.** Entra como `carla@demo.test` (misma contraseña de demostración): solo verás «Estudios», con las personas en proceso de todas las vacantes.
 
 **Para probar la evaluación de CV.** Entra como `ana@demo.test`, abre Vacantes, elige «Analista de Nómina», y pulsa el paso 3, «Cargar y evaluar CV». La vacante ya trae un prompt aprobado y cuatro CV ficticios (uno «escaneado», sin texto). Pulsa «Evaluar 4 CV» y descarga el Excel y los ZIP. Los niveles y las puntuaciones que verás son inventados por el proveedor simulado: sirven para ver la pantalla, no para juzgar la calidad de la evaluación.

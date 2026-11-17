@@ -13,8 +13,9 @@ QUÉ ES Y QUÉ NO ES
 - Los documentos se guardan en una carpeta temporal que se elimina al cerrar.
 - Se niega a arrancar si el entorno está configurado como producción.
 - Solo escucha en este equipo (127.0.0.1).
-- Con DEMO_SAMPLE_DATA=1 añade la vacante «Analista de Nómina · DATOS DE PRUEBA»,
-  con personas en cada etapa (la misma de ``python -m app.cli load-sample-data``).
+- Incluye la vacante «Analista de Nómina · DATOS DE PRUEBA», de Ana Demo, con
+  personas en cada etapa (la misma de ``python -m app.cli load-sample-data``).
+  Con DEMO_SAMPLE_DATA=0 no se carga.
 """
 
 # ruff: noqa: E402  (las importaciones de la API van después de ajustar la ruta)
@@ -574,8 +575,9 @@ def main() -> int:
     # La contraseña se genera en cada arranque; no hay credenciales en el código.
     password = os.environ.get("DEMO_PASSWORD") or f"Demo-{secrets.token_urlsafe(9)}"
     seed(app, password)
-    if os.environ.get("DEMO_SAMPLE_DATA") == "1":
+    if os.environ.get("DEMO_SAMPLE_DATA") != "0":
         # La misma vacante de prueba que carga «load-sample-data» en un servidor.
+        # Los recorridos automáticos la omiten con DEMO_SAMPLE_DATA=0.
         from app.sample_data.loader import load
 
         load(app.state.context, ANA_EMAIL)
@@ -596,6 +598,9 @@ def main() -> int:
     print(f"   Reclutadores:   {ANA_EMAIL}   {BETO_EMAIL}")
     print(f"   Analista de estudios socioeconómicos:   {CARLA_EMAIL}")
     print(f"   Contraseña (la misma para los tres): {password}")
+    if os.environ.get("DEMO_SAMPLE_DATA") != "0":
+        print(" Para ver el flujo completo: vacante «Analista de Nómina · DATOS DE PRUEBA»,")
+        print(" con personas en cada etapa (entra como Ana o como la administradora).")
     print(" Para detenerlo: Ctrl+C")
     print(line, flush=True)
     # Al terminar el proceso, la carpeta temporal se elimina.
