@@ -13,6 +13,8 @@ QUÉ ES Y QUÉ NO ES
 - Los documentos se guardan en una carpeta temporal que se elimina al cerrar.
 - Se niega a arrancar si el entorno está configurado como producción.
 - Solo escucha en este equipo (127.0.0.1).
+- Con DEMO_SAMPLE_DATA=1 añade la vacante «Analista de Nómina · DATOS DE PRUEBA»,
+  con personas en cada etapa (la misma de ``python -m app.cli load-sample-data``).
 """
 
 # ruff: noqa: E402  (las importaciones de la API van después de ajustar la ruta)
@@ -572,6 +574,11 @@ def main() -> int:
     # La contraseña se genera en cada arranque; no hay credenciales en el código.
     password = os.environ.get("DEMO_PASSWORD") or f"Demo-{secrets.token_urlsafe(9)}"
     seed(app, password)
+    if os.environ.get("DEMO_SAMPLE_DATA") == "1":
+        # La misma vacante de prueba que carga «load-sample-data» en un servidor.
+        from app.sample_data.loader import load
+
+        load(app.state.context, ANA_EMAIL)
 
     # El motor en memoria comparte una sola conexión: se atiende una petición a la vez.
     async def one_at_a_time() -> None:

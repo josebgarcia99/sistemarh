@@ -19,6 +19,14 @@ Almacenamiento documental:
     python -m app.cli storage-verify --manifest manifiesto.jsonl --root /ruta/copia [--full]
         Verifica una copia o una restauración contra un manifiesto. No usa la base.
 
+Datos de prueba (una vacante ficticia con personas en cada etapa):
+
+    python -m app.cli load-sample-data --owner correo@de.un.usuario
+        Crea la vacante «Analista de Nómina · DATOS DE PRUEBA» a nombre de ese
+        usuario, con CV, llamadas, entrevistas, referencias y estudio inventados.
+        No usa IA ni la configura. No se puede deshacer: en un entorno de
+        producción se niega, salvo con --allow-production.
+
 Clave maestra (cifra las API keys de IA y los documentos sensibles):
 
     python -m app.cli generate-master-key --output /ruta/fuera/del/repositorio/clave
@@ -48,6 +56,22 @@ def create_admin(context: AppContext, *, email: str, full_name: str, password: s
             email=email, full_name=full_name, password=password
         )
     return user.email
+
+
+def load_sample_data(context: AppContext, owner: str, *, allow_production: bool) -> int:
+    """Carga la vacante de prueba e imprime dónde quedó cada persona."""
+    from app.sample_data.content import VACANCY_NAME
+    from app.sample_data.loader import load
+
+    summary = load(context, owner, allow_production=allow_production)
+    print(f"Vacante creada: «{VACANCY_NAME}» (responsable: {owner}).")
+    print("Personas ficticias y etapa en la que quedaron:")
+    for name, stage in summary.people.items():
+        print(f"  - {name}: {stage}")
+    for warning in summary.warnings:
+        print(f"  Aviso: {warning}")
+    print("Todo es inventado. Los textos de IA son ejemplos fijos: no se usó ningún proveedor.")
+    return 0
 
 
 def _build_context(backend: Backend | None = None) -> AppContext:
@@ -182,7 +206,25 @@ def main(argv: list[str] | None = None) -> int:
     verify.add_argument("--full", action="store_true", help="Recalcula el SHA-256 de cada archivo")
     keygen = commands.add_parser("generate-master-key", help="Crea el archivo de la clave maestra")
     keygen.add_argument("--output", type=Path, required=True)
+    sample = commands.add_parser(
+        "load-sample-data", help="Carga una vacante ficticia con personas en cada etapa"
+    )
+    sample.add_argument("--owner", required=True, help="Correo del usuario que será responsable")
+    sample.add_argument(
+        "--allow-production",
+        action="store_true",
+        help="Permite cargarlos en un entorno de producción (no se pueden borrar después)",
+    )
     args = parser.parse_args(argv)
+
+    if args.command == "load-sample-data":
+        try:
+            return load_sample_data(
+                _build_context(), args.owner, allow_production=args.allow_production
+            )
+        except AppError as error:
+            print(f"No se cargaron los datos de prueba: {error.detail}", file=sys.stderr)
+            return 1
 
     if args.command == "generate-master-key":
         return generate_master_key(args.output)

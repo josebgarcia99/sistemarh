@@ -79,6 +79,8 @@ def run_one(script: Path, api_python: str, shots: Path, logs: Path) -> bool:
         # Para que un recorrido genere archivos de ejemplo con las utilidades de la API.
         "E2E_API_PYTHON": api_python,
         "PYTHONPATH": str(HERE),
+        # Solo un recorrido usa la vacante de prueba con personas en cada etapa.
+        "DEMO_SAMPLE_DATA": "1" if "datos_de_prueba" in script.name else "0",
     }
     demo = start([api_python, "scripts/demo.py"], ROOT, env, logs / f"{script.stem}_api.log")
     web = start(["npx", "next", "start", "-p", "3000"], WEB, env, logs / f"{script.stem}_web.log")

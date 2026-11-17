@@ -201,6 +201,20 @@ Para volver atrás: restaurar el respaldo del paso 1 y levantar la versión ante
 
 Desarrollo, pruebas y producción se mantienen separados, cada uno con su base de datos, su carpeta de documentos y su clave maestra. Ver `infrastructure/env/README.md`. En desarrollo y pruebas solo se usan datos sintéticos y `RECLU_AI_ALLOW_REAL_DOCUMENTS=false`.
 
+### Datos de prueba para conocer el sistema
+
+Para recorrer las pantallas con algo que ver, hay un comando que crea una vacante ficticia, «Analista de Nómina · DATOS DE PRUEBA», con diez personas inventadas repartidas en las etapas (revisión de RH, llamada, psicometría, entrevista, prueba técnica, estudio socioeconómico, una contratada y una que desistió), con sus CV, llamadas, evaluaciones, referencias y síntesis.
+
+```bash
+$COMPOSE exec api python -m app.cli load-sample-data --owner <correo de un administrador o reclutador>
+```
+
+- La vacante queda a nombre de ese usuario; para que otras personas la vean, se comparte desde la pantalla como cualquier otra.
+- **No usa IA**: no necesita claves ni modelos, no llama a ningún proveedor y no genera consumo. Los textos que normalmente escribiría la IA son ejemplos fijos, marcados como «Ejemplo de los datos de prueba».
+- No toca la configuración, los usuarios, los bancos de preguntas generales ni otras vacantes.
+- Si algo falla a la mitad, la base queda como estaba (todo va en una sola transacción). No se carga dos veces para el mismo usuario.
+- **No se puede deshacer desde el sistema**: las vacantes y los candidatos no se borran, solo se archivan, y cuentan en los indicadores. Por eso el comando se niega en un entorno configurado como producción. Si el servidor todavía no tiene datos reales y se quiere cargar ahí, se añade `--allow-production`; para empezar limpio después habría que reinstalar la base.
+
 ## 6. Qué contiene el paquete de despliegue
 
 | Ruta | Contenido |

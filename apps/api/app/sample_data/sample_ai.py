@@ -1,0 +1,188 @@
+"""Sustituto de la IA para cargar los datos de prueba.
+
+No se conecta a ningún proveedor, no necesita claves ni modelos asignados y no
+registra consumo. Devuelve textos de ejemplo fijos, con la misma forma que
+espera el sistema, para que las pantallas tengan algo que mostrar."""
+
+from __future__ import annotations
+
+import json
+import re
+import uuid
+from typing import Any
+
+from app.modules.ai_settings.application.service import GenerationResult
+from app.sample_data.content import EXAMPLE, PEOPLE
+
+
+def _person(text: str):  # noqa: ANN202
+    return next((person for person in PEOPLE if person.name in text), None)
+
+
+class SampleAi:
+    """Ocupa el lugar del servicio de IA solo durante la carga."""
+
+    def ensure_ready(self, operation: object, *, carries_document: bool = False) -> None:
+        return None
+
+    def execute(self, operation: object, *, system: str, user: str, **_: Any) -> GenerationResult:
+        body = self._answer(system, user)
+        if body is None:
+            return GenerationResult(
+                ok=False,
+                text="",
+                complete=False,
+                error="Los datos de prueba no incluyen un ejemplo para esta operación.",
+                input_tokens=None,
+                output_tokens=None,
+                estimated_cost_usd=None,
+                attempts=1,
+                execution_id=uuid.uuid4(),
+            )
+        return GenerationResult(
+            ok=True,
+            text=json.dumps(body, ensure_ascii=False),
+            complete=True,
+            error=None,
+            input_tokens=None,
+            output_tokens=None,
+            estimated_cost_usd=None,
+            attempts=1,
+            execution_id=uuid.uuid4(),
+        )
+
+    def _answer(self, system: str, user: str) -> dict[str, Any] | None:  # noqa: PLR0911
+        if system.startswith("Recibes el material de una prueba"):
+            return {
+                "resumen": EXAMPLE + "calculó bien 9 de 10 recibos; falló uno con incapacidad.",
+                "resultados_documentados": [
+                    "88 de 100 puntos en la rúbrica; el mínimo aprobatorio es 70."
+                ],
+                "datos_no_legibles": [],
+                "advertencias": ["La prueba no cubrió finiquitos."],
+            }
+        if system.startswith("Recibes las notas de una entrevista"):
+            return {
+                "resumen": EXAMPLE + "describió con fechas un cierre de nómina complicado y "
+                "su calendario de la semana de pago.",
+                "competencias_observadas": ["Organización", "Manejo de presión"],
+                "evidencias": [
+                    "Resolvió un fallo de timbrado en diciembre y pagó a tiempo.",
+                    "Cierra incidencias el martes, calcula el miércoles y revisa el jueves.",
+                ],
+                "informacion_faltante": ["No se habló de experiencia con finiquitos."],
+                "preguntas_de_seguimiento": ["¿Cómo calculas un finiquito con vacaciones?"],
+            }
+        if system.startswith("Recibes las referencias"):
+            return {
+                "resumen": EXAMPLE + "dos referencias contactadas y una sin localizar.",
+                "referencias_laborales": [
+                    "La referencia 1 indicó que es analista de nómina desde 2020 y que sigue ahí."
+                ],
+                "referencias_personales": [
+                    "La referencia 3 indicó que la conoce desde hace ocho años."
+                ],
+                "coincidencias_con_cv": [
+                    "Empresa, puesto y año de inicio coinciden con el empleo actual del CV."
+                ],
+                "discrepancias_verificables": [],
+                "sin_confirmar": [
+                    "La referencia 2 no se localizó: nadie confirma el empleo de 2018 a 2020."
+                ],
+            }
+        if system.startswith("Recibes el expediente"):
+            return {
+                "hechos_documentados": [
+                    "Seis años como analista de nómina en la misma empresa (CV).",
+                    "88 de 100 en la prueba técnica (prueba técnica).",
+                ],
+                "declaraciones": [
+                    "Dijo calcular una nómina quincenal de 350 personas (llamada).",
+                    "Una referencia laboral indicó que sigue trabajando ahí (referencia 1).",
+                ],
+                "observaciones_humanas": [
+                    "Quien entrevistó anotó respuestas concretas, con fechas y cifras."
+                ],
+                "resultados_tecnicos": ["Falló un recibo con incapacidad en la prueba técnica."],
+                "informacion_pendiente": [
+                    "El estudio socioeconómico sigue en proceso.",
+                    "No se localizó a la referencia del empleo de 2018 a 2020.",
+                ],
+                "discrepancias_verificables": [],
+                "preguntas_sugeridas": [
+                    "¿Cómo calculas un recibo con incapacidad?",
+                    "¿Quién más puede confirmar tu empleo de 2018 a 2020?",
+                ],
+            }
+        if user.startswith("CV a ordenar"):
+            person = _person(user)
+            if person is None:
+                return None
+            return {
+                "nombre": person.name,
+                "experiencia": person.jobs,
+                "habilidades": ["Excel", "IMSS", "ISR"],
+                "estudios": [
+                    {
+                        "titulo": "Contaduría",
+                        "institucion": "Universidad Ficticia",
+                        "periodo": "2012-2016",
+                    }
+                ],
+                "certificaciones": [],
+                "proyectos": [],
+            }
+        if "<<<LLAMADA" in user:
+            rated = re.findall(
+                r"^Pregunta (\d+): .*\n(?:  Competencia: .*\n)?  Qué se espera", user, re.MULTILINE
+            )
+            return {
+                "resumen": EXAMPLE + "dijo calcular una nómina quincenal de 350 personas y "
+                "describió cómo valida IMSS e ISR.",
+                "evidencias": ["«Concilio contra el SUA cada mes»."],
+                "competencias_exploradas": ["Nómina", "Cumplimiento"],
+                "informacion_faltante": ["No se preguntó por finiquitos."],
+                "coincidencias_con_cv": ["El puesto y los años coinciden con el CV."],
+                "discrepancias_verificables": [],
+                "preguntas_de_seguimiento": ["¿Qué sistema usarías si no hay CONTPAQi?"],
+                "cobertura": [
+                    {
+                        "pregunta": int(number),
+                        "nivel": ("CUMPLE", "CUMPLE", "PARCIAL")[index % 3],
+                        "evidencia": "Respuesta de ejemplo.",
+                    }
+                    for index, number in enumerate(rated)
+                ],
+            }
+        if "<<<CV" in user:
+            person = _person(user)
+            if person is None:
+                return None
+            codes = sorted(
+                set(re.findall(r"^(C\d+)\. ", system, re.MULTILINE)), key=lambda c: int(c[1:])
+            )
+            return {
+                "evaluable": True,
+                "motivo_no_evaluable": None,
+                "criterios": [
+                    {
+                        "id": code,
+                        "nivel": person.level,
+                        "sin_evidencia": False,
+                        "evidencia": f"{person.years} años calculando nómina quincenal.",
+                        "justificacion": "Nivel de ejemplo de los datos de prueba.",
+                    }
+                    for code in codes
+                ],
+                "calidad_documental": {
+                    "redaccion": 3,
+                    "ortografia": 4,
+                    "organizacion": 3,
+                    "claridad": 3,
+                    "coherencia": 3,
+                    "completitud": 3,
+                    "posible_error_de_digitalizacion": False,
+                },
+                "observaciones": EXAMPLE + "calificación fija para mostrar la pantalla.",
+            }
+        return None
