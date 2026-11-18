@@ -122,6 +122,11 @@ class ModelTestOut(BaseModel):
     output_tokens: int | None
     estimated_cost_usd: Decimal | None
     attempts: int
+    # Pasos de la llamada, en milisegundos desde que se envió: cuándo aceptó la
+    # solicitud el proveedor, cuándo llegó el primer texto y cuánto duró en total.
+    accepted_ms: int | None = None
+    first_text_ms: int | None = None
+    duration_ms: int | None = None
 
 
 class UsageRowOut(BaseModel):
@@ -337,6 +342,9 @@ def test_model(
         output_tokens=result.output_tokens,
         estimated_cost_usd=result.estimated_cost_usd,
         attempts=result.attempts,
+        accepted_ms=result.accepted_ms,
+        first_text_ms=result.first_text_ms,
+        duration_ms=result.duration_ms,
     )
 
 

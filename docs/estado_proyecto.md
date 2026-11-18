@@ -38,6 +38,8 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 
 **Primera prueba con modelos reales (17 de noviembre de 2026).** En el servidor, con modelos de Anthropic, «Proponer mejoras con IA» y la mitad de un lote de CV fallaron con «No se pudo conectar con el proveedor». La causa más probable, por el código y por qué operaciones fallaron: la aplicación esperaba solo 20 segundos por respuesta, y una evaluación con toda la rúbrica o una propuesta de redacción tardan más. Se corrigió: pedir una respuesta espera hasta 150 segundos (el proxy admite 180); agotar esa espera se informa como tal y no se reintenta, porque cada intento se cobra; los fallos de conexión sí se reintentan. Además se subió el tope de longitud de las respuestas de 4,000 (6,000 en la evaluación de CV) a 12,000 tokens, porque una rúbrica de diez criterios o más ya rozaba el anterior y una respuesta cortada no sirve y se cobra igual; es solo un techo, se cobra lo que el modelo escribe. Sin cambios de base de datos. **No se ha confirmado todavía en el servidor que con esto dejen de fallar**; no se tuvo acceso a sus registros.
 
+**Respuestas de la IA por partes (17 de noviembre de 2026, rama `pruebas`).** A petición del responsable, para saber en cada solicitud si la conexión fue exitosa y si el modelo está respondiendo: los tres proveedores (Anthropic, OpenAI y Gemini) se consultan ahora por partes, con el formato que documenta cada uno. El sistema distingue tres pasos (el proveedor aceptó la solicitud, llegó el primer texto, llegó la señal de fin) y nombra cada fallo por el paso en que ocurrió: sin conexión, el modelo no empezó a responder, la respuesta se interrumpió, o rebasó el tope total. Espera mientras sigan llegando pedazos (silencio máximo 90 s, tope total 4 min; el proxy admite 360 s). Solo se reintenta lo que falló antes de generar. «Probar» informa cuánto tardó cada paso y las pantallas muestran el tiempo transcurrido mientras la IA trabaja. Sin cambios de base de datos; cambia la configuración de nginx (hay que reiniciar el proxy). Comprobado con respuestas simuladas en el formato de cada proveedor y con un servidor local que imita a Anthropic por una conexión real. **Ninguno de los tres se ha ejecutado contra el servicio real**; el de Gemini usa `streamGenerateContent`, no la API de interacciones más nueva de Google.
+
 ## Funcionalidades terminadas
 
 | Elemento | Detalle |
@@ -130,11 +132,11 @@ Ejecutadas el 12 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 399 pruebas, todas pasan |
+| API: `pytest` | 402 pruebas, todas pasan |
 | Worker: `pytest` | 5 pruebas, todas pasan |
 | `ruff check` y `lint-imports` | Sin errores; 13 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |
-| Frontend: `vitest` | 118 pruebas, todas pasan |
+| Frontend: `vitest` | 120 pruebas, todas pasan |
 | Frontend: `next build` | Compila |
 | Recorrido en navegador real, identidad | 10 pasos: redirección sin sesión, credenciales erróneas, inicio de sesión, alta de usuario, restablecer contraseña, recarga, cierre de sesión, contraseña anterior rechazada, reclutador sin acceso a Usuarios y respuesta 403 de la API |
 | Recorrido en navegador real, vacantes | 11 pasos: alta de dos reclutadores, alta de dos vacantes, cambio de estado, compartir en lectura, la otra persona solo ve la compartida y no puede editarla, la API le niega cambiar el estado, transferencia individual, baja con transferencia, auditoría con el acceso denegado, la persona dada de baja ya no entra y el receptor queda como responsable |

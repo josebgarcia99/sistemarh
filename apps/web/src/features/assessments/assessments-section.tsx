@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useRef, useState } from "react";
+import { AiWaitNotice, useAiWait } from "@/components/ui/ai-wait";
 import {
   cardClass,
   dangerButtonClass,
@@ -492,11 +493,12 @@ function AssessmentEditor({
       setBusy(false);
     }
   }
+  const aiWait = useAiWait();
   async function digitize() {
     setBusy(true);
     setFeedback(null);
     try {
-      const result = await digitizeStudy(item.id, fileId || documents[0].id);
+      const result = await aiWait.run(() => digitizeStudy(item.id, fileId || documents[0].id));
       setReading(result);
       // Lo que lee la IA entra sin verificar: una persona lo revisa campo por campo.
       setAnswers({
@@ -790,6 +792,7 @@ function AssessmentEditor({
         </>
       )}
 
+      <AiWaitNotice wait={aiWait} />
       <FeedbackLine feedback={feedback ?? (notice ? { kind: "ok", text: notice } : null)} />
       {canEdit && (
         <div className="flex flex-wrap gap-3">
@@ -797,7 +800,7 @@ function AssessmentEditor({
             {busy ? "Trabajando…" : "Guardar"}
           </button>
           {kind !== "ESTUDIO_SOCIOECONOMICO" && (
-            <button type="button" className={secondaryButtonClass} disabled={busy} onClick={() => run(() => summarizeAssessment(item.id), "Resumen listo.")}>
+            <button type="button" className={secondaryButtonClass} disabled={busy} onClick={() => run(() => aiWait.run(() => summarizeAssessment(item.id)), "Resumen listo.")}>
               {kind === "ENTREVISTA"
                 ? "Organizar con IA"
                 : kind === "REFERENCIAS"

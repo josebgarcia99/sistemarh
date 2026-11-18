@@ -13,6 +13,7 @@ import {
 import { useSession } from "@/features/auth/use-session";
 import {
   type AiModel,
+  type AiModelTest,
   type AiProvider,
   assignModel,
   getAiOverview,
@@ -36,6 +37,19 @@ const dateFormat = new Intl.DateTimeFormat("es-MX", {
 });
 
 type Feedback = { kind: "ok" | "error"; text: string } | null;
+
+/** Cuánto tardó cada paso de la prueba: conectar, empezar a contestar y terminar. */
+function describeSteps(result: AiModelTest): string {
+  const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
+  const steps = [
+    result.accepted_ms !== null && `conectó en ${seconds(result.accepted_ms)}`,
+    result.first_text_ms !== null && `empezó a contestar a los ${seconds(result.first_text_ms)}`,
+    result.duration_ms !== null && `terminó a los ${seconds(result.duration_ms)}`,
+  ].filter(Boolean) as string[];
+  if (steps.length === 0) return "";
+  const text = steps.length > 1 ? `${steps.slice(0, -1).join(", ")} y ${steps.at(-1)}` : steps[0];
+  return ` Pasos: ${text}.`;
+}
 
 export function AiSettingsScreen() {
   const { user } = useSession();
@@ -646,7 +660,7 @@ function ModelPriceRow({
               : " Sin precio capturado no se estima el costo.";
             return {
               kind: "ok",
-              text: `${model.display_name} respondió. Tokens: ${result.input_tokens} de entrada y ${result.output_tokens} de salida.${cost}`,
+              text: `${model.display_name} respondió.${describeSteps(result)} Tokens: ${result.input_tokens} de entrada y ${result.output_tokens} de salida.${cost}`,
             };
           })
         }

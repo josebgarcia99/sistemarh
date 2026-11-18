@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { AiWaitNotice, useAiWait } from "@/components/ui/ai-wait";
 import {
   cardClass,
   dangerButtonClass,
@@ -259,12 +260,13 @@ function PromptEditor({
   const [proposal, setProposal] = useState<CriteriaProposal | null>(null);
   const [proposalFeedback, setProposalFeedback] = useState<Feedback>(null);
   const [proposing, setProposing] = useState(false);
+  const aiWait = useAiWait();
 
   async function propose() {
     setProposing(true);
     setProposalFeedback(null);
     try {
-      setProposal(await proposeCriteria(version.id));
+      setProposal(await aiWait.run(() => proposeCriteria(version.id)));
     } catch (caught) {
       setProposalFeedback({ kind: "error", text: describeError(caught) });
     } finally {
@@ -563,6 +565,7 @@ function PromptEditor({
                 criterio. No añade criterios ni requisitos, y nada cambia hasta que lo apliques.
               </p>
             </div>
+            <AiWaitNotice wait={aiWait} />
             <FeedbackLine feedback={proposalFeedback} />
             {proposal && (
               <section aria-label="Mejoras propuestas por la IA" className="flex flex-col gap-3">

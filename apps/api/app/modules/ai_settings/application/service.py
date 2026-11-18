@@ -41,8 +41,11 @@ from app.modules.audit.domain.models import AuditAction, AuditResult
 RESOURCE = "proveedor_ia"
 TEST_OPERATION = "PRUEBA"
 # Fallos que pueden ser pasajeros: red, límite de solicitudes o error del proveedor.
-# Lo que se reintenta solo. Una respuesta que no llegó a tiempo ("tiempo") no:
-# repetirla tardaría lo mismo y el proveedor cobraría cada intento.
+# Lo que se reintenta solo: no poder conectar, el límite de solicitudes y un
+# error del proveedor antes de responder. No se reintenta cuando el proveedor
+# ya aceptó la solicitud y el modelo no respondió ("sin_respuesta"), la
+# respuesta se cortó a la mitad ("interrumpida") o tardó demasiado ("tiempo"):
+# repetirla volvería a costar y lo decide la persona.
 _RETRYABLE = frozenset({"red", "limite", "proveedor"})
 _BACKOFF_SECONDS = (2.0, 6.0)
 _MILLION = Decimal(1_000_000)
@@ -102,6 +105,12 @@ class GenerationResult:
     estimated_cost_usd: Decimal | None
     attempts: int
     execution_id: uuid.UUID
+    # Cuánto tardó cada paso de la llamada que dio la respuesta, en milisegundos:
+    # hasta que el proveedor aceptó la solicitud, hasta el primer pedazo de
+    # texto y en total. Los dos primeros, solo si el proveedor los informa.
+    accepted_ms: int | None = None
+    first_text_ms: int | None = None
+    duration_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -646,6 +655,9 @@ class AiSettingsService:
             estimated_cost_usd=cost,
             attempts=attempts,
             execution_id=execution.id,
+            accepted_ms=generation.accepted_ms if generation else None,
+            first_text_ms=generation.first_text_ms if generation else None,
+            duration_ms=execution.duration_ms,
         )
 
     def test_model(self, actor: Actor, model_ref: uuid.UUID) -> GenerationResult:

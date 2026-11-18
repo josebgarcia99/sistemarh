@@ -123,6 +123,10 @@ class Generation:
     input_tokens: int
     output_tokens: int
     complete: bool
+    # Milisegundos desde que se envió la solicitud hasta que el proveedor la
+    # aceptó y hasta el primer pedazo de texto, cuando el proveedor lo informa.
+    accepted_ms: int | None = None
+    first_text_ms: int | None = None
 
 
 @dataclass(frozen=True)

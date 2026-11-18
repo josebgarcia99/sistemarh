@@ -119,6 +119,10 @@ const modelTestSchema = z.object({
   output_tokens: z.number().nullable(),
   estimated_cost_usd: z.string().nullable(),
   attempts: z.number(),
+  /** Pasos de la llamada, en milisegundos desde que se envió la solicitud. */
+  accepted_ms: z.number().nullable().default(null),
+  first_text_ms: z.number().nullable().default(null),
+  duration_ms: z.number().nullable().default(null),
 });
 export type AiModelTest = z.infer<typeof modelTestSchema>;
 

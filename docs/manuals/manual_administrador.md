@@ -64,16 +64,27 @@ Cada tarea de IA usa el modelo que tú le asignes: análisis de perfiles, genera
 
 ### Cuando la IA no responde
 
-Si una operación de IA falla, el mensaje dice por qué:
+El sistema pide cada respuesta **por partes**: el proveedor va mandando señales conforme trabaja. Así se sabe en qué paso está cada solicitud (se conectó, el modelo empezó a contestar, terminó) y, si algo falla, el mensaje dice en qué paso fue:
 
-| Mensaje | Qué significa | Qué hacer |
+| Mensaje | En qué paso falló | Qué hacer |
 | --- | --- | --- |
-| «El proveedor tardó más de 150 segundos en responder» | El proveedor recibió la solicitud pero no terminó a tiempo. No se reintenta solo, porque cada intento se cobra | Volver a intentarlo. Si se repite siempre en la misma operación, prueba un modelo más rápido para ella o avisa a soporte |
-| «No se pudo conectar con el proveedor» | El servidor no logró llegar al proveedor (red, salida a internet). Se reintenta solo dos veces | Si persiste, pedir a Sistemas que revise la salida HTTPS hacia el proveedor |
-| «El proveedor limitó las solicitudes» | Demasiadas solicitudes en poco tiempo o saldo agotado en el proveedor | Esperar unos minutos; revisar el saldo en la consola del proveedor |
+| «No se pudo conectar con el proveedor» | No se llegó al proveedor (red o salida a internet). Se reintenta solo dos veces | Si persiste, pedir a Sistemas que revise la salida HTTPS hacia el proveedor |
+| «El proveedor recibió la solicitud, pero el modelo no empezó a responder» | Se conectó, pero pasaron 90 segundos sin que el modelo escribiera nada | Volver a intentarlo. Si se repite, el proveedor puede estar saturado: probar más tarde |
+| «El modelo empezó a responder y la respuesta se interrumpió antes de terminar» | Ya había texto y la conexión se cortó o se quedó en silencio | Volver a intentarlo |
+| «El modelo llevaba más de 4 minutos respondiendo y se dejó de esperar» | Seguía escribiendo, pero rebasó el tope total | Volver a intentarlo; si se repite, la respuesta pedida es demasiado larga (por ejemplo, una rúbrica muy grande) |
+| «El proveedor no pudo generar la respuesta (código)» | El proveedor aceptó la solicitud y avisó de un error propio antes de escribir. Se reintenta solo | Si persiste, anotar el código entre paréntesis y avisar a soporte |
+| «El proveedor limitó las solicitudes» | Demasiadas solicitudes en poco tiempo o saldo agotado en el proveedor. Se reintenta solo | Esperar unos minutos; revisar el saldo en la consola del proveedor |
 | «El proveedor rechazó la clave» | La clave no es válida o no tiene permisos | Revisar la clave en el servidor |
 
-En un lote de CV, los archivos que fallaron quedan con «Error» y el motivo; «Reintentar» vuelve a procesar solo esos. Hasta el 17 de noviembre de 2026 el sistema esperaba solo 20 segundos por respuesta y avisaba «No se pudo conectar con el proveedor» aunque la conexión estuviera bien; por eso fallaban las evaluaciones largas y «Proponer mejoras con IA».
+Qué conviene saber:
+
+- **Mientras sigan llegando pedazos, el sistema sigue esperando.** No hay un tope corto: solo se rinde tras 90 segundos de silencio o 4 minutos en total.
+- **Lo que se reintenta solo y lo que no.** Se reintenta cuando no se llegó a generar nada (sin conexión, límite, error inicial del proveedor). Cuando el proveedor ya había aceptado la solicitud no se reintenta, porque cada intento se cobra: lo decide la persona.
+- **En pantalla.** Mientras la IA responde aparece «La IA está trabajando» con el tiempo transcurrido. Una respuesta larga puede tardar más de un minuto.
+- **«Probar» en «Modelos y precios»** dice cuánto tardó cada paso: en cuánto conectó, cuándo empezó a contestar y cuándo terminó. Sirve para comprobar que la conexión con un modelo funciona de principio a fin.
+- **En un lote de CV**, los archivos que fallaron quedan con «Error» y el motivo; «Reintentar» vuelve a procesar solo esos.
+
+Antecedente: hasta el 17 de noviembre de 2026 el sistema pedía la respuesta completa y esperaba solo 20 segundos, y avisaba «No se pudo conectar con el proveedor» aunque la conexión estuviera bien; por eso fallaban las evaluaciones largas y «Proponer mejoras con IA».
 
 ### Documentos reales y privacidad
 

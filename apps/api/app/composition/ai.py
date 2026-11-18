@@ -53,7 +53,14 @@ class _Adapter:
             )
         except ProviderHttpError as error:
             raise ProviderError(error.kind, error.message) from error
-        return Generation(result.text, result.input_tokens, result.output_tokens, result.complete)
+        return Generation(
+            result.text,
+            result.input_tokens,
+            result.output_tokens,
+            result.complete,
+            accepted_ms=result.accepted_ms,
+            first_text_ms=result.first_text_ms,
+        )
 
 
 def build_provider_clients(settings: Settings) -> dict[ProviderCode, ProviderClient]:

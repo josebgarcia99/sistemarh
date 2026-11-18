@@ -107,6 +107,8 @@ El servidor de la aplicación (los contenedores de la API y del worker) inicia c
 - Permitir por **nombre de dominio**, no por dirección IP: las direcciones de estos servicios cambian.
 - Si la salida pasa por un proxy corporativo, definir `HTTPS_PROXY` (y `NO_PROXY` para los servicios internos) en el entorno de la API y del worker. Si el proxy inspecciona TLS, su certificado raíz debe estar instalado en los contenedores.
 - La resolución DNS de esos nombres debe funcionar desde los contenedores.
+- Las respuestas de la IA se reciben **por partes** (eventos enviados por el servidor, `text/event-stream`). Si la salida pasa por un proxy que retiene la respuesta hasta tenerla completa, todo sigue funcionando mientras la respuesta tarde menos de 90 segundos; una más larga se informaría como «el modelo no empezó a responder». En ese caso hay que pedir que el proxy no retenga (no «bufferice») las respuestas de esos dominios.
+- El proxy propio de la aplicación (nginx) deja durar una llamada a la API hasta 360 segundos, porque una respuesta larga de la IA puede tardar varios minutos.
 - Comprobación desde el servidor: `curl -sS -o /dev/null -w "%{http_code}\n" https://generativelanguage.googleapis.com/v1beta/models` debe responder con un código HTTP (por ejemplo `403`, porque no lleva clave). Si no responde o da error de conexión, la salida está bloqueada.
 - La API key no se configura en el servidor: el administrador la registra en la pantalla «IA».
 
@@ -179,7 +181,7 @@ Las métricas son por proceso y se pierden al reiniciar. Si Sistemas usa una her
 1. Respaldar base y documentos.
 2. Obtener la versión nueva del repositorio y revisar `docs/estado_proyecto.md` («Cambios recientes»).
 3. Si cambió la versión del esquema, ejecutar en orden los scripts `actualizacion_NNNN_a_MMMM.sql` que falten. La versión instalada está en `dbo.alembic_version`. Si se añadieron tablas, revisar `permisos_usuario_aplicacion.sql`.
-4. Reconstruir y levantar: `docker compose ... up -d --build`. Si la versión del esquema de la base no es la que espera la aplicación, `/api/v1/health/ready` responde 503 con el componente «esquema» en fallo y lo deja escrito en los registros: no dar servicio hasta corregirlo.
+4. Reconstruir y levantar: `docker compose ... up -d --build`. Si cambió `infrastructure/nginx/reclutamiento.conf`, reiniciar además el proxy para que tome la configuración nueva: `docker compose ... restart proxy`. Si la versión del esquema de la base no es la que espera la aplicación, `/api/v1/health/ready` responde 503 con el componente «esquema» en fallo y lo deja escrito en los registros: no dar servicio hasta corregirlo.
 5. Repetir las comprobaciones de la sección 3.5.
 
 Para volver atrás: restaurar el respaldo del paso 1 y levantar la versión anterior. Los scripts de actualización no tienen reversión automática en producción.

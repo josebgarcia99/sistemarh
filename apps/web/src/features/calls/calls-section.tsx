@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { AiWaitNotice, useAiWait } from "@/components/ui/ai-wait";
 import { cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
 import {
   areaClass,
@@ -254,6 +255,7 @@ function CallEditor({
   const [notes, setNotes] = useState(call.notes);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
+  const aiWait = useAiWait();
   const active = items.filter((item) => !item.omitted);
   const removed = items.filter((item) => item.omitted);
   const change = (id: string, patch: Partial<Item>) =>
@@ -520,7 +522,7 @@ function CallEditor({
             disabled={busy}
             onClick={() =>
               run(async () => {
-                await analyzeCall(call.id);
+                await aiWait.run(() => analyzeCall(call.id));
               }, "Análisis listo.")
             }
           >
@@ -528,6 +530,7 @@ function CallEditor({
           </button>
         </div>
       )}
+      <AiWaitNotice wait={aiWait} />
       {editable && (
         <p className="text-sm text-ink-muted">
           Guarda antes de analizar: la IA trabaja con lo último guardado, también en las preguntas

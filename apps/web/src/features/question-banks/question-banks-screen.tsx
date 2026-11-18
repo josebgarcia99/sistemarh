@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { AiWaitNotice, useAiWait } from "@/components/ui/ai-wait";
 import {
   cardClass,
   dangerButtonClass,
@@ -384,11 +385,12 @@ function QuestionAssistant({ onAdd }: { onAdd: (question: ProposedQuestion) => v
   });
   const options = vacancies.data?.items ?? [];
 
+  const aiWait = useAiWait();
   async function propose() {
     setBusy(true);
     setFeedback(null);
     try {
-      setProposals(await proposeQuestions(vacancyId || options[0].id, 8));
+      setProposals(await aiWait.run(() => proposeQuestions(vacancyId || options[0].id, 8)));
     } catch (caught) {
       setFeedback({ kind: "error", text: describeError(caught) });
     } finally {
@@ -421,6 +423,7 @@ function QuestionAssistant({ onAdd }: { onAdd: (question: ProposedQuestion) => v
           ))}
         </select>
       </div>
+      <AiWaitNotice wait={aiWait} />
       <FeedbackLine feedback={feedback} />
       <div className="flex flex-wrap gap-3">
         <button type="button" className={primaryButtonClass} disabled={busy || options.length === 0} onClick={propose}>

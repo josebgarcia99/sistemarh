@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { AiWaitNotice, useAiWait } from "@/components/ui/ai-wait";
 import { cardClass, fieldClass, primaryButtonClass } from "@/components/ui/styles";
 import { dateTimeFormat, type Feedback, FeedbackLine } from "@/features/recruitment/shared";
 import {
@@ -48,11 +49,12 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
   // Síntesis anterior que se está consultando; vacío = la más reciente.
   const [shownId, setShownId] = useState("");
 
+  const aiWait = useAiWait();
   async function synthesize(automatic = false) {
     setBusy(true);
     setFeedback(null);
     try {
-      await createSynthesis(applicationId);
+      await aiWait.run(() => createSynthesis(applicationId));
       await queryClient.invalidateQueries({ queryKey: synthesisKey });
       setShownId("");
       setFeedback({
@@ -182,6 +184,7 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
             {busy ? "Consultando a la IA…" : latest ? "Generar una síntesis nueva" : "Generar síntesis"}
           </button>
         )}
+        <AiWaitNotice wait={aiWait} />
         <FeedbackLine feedback={feedback} />
         {syntheses.data?.hidden && (
           <p className="rounded-2xl bg-surface px-4 py-3">

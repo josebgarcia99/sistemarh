@@ -19,6 +19,7 @@ from app.infrastructure.ai_providers.http_clients import (
 from app.infrastructure.documents.photos import PhotoError, prepare_photo
 from app.modules.ai_settings.domain.models import ImageInput, ProviderCode
 from app.modules.assessments.domain import assistant
+from app.tests.support.provider_streams import anthropic_events, gemini_events, openai_events, sse
 from app.tests.support.sample_files import pdf_cv, photo
 from app.tests.test_api_assessments import ana, create, update
 from app.tests.test_api_cv_batches import (
@@ -79,31 +80,10 @@ def test_los_tres_proveedores_reciben_la_imagen_en_su_formato():
         body = json.loads(request.content)
         seen[request.url.host] = body
         if "googleapis" in request.url.host:
-            return httpx.Response(
-                200,
-                json={
-                    "candidates": [
-                        {"content": {"parts": [{"text": "ok"}]}, "finishReason": "STOP"}
-                    ],
-                    "usageMetadata": {"promptTokenCount": 300, "candidatesTokenCount": 5},
-                },
-            )
+            return sse(gemini_events(["ok"], input_tokens=300, output_tokens=5))
         if "anthropic" in request.url.host:
-            return httpx.Response(
-                200,
-                json={
-                    "content": [{"type": "text", "text": "ok"}],
-                    "usage": {"input_tokens": 300, "output_tokens": 5},
-                },
-            )
-        return httpx.Response(
-            200,
-            json={
-                "status": "completed",
-                "output": [{"type": "message", "content": [{"type": "output_text", "text": "ok"}]}],
-                "usage": {"input_tokens": 300, "output_tokens": 5},
-            },
-        )
+            return sse(anthropic_events(["ok"], input_tokens=300, output_tokens=5))
+        return sse(openai_events(["ok"], input_tokens=300, output_tokens=5))
 
     arguments = {"system": "sistema", "user": "usuario", "max_output_tokens": 500}
     for client in (

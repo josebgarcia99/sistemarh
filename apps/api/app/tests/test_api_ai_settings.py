@@ -7,6 +7,7 @@ la sección 32.3: las API keys no aparecen en respuestas, logs ni auditoría.
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 
@@ -17,6 +18,7 @@ import sqlalchemy as sa
 from app.core.config.settings import Environment, Settings
 from app.core.security.master_key import MasterKey, generate_key_text
 from app.infrastructure.ai_providers.http_clients import (
+    TIMEOUT_SECONDS,
     AnthropicClient,
     GeminiClient,
     OpenAIClient,
@@ -32,6 +34,13 @@ from app.modules.ai_settings.domain.models import (
 )
 from app.modules.ai_settings.infrastructure.orm import AiProviderCredentialRow
 from app.tests.conftest import ADMIN_EMAIL, ADMIN_PASSWORD, login
+from app.tests.support.provider_streams import (
+    anthropic_events,
+    cut,
+    gemini_events,
+    openai_events,
+    sse,
+)
 
 FAKE_KEY = "clave-ficticia-anthropic-0000-ABCD"
 OTHER_KEY = "clave-ficticia-anthropic-1111-WXYZ"
@@ -446,6 +455,16 @@ def test_un_fallo_de_red_o_una_respuesta_ilegible_se_informan():
     with pytest.raises(ProviderHttpError) as error:
         AnthropicClient("2026-10-21", client_factory=_client(offline)).list_models(FAKE_KEY)
     assert error.value.kind == "red"
+    # Consultar la lista de modelos espera poco: veinte segundos.
+    waits: list[dict[str, float]] = []
+
+    def listing(request: httpx.Request) -> httpx.Response:
+        waits.append(request.extensions["timeout"])
+        return httpx.Response(200, json={"data": []})
+
+    quick = lambda: httpx.Client(transport=httpx.MockTransport(listing), timeout=TIMEOUT_SECONDS)  # noqa: E731
+    assert AnthropicClient("2026-10-21", client_factory=quick).list_models(FAKE_KEY) == []
+    assert TIMEOUT_SECONDS == 20.0 and waits[0]["read"] == 20.0
 
     def garbage(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=b"<html>no es json</html>")
@@ -455,53 +474,156 @@ def test_un_fallo_de_red_o_una_respuesta_ilegible_se_informan():
     assert error.value.kind == "proveedor" and json.dumps(error.value.message)
 
 
-@pytest.mark.parametrize(
-    "client",
-    [
-        lambda factory: AnthropicClient("2026-10-21", client_factory=factory),
-        lambda factory: OpenAIClient(client_factory=factory),
-        lambda factory: GeminiClient(client_factory=factory),
-    ],
-    ids=["anthropic", "openai", "gemini"],
-)
-def test_una_respuesta_larga_tiene_tiempo_para_llegar_y_si_no_llega_se_dice_claro(client):
-    """Una evaluación completa tarda más de veinte segundos: pedir una respuesta
-    espera mucho más que consultar la lista de modelos, y agotar esa espera no se
-    confunde con un fallo de red."""
+def _streams(parts: list[str], **options) -> dict[str, list]:
+    """La misma respuesta en el formato de cada proveedor."""
+    return {
+        "anthropic": anthropic_events(parts, **options),
+        "openai": openai_events(parts, **options),
+        "gemini": gemini_events(parts)
+        if options.get("end", True)
+        else gemini_events(parts, finish=None),
+    }
+
+
+_CLIENTS = {
+    "anthropic": lambda factory, clock=None: AnthropicClient(
+        "2026-10-21", client_factory=factory, **({"clock": clock} if clock else {})
+    ),
+    "openai": lambda factory, clock=None: OpenAIClient(
+        client_factory=factory, **({"clock": clock} if clock else {})
+    ),
+    "gemini": lambda factory, clock=None: GeminiClient(
+        client_factory=factory, **({"clock": clock} if clock else {})
+    ),
+}
+_ASK = {"system": "s", "user": "u", "max_output_tokens": 100}
+
+
+@pytest.mark.parametrize("name", ["anthropic", "openai", "gemini"])
+def test_cada_fallo_se_informa_segun_el_paso_en_que_ocurrio(name):
+    """La respuesta se pide por partes: se sabe si se conectó, si el modelo empezó
+    a responder y si terminó, y cada fallo se nombra por lo que fue."""
+    build = _CLIENTS[name]
+
+    def fails(handler) -> ProviderHttpError:
+        with pytest.raises(ProviderHttpError) as error:
+            build(_client(handler)).generate(FAKE_KEY, "modelo", **_ASK)
+        return error.value
+
+    # 1. No se llegó al proveedor: fallo de red (el único que se reintenta solo).
     waits: list[dict[str, float]] = []
 
-    def slow(request: httpx.Request) -> httpx.Response:
-        waits.append(request.extensions["timeout"])
-        raise httpx.ReadTimeout("sin respuesta a tiempo")
-
-    with pytest.raises(ProviderHttpError) as error:
-        client(_client(slow)).generate(
-            FAKE_KEY, "modelo", system="s", user="u", max_output_tokens=100
-        )
-    assert error.value.kind == "tiempo"
-    assert "tardó más de 150 segundos" in error.value.message
-    assert waits == [{"connect": 10.0, "read": 150.0, "write": 150.0, "pool": 10.0}]
-
-    # No poder conectar sí es un fallo de red.
     def unreachable(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectTimeout("no conecta")
-
-    with pytest.raises(ProviderHttpError) as error:
-        client(_client(unreachable)).generate(
-            FAKE_KEY, "modelo", system="s", user="u", max_output_tokens=100
-        )
-    assert error.value.kind == "red"
-
-    # La lista de modelos conserva su espera corta.
-    def listing(request: httpx.Request) -> httpx.Response:
         waits.append(request.extensions["timeout"])
         raise httpx.ConnectError("sin red")
 
-    with pytest.raises(ProviderHttpError):
-        client(
-            lambda: httpx.Client(transport=httpx.MockTransport(listing), timeout=20.0)
-        ).list_models(FAKE_KEY)
-    assert waits[-1]["read"] == 20.0
+    assert fails(unreachable).kind == "red"
+    # Diez segundos para conectar; después, hasta noventa sin que llegue nada.
+    assert waits == [{"connect": 10.0, "read": 90.0, "write": 90.0, "pool": 10.0}]
+
+    def refused(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("no conecta")
+
+    assert fails(refused).kind == "red"
+
+    # 2. Se conectó, pero el modelo no empezó a responder.
+    def silent(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("sin respuesta")
+
+    started = _streams([], end=False)[name] if name != "gemini" else []
+    for handler in (
+        silent,
+        lambda request: cut(started, httpx.ReadTimeout("silencio")),
+        lambda request: sse(started),  # cerró sin haber escrito nada
+    ):
+        error = fails(handler)
+        assert error.kind == "sin_respuesta"
+        assert "el modelo no empezó a responder" in error.message
+
+    # 3. Empezó a responder y se cortó: por silencio, por caída o por cierre sin aviso.
+    half = _streams(["Hola, "], end=False)[name]
+    for handler in (
+        lambda request: cut(half, httpx.ReadTimeout("silencio")),
+        lambda request: cut(half, httpx.RemoteProtocolError("conexión cerrada")),
+        lambda request: sse(half),
+    ):
+        error = fails(handler)
+        assert error.kind == "interrumpida"
+        assert "se interrumpió antes de terminar" in error.message
+
+    # 4. Siguió escribiendo más del tope total: se deja de esperar.
+    ticks = itertools.chain([0.0, 1.0], itertools.repeat(500.0))
+    with pytest.raises(ProviderHttpError) as late:
+        build(
+            _client(lambda request: sse(_streams(["a", "b", "c"])[name])), lambda: next(ticks)
+        ).generate(FAKE_KEY, "modelo", **_ASK)
+    assert late.value.kind == "tiempo" and "más de 4 minutos" in late.value.message
+
+    # 5. El proveedor rechaza la solicitud antes de empezar: por su estado HTTP.
+    for status, kind in ((401, "clave"), (429, "limite"), (529, "proveedor")):
+        rejected = fails(lambda request, status=status: httpx.Response(status, json={"error": {}}))
+        assert rejected.kind == kind and FAKE_KEY not in rejected.message
+
+    # 6. Todo bien: se sabe cuánto tardó cada paso.
+    clock = itertools.count(10.0, 0.4)
+    generation = build(
+        _client(lambda request: sse(_streams(["Hola, ", "mundo"])[name], done=True)),
+        lambda: next(clock),
+    ).generate(FAKE_KEY, "modelo", **_ASK)
+    assert generation.text == "Hola, mundo" and generation.complete is True
+    assert generation.accepted_ms == 400
+    assert generation.first_text_ms is not None
+    assert generation.accepted_ms < generation.first_text_ms
+
+
+def test_un_error_del_proveedor_a_media_respuesta_no_se_confunde_con_uno_inicial():
+    overloaded = ("error", {"type": "error", "error": {"type": "overloaded_error", "message": "x"}})
+    limited = ("error", {"type": "error", "error": {"type": "rate_limit_error", "message": "x"}})
+
+    def anthropic(events) -> ProviderHttpError:
+        with pytest.raises(ProviderHttpError) as error:
+            AnthropicClient("2026-10-21", client_factory=_client(lambda r: sse(events))).generate(
+                FAKE_KEY, "m", **_ASK
+            )
+        return error.value
+
+    # Antes de escribir nada es un fallo pasajero del proveedor, con su código.
+    start = anthropic_events([], end=False)
+    early = anthropic([*start, overloaded])
+    assert (early.kind, early.message) == (
+        "proveedor",
+        "El proveedor no pudo generar la respuesta (overloaded_error).",
+    )
+    assert anthropic([*start, limited]).kind == "limite"
+    # Con texto ya escrito es una respuesta interrumpida: repetirla volvería a costar.
+    assert anthropic([*anthropic_events(["Hola"], end=False), overloaded]).kind == "interrumpida"
+
+    def openai(events) -> ProviderHttpError:
+        with pytest.raises(ProviderHttpError) as error:
+            OpenAIClient(client_factory=_client(lambda r: sse(events))).generate(
+                FAKE_KEY, "m", **_ASK
+            )
+        return error.value
+
+    failed = {
+        "type": "response.failed",
+        "response": {"status": "failed", "error": {"code": "server_error", "message": "x"}},
+    }
+    start = openai_events([], end=False)
+    assert openai([*start, failed]).message.endswith("(server_error).")
+    plain = {"type": "error", "code": "Rate_Limit_Exceeded <b>", "message": FAKE_KEY}
+    limited_openai = openai([*start, plain])
+    assert limited_openai.kind == "limite" and FAKE_KEY not in limited_openai.message
+    assert openai([*openai_events(["Hola"], end=False), failed]).kind == "interrumpida"
+
+    # Gemini avisa con un objeto «error» dentro de la respuesta.
+    with pytest.raises(ProviderHttpError) as error:
+        GeminiClient(
+            client_factory=_client(
+                lambda r: sse([{"error": {"code": 503, "status": "UNAVAILABLE", "message": "x"}}])
+            )
+        ).generate(FAKE_KEY, "m", **_ASK)
+    assert error.value.message == "El proveedor no pudo generar la respuesta (unavailable)."
 
 
 # --- Ejecución, consumo y límite mensual -------------------------------------------------
@@ -556,7 +678,12 @@ def test_probar_un_modelo_registra_tokens_y_costo_sin_guardar_contenido(
     admin.put(
         f"/api/v1/ai/models/{ready['id']}/prices", json={"input_price": "3", "output_price": "15"}
     )
+    # El proveedor informa cuánto tardó cada paso; la prueba lo devuelve.
+    providers[ProviderCode.ANTHROPIC].script = [
+        Generation("OK", 1000, 500, True, accepted_ms=420, first_text_ms=1310)
+    ]
     result = admin.post(f"/api/v1/ai/models/{ready['id']}/test").json()
+    assert result.pop("duration_ms") >= 0
     assert result == {
         "ok": True,
         "error": None,
@@ -566,6 +693,8 @@ def test_probar_un_modelo_registra_tokens_y_costo_sin_guardar_contenido(
         # 1000 × 3 / 1 000 000 + 500 × 15 / 1 000 000
         "estimated_cost_usd": "0.010500",
         "attempts": 1,
+        "accepted_ms": 420,
+        "first_text_ms": 1310,
     }
     (model, system, user) = providers[ProviderCode.ANTHROPIC].prompts[0]
     assert model == "modelo-grande-1" and "OK" in system and "Prueba" in user
@@ -619,11 +748,12 @@ def test_los_fallos_pasajeros_se_reintentan_y_los_definitivos_quedan_registrados
         1,
         "El proveedor rechazó la clave.",
     )
-    # Una respuesta que no llegó a tiempo tampoco: repetirla volvería a costar.
-    slow = "El proveedor tardó más de 150 segundos en responder. Vuelve a intentarlo."
-    fake.script = [ProviderError("tiempo", slow), Generation("no debe pedirse", 1, 1, True)]
-    late = run(admin)
-    assert (late.ok, late.attempts, late.error) == (False, 1, slow)
+    # Tampoco cuando el proveedor ya había aceptado la solicitud: repetirla
+    # volvería a costar, así que lo decide la persona.
+    for kind in ("sin_respuesta", "interrumpida", "tiempo"):
+        fake.script = [ProviderError(kind, "mensaje"), Generation("no debe pedirse", 1, 1, True)]
+        stopped = run(admin)
+        assert (stopped.ok, stopped.attempts, stopped.error) == (False, 1, "mensaje"), kind
     fake.script = None
     # Tras agotar los reintentos el fallo se informa; no es una excepción.
     fake.script = [ProviderError("red", "No se pudo conectar con el proveedor.")] * 3
@@ -631,7 +761,7 @@ def test_los_fallos_pasajeros_se_reintentan_y_los_definitivos_quedan_registrados
     assert (exhausted.ok, exhausted.attempts) == (False, 3)
 
     (row,) = usage(admin)["rows"]
-    assert (row["calls"], row["failures"], row["input_tokens"]) == (4, 3, 10)
+    assert (row["calls"], row["failures"], row["input_tokens"]) == (6, 5, 10)
     assert row["estimated_cost_usd"] is None  # sin precio capturado no hay costo estimado
 
 
@@ -690,15 +820,22 @@ def test_los_clientes_generan_texto_y_leen_el_consumo():
             "max_tokens": 300,
             "system": "sistema",
             "messages": [{"role": "user", "content": "usuario"}],
+            "stream": True,
         }
-        return httpx.Response(
-            200,
-            json={
-                "content": [{"type": "text", "text": "hola "}, {"type": "text", "text": "mundo"}],
-                "stop_reason": "max_tokens",
-                "usage": {"input_tokens": 12, "output_tokens": 7},
+        events = anthropic_events(
+            ["hola ", "mundo"], input_tokens=12, output_tokens=7, stop_reason="max_tokens"
+        )
+        # El razonamiento del modelo y los eventos que no se conocen no son la respuesta.
+        thinking = (
+            "content_block_delta",
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "thinking_delta", "thinking": "pensando…"},
             },
         )
+        unknown = ("evento_nuevo", {"type": "evento_nuevo", "dato": 1})
+        return sse([events[0], thinking, unknown, *events[1:]])
 
     generation = AnthropicClient("2026-10-21", client_factory=_client(anthropic)).generate(
         FAKE_KEY, "m-1", system="sistema", user="usuario", max_output_tokens=300
@@ -719,32 +856,104 @@ def test_los_clientes_generan_texto_y_leen_el_consumo():
             "input": "usuario",
             "max_output_tokens": 300,
             "store": False,
+            "stream": True,
         }
-        return httpx.Response(
-            200,
-            json={
-                "status": "completed",
-                "error": None,
-                "output": [
-                    {"type": "reasoning"},
-                    {"type": "message", "content": [{"type": "output_text", "text": "listo"}]},
-                ],
-                "usage": {"input_tokens": 20, "output_tokens": 3},
-            },
-        )
+        events = openai_events(["lis", "to"], input_tokens=20, output_tokens=3)
+        reasoning = {"type": "response.reasoning_summary_text.delta", "delta": "pensando…"}
+        return sse([events[0], reasoning, *events[1:]], done=True)
 
     generation = OpenAIClient(client_factory=_client(openai)).generate(
         FAKE_KEY, "m-2", system="sistema", user="usuario", max_output_tokens=300
     )
     assert (generation.text, generation.input_tokens, generation.complete) == ("listo", 20, True)
+    cut_short = OpenAIClient(
+        client_factory=_client(lambda r: sse(openai_events(["a medias"], status="incomplete")))
+    ).generate(FAKE_KEY, "m-2", system="s", user="u", max_output_tokens=5)
+    assert (cut_short.text, cut_short.complete) == ("a medias", False)
 
+    # Un dato que no es JSON, o con un contenido de otro tipo, se informa como tal.
     def malformed(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"inesperado": True})
+        return httpx.Response(200, content=b"data: {esto no es json}\n\n")
 
-    for client in (
-        AnthropicClient("2026-10-21", client_factory=_client(malformed)),
-        OpenAIClient(client_factory=_client(malformed)),
-    ):
+    def odd(request: httpx.Request) -> httpx.Response:
+        return sse(
+            [
+                {"type": "message_start", "message": "texto"},
+                {"type": "response.completed", "response": "x"},
+            ]
+        )
+
+    for handler in (malformed, odd):
+        for client in (
+            AnthropicClient("2026-10-21", client_factory=_client(handler)),
+            OpenAIClient(client_factory=_client(handler)),
+        ):
+            with pytest.raises(ProviderHttpError) as error:
+                client.generate(FAKE_KEY, "m", system="s", user="u", max_output_tokens=10)
+            assert error.value.kind == "proveedor"
+            assert error.value.message.endswith("formato inesperado.")
+
+
+def test_la_respuesta_por_partes_funciona_con_un_servidor_de_verdad(monkeypatch):
+    """Con conexiones reales (un servidor local que imita a Anthropic): el texto
+    se junta conforme llega, y un silencio largo se detecta en el paso correcto."""
+    import http.server
+    import threading
+    import time
+
+    from app.infrastructure.ai_providers import http_clients
+    from app.tests.support.provider_streams import _lines
+
+    events = anthropic_events(["Hola, ", "mundo"], input_tokens=9, output_tokens=4)
+    plans = {
+        # (pedazos que se envían, pausa en segundos antes de cada uno)
+        "/bien/v1/messages": [(_lines([event]), 0.02) for event in events],
+        "/mudo/v1/messages": [(_lines(events[:2]), 0.0), (b"", 3.0)],
+        "/cortado/v1/messages": [(_lines(events[:4]), 0.0), (b"", 3.0)],
+    }
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers.get("content-length", 0)))
+            self.send_response(200)
+            self.send_header("content-type", "text/event-stream")
+            self.end_headers()
+            try:
+                for chunk, pause in plans[self.path]:
+                    time.sleep(pause)
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+            except OSError:
+                pass  # quien llamaba ya se fue
+
+        def log_message(self, *args) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+        ask = {"system": "s", "user": "u", "max_output_tokens": 50}
+        # Para la prueba, el silencio máximo es de medio segundo.
+        monkeypatch.setattr(http_clients, "STREAM_TIMEOUT", httpx.Timeout(0.5, connect=2.0))
+
+        good = AnthropicClient("2026-10-21", base_url=f"{base}/bien").generate(FAKE_KEY, "m", **ask)
+        assert (good.text, good.input_tokens, good.output_tokens) == ("Hola, mundo", 9, 4)
+        assert good.accepted_ms is not None and good.first_text_ms >= good.accepted_ms
+
+        for path, kind in (("mudo", "sin_respuesta"), ("cortado", "interrumpida")):
+            with pytest.raises(ProviderHttpError) as error:
+                AnthropicClient("2026-10-21", base_url=f"{base}/{path}").generate(
+                    FAKE_KEY, "m", **ask
+                )
+            assert error.value.kind == kind, path
+
+        # Un puerto donde nadie escucha: fallo de red.
+        server.shutdown()
+        server.server_close()
         with pytest.raises(ProviderHttpError) as error:
-            client.generate(FAKE_KEY, "m", system="s", user="u", max_output_tokens=10)
-        assert error.value.kind == "proveedor"
+            AnthropicClient("2026-10-21", base_url=f"{base}/bien").generate(FAKE_KEY, "m", **ask)
+        assert error.value.kind == "red"
+    finally:
+        server.shutdown()
+        server.server_close()

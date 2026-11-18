@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, type ReactNode, useRef, useState } from "react";
+import { AiWaitNotice, useAiWait } from "@/components/ui/ai-wait";
 import {
   cardClass,
   fieldClass,
@@ -517,8 +518,9 @@ function ProfileSource({
   });
   const documents = (files ?? []).filter((file) => file.document_type === "PERFIL_PUESTO");
 
+  const aiWait = useAiWait();
   async function read(from: { fileId: string } | { text: string }) {
-    const proposal = await extractProfile(vacancyId, from);
+    const proposal = await aiWait.run(() => extractProfile(vacancyId, from));
     onProposal(proposal);
     setFeedback({
       kind: "ok",
@@ -648,6 +650,7 @@ function ProfileSource({
           </button>
         </>
       )}
+      <AiWaitNotice wait={aiWait} />
       <FeedbackLine feedback={feedback} />
     </div>
   );

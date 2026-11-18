@@ -32,7 +32,7 @@ const nextConfig: NextConfig = {
     proxyClientMaxBodySize: "25mb",
     // Una llamada a la IA puede tardar más de los 30 segundos que este reenvío
     // espera por omisión. Mismo margen que el proxy inverso de producción.
-    proxyTimeout: 180_000,
+    proxyTimeout: 360_000,
   },
   turbopack: {
     rules: {

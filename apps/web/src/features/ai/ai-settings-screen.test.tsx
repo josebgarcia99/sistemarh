@@ -253,6 +253,9 @@ describe("AiSettingsScreen", () => {
           output_tokens: 500,
           estimated_cost_usd: "0.010500",
           attempts: 1,
+          accepted_ms: 420,
+          first_text_ms: 1310,
+          duration_ms: 2080,
         },
       },
       "GET /api/v1/ai/usage": {
@@ -289,8 +292,11 @@ describe("AiSettingsScreen", () => {
     expect(JSON.parse(String(put?.[1]?.body))).toEqual({ input_price: "3", output_price: "15" });
 
     await user.click(screen.getByRole("button", { name: "Probar Modelo Grande 1" }));
-    expect((await within(prices).findByText(/respondió/)).textContent).toContain(
-      "Costo estimado: 0.010500 USD",
+    const tested = (await within(prices).findByText(/respondió/)).textContent;
+    expect(tested).toContain("Costo estimado: 0.010500 USD");
+    // La prueba dice cuánto tardó cada paso: conectar, empezar a contestar y terminar.
+    expect(tested).toContain(
+      "Pasos: conectó en 0.4 s, empezó a contestar a los 1.3 s y terminó a los 2.1 s.",
     );
 
     const usage = screen.getByRole("region", { name: "Consumo y costos de este mes" });

@@ -23,6 +23,7 @@ from app.modules.ai_settings.domain.models import (
     ProviderCode,
     ProviderError,
 )
+from app.tests.support.provider_streams import sse
 from app.tests.test_api_ai_settings import (
     admin,
     audit,
@@ -98,36 +99,45 @@ def test_el_cliente_de_gemini_lista_solo_los_modelos_que_generan_texto_y_pagina(
 
 def test_el_cliente_de_gemini_genera_texto_y_cuenta_el_razonamiento_como_salida():
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/v1beta/models/gemini-ficticio-pro:generateContent"
+        # La respuesta se pide por partes, con la misma solicitud.
+        assert request.url.path == "/v1beta/models/gemini-ficticio-pro:streamGenerateContent"
+        assert request.url.params["alt"] == "sse" and GEMINI_KEY not in str(request.url)
         assert request.headers["x-goog-api-key"] == GEMINI_KEY
         assert json.loads(request.content) == {
             "systemInstruction": {"parts": [{"text": "sistema"}]},
             "contents": [{"role": "user", "parts": [{"text": "usuario"}]}],
             "generationConfig": {"maxOutputTokens": 300},
         }
-        return httpx.Response(
-            200,
-            json={
-                "candidates": [
-                    {
-                        "content": {
-                            "role": "model",
-                            "parts": [
-                                {"text": "pensando…", "thought": True},
-                                {"text": '{"ok": '},
-                                {"text": "true}"},
-                            ],
-                        },
-                        "finishReason": "STOP",
-                    }
-                ],
-                "usageMetadata": {
-                    "promptTokenCount": 40,
-                    "candidatesTokenCount": 6,
-                    "thoughtsTokenCount": 14,
-                    "totalTokenCount": 60,
+        return sse(
+            [
+                # El razonamiento del modelo llega como una parte más y no es la respuesta.
+                {
+                    "candidates": [
+                        {
+                            "content": {
+                                "role": "model",
+                                "parts": [{"text": "pensando…", "thought": True}],
+                            }
+                        }
+                    ],
+                    "usageMetadata": {"promptTokenCount": 40, "thoughtsTokenCount": 14},
                 },
-            },
+                {"candidates": [{"content": {"role": "model", "parts": [{"text": '{"ok": '}]}}]},
+                {
+                    "candidates": [
+                        {
+                            "content": {"role": "model", "parts": [{"text": "true}"}]},
+                            "finishReason": "STOP",
+                        }
+                    ],
+                    "usageMetadata": {
+                        "promptTokenCount": 40,
+                        "candidatesTokenCount": 6,
+                        "thoughtsTokenCount": 14,
+                        "totalTokenCount": 60,
+                    },
+                },
+            ]
         )
 
     generation = GeminiClient(client_factory=_client(handler)).generate(
@@ -151,18 +161,19 @@ def test_el_cliente_de_gemini_genera_texto_y_cuenta_el_razonamiento_como_salida(
             None,
             False,
         ),
-        # Sin candidatos (solicitud bloqueada) o con un formato inesperado.
+        # Solicitud bloqueada por el proveedor: no habrá respuesta.
         ({"promptFeedback": {"blockReason": "SAFETY"}}, "proveedor", None),
-        ({"candidates": [{"content": {"parts": [{"text": "x"}]}}]}, "proveedor", None),
-        ({"inesperado": True}, "proveedor", None),
+        # Escribió algo y cerró sin decir por qué terminó: respuesta interrumpida.
+        ({"candidates": [{"content": {"parts": [{"text": "x"}]}}]}, "interrumpida", None),
+        # Aceptó la solicitud y no mandó nada que sirva: el modelo no respondió.
+        ({"inesperado": True}, "sin_respuesta", None),
+        ({"candidates": []}, "sin_respuesta", None),
     ],
 )
-def test_el_cliente_de_gemini_distingue_respuestas_cortadas_bloqueadas_y_malformadas(
+def test_el_cliente_de_gemini_distingue_respuestas_cortadas_bloqueadas_y_vacias(
     response, kind, complete
 ):
-    client = GeminiClient(
-        client_factory=_client(lambda request: httpx.Response(200, json=response))
-    )
+    client = GeminiClient(client_factory=_client(lambda request: sse([response])))
     if kind is None:
         generation = client.generate(GEMINI_KEY, "m", system="s", user="u", max_output_tokens=10)
         assert generation.complete is complete and generation.text == "a medias"
