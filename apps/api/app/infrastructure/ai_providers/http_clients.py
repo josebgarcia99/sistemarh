@@ -14,7 +14,15 @@ from typing import Any, Protocol
 
 import httpx
 
+# Para consultar la lista de modelos basta poco tiempo.
 TIMEOUT_SECONDS = 20.0
+# Una respuesta completa tarda mucho más: el proveedor no contesta hasta que
+# termina de escribirla, y una evaluación con toda la rúbrica o una propuesta de
+# redacción pasan fácilmente de veinte segundos. El tope queda por debajo del
+# que aplica el proxy a las llamadas a la API (180 s), para que el aviso lo dé
+# la aplicación y no el proxy.
+GENERATION_SECONDS = 150.0
+GENERATION_TIMEOUT = httpx.Timeout(GENERATION_SECONDS, connect=10.0, pool=10.0)
 _MAX_PAGES = 20
 
 
@@ -60,8 +68,19 @@ def _get(client: httpx.Client, url: str, headers: dict[str, str], params: dict[s
 
 
 def _post(client: httpx.Client, url: str, headers: dict[str, str], body: dict[str, Any]) -> Any:
+    """Pide una respuesta al proveedor, con el tiempo de espera largo."""
     try:
-        response = client.post(url, headers=headers, json=body)
+        response = client.post(url, headers=headers, json=body, timeout=GENERATION_TIMEOUT)
+    except (httpx.ConnectTimeout, httpx.PoolTimeout) as error:
+        raise ProviderHttpError("red", "No se pudo conectar con el proveedor.") from error
+    except httpx.TimeoutException as error:
+        # Se conectó, pero la respuesta no llegó a tiempo. No es un fallo de red
+        # y no se reintenta solo: repetirlo tardaría lo mismo y volvería a costar.
+        raise ProviderHttpError(
+            "tiempo",
+            f"El proveedor tardó más de {int(GENERATION_SECONDS)} segundos en responder. "
+            "Vuelve a intentarlo.",
+        ) from error
     except httpx.HTTPError as error:
         raise ProviderHttpError("red", "No se pudo conectar con el proveedor.") from error
     return _checked(response)

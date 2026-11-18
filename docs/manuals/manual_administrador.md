@@ -62,6 +62,19 @@ Cada tarea de IA usa el modelo que tú le asignes: análisis de perfiles, genera
 - Define un **límite mensual** por proveedor. Al alcanzarlo, las llamadas a la IA se detienen con un aviso; lo ya evaluado no se pierde.
 - «Consumo y costos de este mes» muestra llamadas, fallos y costo estimado por tarea. El costo es una estimación con tus precios; no sustituye a la factura del proveedor.
 
+### Cuando la IA no responde
+
+Si una operación de IA falla, el mensaje dice por qué:
+
+| Mensaje | Qué significa | Qué hacer |
+| --- | --- | --- |
+| «El proveedor tardó más de 150 segundos en responder» | El proveedor recibió la solicitud pero no terminó a tiempo. No se reintenta solo, porque cada intento se cobra | Volver a intentarlo. Si se repite siempre en la misma operación, prueba un modelo más rápido para ella o avisa a soporte |
+| «No se pudo conectar con el proveedor» | El servidor no logró llegar al proveedor (red, salida a internet). Se reintenta solo dos veces | Si persiste, pedir a Sistemas que revise la salida HTTPS hacia el proveedor |
+| «El proveedor limitó las solicitudes» | Demasiadas solicitudes en poco tiempo o saldo agotado en el proveedor | Esperar unos minutos; revisar el saldo en la consola del proveedor |
+| «El proveedor rechazó la clave» | La clave no es válida o no tiene permisos | Revisar la clave en el servidor |
+
+En un lote de CV, los archivos que fallaron quedan con «Error» y el motivo; «Reintentar» vuelve a procesar solo esos. Hasta el 17 de noviembre de 2026 el sistema esperaba solo 20 segundos por respuesta y avisaba «No se pudo conectar con el proveedor» aunque la conexión estuviera bien; por eso fallaban las evaluaciones largas y «Proponer mejoras con IA».
+
 ### Documentos reales y privacidad
 
 Por omisión el sistema **no envía documentos reales** a los proveedores de IA. Activarlo es una decisión que se toma con Sistemas (variable `RECLU_AI_ALLOW_REAL_DOCUMENTS`), con el aviso de privacidad vigente y sabiendo qué hace cada proveedor con los datos. Antes de enviar un CV se ocultan correos y teléfonos. Los estudios socioeconómicos nunca se incluyen en la síntesis de un expediente.

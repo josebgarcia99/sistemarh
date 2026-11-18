@@ -18,6 +18,7 @@ from app.core.config.settings import Environment, Settings
 from app.core.security.master_key import MasterKey, generate_key_text
 from app.infrastructure.ai_providers.http_clients import (
     AnthropicClient,
+    GeminiClient,
     OpenAIClient,
     ProviderHttpError,
 )
@@ -452,6 +453,55 @@ def test_un_fallo_de_red_o_una_respuesta_ilegible_se_informan():
     assert error.value.kind == "proveedor" and json.dumps(error.value.message)
 
 
+@pytest.mark.parametrize(
+    "client",
+    [
+        lambda factory: AnthropicClient("2026-10-21", client_factory=factory),
+        lambda factory: OpenAIClient(client_factory=factory),
+        lambda factory: GeminiClient(client_factory=factory),
+    ],
+    ids=["anthropic", "openai", "gemini"],
+)
+def test_una_respuesta_larga_tiene_tiempo_para_llegar_y_si_no_llega_se_dice_claro(client):
+    """Una evaluación completa tarda más de veinte segundos: pedir una respuesta
+    espera mucho más que consultar la lista de modelos, y agotar esa espera no se
+    confunde con un fallo de red."""
+    waits: list[dict[str, float]] = []
+
+    def slow(request: httpx.Request) -> httpx.Response:
+        waits.append(request.extensions["timeout"])
+        raise httpx.ReadTimeout("sin respuesta a tiempo")
+
+    with pytest.raises(ProviderHttpError) as error:
+        client(_client(slow)).generate(
+            FAKE_KEY, "modelo", system="s", user="u", max_output_tokens=100
+        )
+    assert error.value.kind == "tiempo"
+    assert "tardó más de 150 segundos" in error.value.message
+    assert waits == [{"connect": 10.0, "read": 150.0, "write": 150.0, "pool": 10.0}]
+
+    # No poder conectar sí es un fallo de red.
+    def unreachable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("no conecta")
+
+    with pytest.raises(ProviderHttpError) as error:
+        client(_client(unreachable)).generate(
+            FAKE_KEY, "modelo", system="s", user="u", max_output_tokens=100
+        )
+    assert error.value.kind == "red"
+
+    # La lista de modelos conserva su espera corta.
+    def listing(request: httpx.Request) -> httpx.Response:
+        waits.append(request.extensions["timeout"])
+        raise httpx.ConnectError("sin red")
+
+    with pytest.raises(ProviderHttpError):
+        client(
+            lambda: httpx.Client(transport=httpx.MockTransport(listing), timeout=20.0)
+        ).list_models(FAKE_KEY)
+    assert waits[-1]["read"] == 20.0
+
+
 # --- Ejecución, consumo y límite mensual -------------------------------------------------
 
 
@@ -567,13 +617,19 @@ def test_los_fallos_pasajeros_se_reintentan_y_los_definitivos_quedan_registrados
         1,
         "El proveedor rechazó la clave.",
     )
+    # Una respuesta que no llegó a tiempo tampoco: repetirla volvería a costar.
+    slow = "El proveedor tardó más de 150 segundos en responder. Vuelve a intentarlo."
+    fake.script = [ProviderError("tiempo", slow), Generation("no debe pedirse", 1, 1, True)]
+    late = run(admin)
+    assert (late.ok, late.attempts, late.error) == (False, 1, slow)
+    fake.script = None
     # Tras agotar los reintentos el fallo se informa; no es una excepción.
     fake.script = [ProviderError("red", "No se pudo conectar con el proveedor.")] * 3
     exhausted = run(admin)
     assert (exhausted.ok, exhausted.attempts) == (False, 3)
 
     (row,) = usage(admin)["rows"]
-    assert (row["calls"], row["failures"], row["input_tokens"]) == (3, 2, 10)
+    assert (row["calls"], row["failures"], row["input_tokens"]) == (4, 3, 10)
     assert row["estimated_cost_usd"] is None  # sin precio capturado no hay costo estimado
 
 

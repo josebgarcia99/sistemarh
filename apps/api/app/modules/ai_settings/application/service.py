@@ -41,6 +41,8 @@ from app.modules.audit.domain.models import AuditAction, AuditResult
 RESOURCE = "proveedor_ia"
 TEST_OPERATION = "PRUEBA"
 # Fallos que pueden ser pasajeros: red, límite de solicitudes o error del proveedor.
+# Lo que se reintenta solo. Una respuesta que no llegó a tiempo ("tiempo") no:
+# repetirla tardaría lo mismo y el proveedor cobraría cada intento.
 _RETRYABLE = frozenset({"red", "limite", "proveedor"})
 _BACKOFF_SECONDS = (2.0, 6.0)
 _MILLION = Decimal(1_000_000)

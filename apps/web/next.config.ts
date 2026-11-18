@@ -30,6 +30,9 @@ const nextConfig: NextConfig = {
     // El reenvío a la API debe dejar pasar una carga completa. El límite real
     // (20 MB por omisión) lo aplica la API; aquí va con margen.
     proxyClientMaxBodySize: "25mb",
+    // Una llamada a la IA puede tardar más de los 30 segundos que este reenvío
+    // espera por omisión. Mismo margen que el proxy inverso de producción.
+    proxyTimeout: 180_000,
   },
   turbopack: {
     rules: {
