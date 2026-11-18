@@ -59,6 +59,8 @@ class FakeProvider:
     def generate(self, api_key, model, *, system, user, max_output_tokens, images=()) -> Generation:
         self.prompts = [*(self.prompts or []), (model, system, user)]
         self.images = [*getattr(self, "images", []), *images]
+        # Tope de respuesta que se pidió en cada llamada.
+        self.limits = [*getattr(self, "limits", []), max_output_tokens]
         step = self.script.pop(0) if self.script else Generation("OK", 1000, 500, True)
         if isinstance(step, ProviderError):
             raise step

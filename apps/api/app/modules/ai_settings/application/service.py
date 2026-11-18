@@ -46,6 +46,11 @@ TEST_OPERATION = "PRUEBA"
 _RETRYABLE = frozenset({"red", "limite", "proveedor"})
 _BACKOFF_SECONDS = (2.0, 6.0)
 _MILLION = Decimal(1_000_000)
+# Tope de la respuesta, en tokens. Es solo un techo: se cobra lo que el modelo
+# escribe, no el tope. Tiene que caber la respuesta más larga que se pide (la
+# redacción o la evaluación de una rúbrica de 30 criterios); si el proveedor la
+# corta, la respuesta no sirve y se pagó igual.
+DEFAULT_OUTPUT_TOKENS = 12000
 _MIN_KEY_LENGTH = 20
 _MAX_KEY_LENGTH = 500
 
@@ -565,7 +570,7 @@ class AiSettingsService:
         model: Model | None = None,
         actor_user_id: uuid.UUID | None = None,
         vacancy_id: uuid.UUID | None = None,
-        max_output_tokens: int = 4000,
+        max_output_tokens: int = DEFAULT_OUTPUT_TOKENS,
         carries_document: bool = False,
         images: Sequence[ImageInput] = (),
     ) -> GenerationResult:

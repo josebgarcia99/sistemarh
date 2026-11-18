@@ -37,8 +37,9 @@ _EXPORT_TYPES = {
     "reporte": DocumentType.REPORTE_EVALUACION,
     "paquete": DocumentType.PAQUETE_CV,
 }
-# Espacio para niveles, evidencias y justificaciones de toda la rúbrica.
-_MAX_OUTPUT_TOKENS = 6000
+# Espacio para niveles, evidencias y justificaciones de toda la rúbrica, que
+# admite hasta 30 criterios. Es un techo: se cobra lo que el modelo escribe.
+_MAX_OUTPUT_TOKENS = 12000
 
 
 def _cv(asset: FileAsset) -> CvFile:

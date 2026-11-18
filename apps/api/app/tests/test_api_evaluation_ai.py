@@ -251,6 +251,9 @@ def test_la_ia_mejora_la_redaccion_de_los_criterios_sin_anadir_ninguno(
     _, system, user = fake.prompts[0]
     assert system == assistant.CRITERIA_SYSTEM
     assert "Experiencia en cálculo de nómina" in user and "C3." in user
+    # La respuesta tiene espacio para una rúbrica completa (hasta 30 criterios con
+    # su descripción y cinco niveles): con menos, el proveedor la cortaría.
+    assert fake.limits[-1] >= 12000
     # Nada cambió en el borrador: aplicar la propuesta es una edición normal.
     unchanged = recruiter.get(f"{API}/prompts/{draft['id']}").json()
     assert unchanged["revision"] == draft["revision"] and unchanged["criteria"] == draft["criteria"]
