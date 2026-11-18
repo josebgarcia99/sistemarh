@@ -610,4 +610,55 @@ describe("EvaluationWorkspace", () => {
     expect(body.criteria[0].weight).toBe("3.00");
     expect(body.criteria[0].levels).toEqual(levels);
   });
+
+  it("si se quitan criterios, las mejoras de la IA siguen a su criterio y no a su número", async () => {
+    const criterion = (n: number, name: string) => ({
+      id: `70000000-0000-0000-0000-00000000000${n}`,
+      code: `C${n}`,
+      name,
+      description: "",
+      kind: "INDISPENSABLE" as const,
+      weight: "3.00",
+      levels: LEVELS,
+      origin: "PERFIL" as const,
+    });
+    const criteria = [criterion(1, "Experiencia en nómina"), criterion(2, "Excel"), criterion(3, "Informes")];
+    const suggestion = (n: number, description: string) => ({
+      id: criteria[n - 1].id,
+      code: `C${n}`,
+      name: criteria[n - 1].name,
+      description,
+      levels: LEVELS,
+    });
+    mockApi({
+      [`GET ${PROMPTS_URL}`]: { body: [makePrompt({ criteria })] },
+      [`POST /api/v1/prompts/${PROMPT_ID}/criteria-proposals`]: {
+        body: {
+          suggestions: [suggestion(1, "Busca nómina."), suggestion(2, "Busca Excel."), suggestion(3, "Busca informes.")],
+          observations: [],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(screen.getByRole("button", { name: "Prompt de evaluación" }));
+    await user.click(await screen.findByRole("button", { name: "Proponer mejoras con IA" }));
+    const panel = within(await screen.findByRole("region", { name: "Mejoras propuestas por la IA" }));
+    expect(panel.getByRole("button", { name: "Aplicar a C3" })).toBeTruthy();
+
+    // Al quitar el segundo criterio, «Informes» pasa a ser el C2 en la rúbrica…
+    await user.click(screen.getByRole("button", { name: "Quitar criterio C2" }));
+    // …y su mejora lo sigue: ya no dice C3, y la del criterio quitado no se muestra.
+    expect(panel.getByText("C2. Informes")).toBeTruthy();
+    expect(panel.queryByRole("button", { name: "Aplicar a C3" })).toBeNull();
+    expect(panel.queryByText("Busca Excel.")).toBeNull();
+    expect(panel.getByText("No se muestra 1 mejora porque era para un criterio que ya quitaste.")).toBeTruthy();
+
+    await user.click(panel.getByRole("button", { name: "Aplicar a C2" }));
+    expect((screen.getByLabelText("Descripción del criterio C2") as HTMLInputElement).value).toBe("Busca informes.");
+    expect((screen.getByLabelText("Descripción del criterio C1") as HTMLInputElement).value).toBe("");
+    // Queda solo la mejora del primer criterio; la del que se quitó no vuelve a aparecer.
+    expect(panel.getByRole("button", { name: "Aplicar a C1" })).toBeTruthy();
+    expect(panel.queryByText(/ya quitaste/)).toBeNull();
+  });
 });

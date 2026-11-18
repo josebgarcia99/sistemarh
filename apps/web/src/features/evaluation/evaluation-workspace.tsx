@@ -276,6 +276,15 @@ function PromptEditor({
       setProposing(false);
     }
   }
+  // Cada mejora se empareja con su criterio por identidad, no por número: si se quitan
+  // criterios, los que quedan cambian de número en pantalla (el antiguo C10 puede ser
+  // ahora el C7) y las mejoras de criterios que ya no están dejan de mostrarse.
+  const matched = (proposal?.suggestions ?? [])
+    .map((item) => ({ item, index: criteria.findIndex((criterion) => criterion.id === item.id) }))
+    .filter(({ index }) => index >= 0)
+    .sort((a, b) => a.index - b.index);
+  const orphaned = (proposal?.suggestions.length ?? 0) - matched.length;
+
   /** Copia al borrador la redacción propuesta. No guarda: eso lo hace «Guardar cambios». */
   function applySuggestions(ids: string[]) {
     if (!proposal) return;
@@ -288,7 +297,10 @@ function PromptEditor({
           : item;
       }),
     );
-    const rest = proposal.suggestions.filter((item) => !ids.includes(item.id));
+    // Lo aplicado se retira, y también lo que era para criterios que ya no están.
+    const rest = proposal.suggestions.filter(
+      (item) => !ids.includes(item.id) && criteria.some((criterion) => criterion.id === item.id),
+    );
     setProposal(rest.length > 0 ? { ...proposal, suggestions: rest } : null);
     setProposalFeedback({
       kind: "ok",
@@ -589,6 +601,8 @@ function PromptEditor({
               <p className="flex-[1_1_300px] text-sm text-ink-muted">
                 La IA sugiere una redacción más clara para la descripción y los niveles de cada
                 criterio. No añade criterios ni requisitos, y nada cambia hasta que lo apliques.
+                Trabaja sobre lo último guardado: si quitaste o cambiaste criterios, pulsa antes
+                «Guardar cambios».
               </p>
             </div>
             <AiWaitNotice wait={aiWait} />
@@ -605,11 +619,18 @@ function PromptEditor({
                     </ul>
                   </div>
                 )}
+                {orphaned > 0 && (
+                  <p className="rounded-2xl bg-surface px-4 py-3">
+                    {orphaned === 1
+                      ? "No se muestra 1 mejora porque era para un criterio que ya quitaste."
+                      : `No se muestran ${orphaned} mejoras porque eran para criterios que ya quitaste.`}
+                  </p>
+                )}
                 <ul className="flex flex-col gap-3">
-                  {proposal.suggestions.map((item) => (
+                  {matched.map(({ item, index }) => (
                     <li key={item.id} className="flex flex-col gap-2 rounded-3xl bg-surface p-4">
                       <p className="font-medium">
-                        {item.code}. {item.name}
+                        C{index + 1}. {criteria[index].name || item.name}
                       </p>
                       {item.description && <p>{item.description}</p>}
                       <ol start={0} className="list-decimal pl-6 text-ink-muted">
@@ -622,19 +643,21 @@ function PromptEditor({
                         className={`${secondaryButtonClass} self-start`}
                         onClick={() => applySuggestions([item.id])}
                       >
-                        Aplicar a {item.code}
+                        Aplicar a C{index + 1}
                       </button>
                     </li>
                   ))}
                 </ul>
                 <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    className={primaryButtonClass}
-                    onClick={() => applySuggestions(proposal.suggestions.map((item) => item.id))}
-                  >
-                    Aplicar todas
-                  </button>
+                  {matched.length > 0 && (
+                    <button
+                      type="button"
+                      className={primaryButtonClass}
+                      onClick={() => applySuggestions(matched.map(({ item }) => item.id))}
+                    >
+                      Aplicar todas
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={secondaryButtonClass}
