@@ -33,7 +33,7 @@ En cualquier etapa se puede retroceder, reprogramar, cancelar, registrar desisti
 | Psicometría | Extrae y resume resultados documentados | Validación profesional y avance | No diagnostica ni declara aptitud |
 | Entrevista | Ordena y resume lo capturado | La conclusión del entrevistador | No sustituye su decisión |
 | Estudio | Lee formularios y señala faltantes o texto ilegible | Qué dato queda verificado | No puntúa condición económica, domicilio ni familia; no infiere nada de fotografías |
-| Expediente | Sintetiza separando hechos, declaraciones, observaciones y pendientes | La lectura del conjunto | No genera un índice global de idoneidad |
+| Expediente | Sintetiza separando hechos, declaraciones, observaciones y pendientes; señala puntos de atención y da una recomendación en palabras marcada como IA (decisión del 18 nov 2026) | La lectura del conjunto y la decisión | No calcula ninguna puntuación global ni mueve o cierra postulaciones |
 | Cierre | Nada | El resultado final | No decide contrataciones |
 
 ## 17. Diseño de las pantallas

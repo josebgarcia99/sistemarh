@@ -52,10 +52,33 @@ class SampleAi:
         )
 
     def _answer(self, system: str, user: str) -> dict[str, Any] | None:  # noqa: PLR0911
-        if system.startswith("Recibes el texto del reporte de una prueba psicométrica"):
+        if system.startswith("Recibes el reporte de una prueba psicométrica"):
             return {
                 "resumen": EXAMPLE + "el reporte de la Prueba Inventada de Habilidades documenta "
                 "tres escalas y concluye que el perfil es compatible con tareas de detalle.",
+                "escalas": [
+                    {
+                        "nombre": "Atención al detalle",
+                        "nivel": 4,
+                        "maximo": 5,
+                        "frase": "Nivel alto",
+                        "lectura": "FAVORABLE",
+                    },
+                    {
+                        "nombre": "Razonamiento numérico",
+                        "nivel": 4,
+                        "maximo": 5,
+                        "frase": "Nivel alto",
+                        "lectura": "FAVORABLE",
+                    },
+                    {
+                        "nombre": "Trabajo bajo presión",
+                        "nivel": 3,
+                        "maximo": 5,
+                        "frase": "Nivel medio",
+                        "lectura": "INTERMEDIO",
+                    },
+                ],
                 "resultados_documentados": [
                     "Atención al detalle: percentil 80.",
                     "Razonamiento numérico: percentil 65.",
@@ -120,8 +143,44 @@ class SampleAi:
                     "¿Quién más puede confirmar tu empleo de 2018 a 2020?"
                 ],
             }
+        if system.startswith("Recibes el expediente de una postulación que una persona"):
+            return {
+                "analisis_de_cierre": EXAMPLE + "la persona llegó hasta la etapa en la que se "
+                "cerró su postulación. El CV documenta su experiencia y la llamada la confirmó.\n\n"
+                "El motivo escrito por Recursos Humanos coincide con lo que consta en el "
+                "expediente.",
+                "avance_por_etapa": [
+                    "CV: documenta la experiencia declarada.",
+                    "Llamada: confirma el puesto y los años del CV.",
+                ],
+                "puntos_de_atencion": [
+                    "Prueba técnica: falló un recibo con incapacidad (prueba técnica)."
+                ],
+                "informacion_pendiente": ["El estudio socioeconómico no se concluyó."],
+            }
         if system.startswith("Recibes el expediente"):
             return {
+                "puntos_de_atencion": [
+                    "Prueba técnica: falló un recibo con incapacidad (prueba técnica).",
+                    "Prueba psicométrica: el reporte ubica «Trabajo bajo presión» en 3 de 5, "
+                    "lectura intermedia (prueba psicométrica).",
+                    "Referencias: el empleo de 2018 a 2020 quedó sin confirmar (referencias).",
+                ],
+                "contrastes": [
+                    "Cierre de nómina con poco tiempo: dijo resolverlo sin problema "
+                    "(llamada 1); el reporte ubica «Trabajo bajo presión» en 3 de 5 (prueba "
+                    "psicométrica). Conclusión: lo declarado se sostiene solo en parte; "
+                    "conviene pedir un ejemplo concreto.",
+                ],
+                "veredicto": "RECOMENDABLE_CON_RESERVAS",
+                "razones": [
+                    "Seis años como analista de nómina en la misma empresa (CV).",
+                    "88 de 100 en la prueba técnica (prueba técnica).",
+                    "Un empleo anterior sin confirmar por referencias (referencias).",
+                ],
+                "conclusion": EXAMPLE + "cumple la experiencia que pide el puesto y su prueba "
+                "técnica es alta. Quedan por aclarar un empleo sin confirmar y el manejo de "
+                "recibos con incapacidad.",
                 "hechos_documentados": [
                     "Seis años como analista de nómina en la misma empresa (CV).",
                     "88 de 100 en la prueba técnica (prueba técnica).",

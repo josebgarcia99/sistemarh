@@ -6,7 +6,7 @@ Para quien administra el sistema: da de alta a las personas, configura la IA, de
 
 ## Tu papel
 
-- Ves **todas** las vacantes, candidatos y reportes.
+- Ves **todas** las vacantes, candidatos y reportes, incluidas las pruebas psicométricas, los estudios socioeconómicos y la recomendación de la IA de cada expediente.
 - Eres la única persona que puede crear usuarios, cambiar contraseñas, transferir vacantes, configurar la IA, eliminar documentos y consultar la auditoría.
 - Lo que no puedes hacer: desactivarte a ti mismo, quitarte el rol de administrador o dejar el sistema sin ningún administrador activo. El sistema lo impide.
 
@@ -74,6 +74,8 @@ La clave se guarda cifrada y **no vuelve a mostrarse**: solo verás sus cuatro �
 
 Cada tarea de IA usa el modelo que tú le asignes: análisis de perfiles, generación de prompts, evaluación de CV, extracción de datos del CV, análisis de llamadas (también organiza las entrevistas y analiza las referencias), lectura de documentos, resumen de pruebas y síntesis de expedientes. Una tarea sin modelo asignado no se puede usar, y la pantalla lo avisa a quien lo intente. «Probar» comprueba un modelo concreto.
 
+**«Resumen de pruebas» necesita un modelo que lea imágenes.** Al resumir una prueba psicométrica, el sistema envía el texto del reporte y la imagen de sus páginas (hasta seis), para que la IA lea el nivel de cada gráfica o aguja. La imagen lleva el nombre de la persona, igual que el texto. **«Síntesis de expedientes»** es la que produce la recomendación de la IA y el análisis de cierre de «No viable»: conviene asignarle el modelo más capaz.
+
 ### Costos y límite mensual
 
 - Captura el precio de cada modelo para que el sistema estime el costo de cada llamada.
@@ -106,7 +108,7 @@ Antecedente: hasta el 17 de noviembre de 2026 el sistema pedía la respuesta com
 
 ### Documentos reales y privacidad
 
-Por omisión el sistema **no envía documentos reales** a los proveedores de IA. Activarlo es una decisión que se toma con Sistemas (variable `RECLU_AI_ALLOW_REAL_DOCUMENTS`), con el aviso de privacidad vigente y sabiendo qué hace cada proveedor con los datos. Antes de enviar un CV se ocultan correos y teléfonos. Los estudios socioeconómicos nunca se incluyen en la síntesis de un expediente.
+Por omisión el sistema **no envía documentos reales** a los proveedores de IA. Activarlo es una decisión que se toma con Sistemas (variable `RECLU_AI_ALLOW_REAL_DOCUMENTS`), con el aviso de privacidad vigente y sabiendo qué hace cada proveedor con los datos. Antes de enviar un CV se ocultan correos y teléfonos. Del estudio socioeconómico solo entran en la síntesis las descripciones de sus fotografías (por lo que dicen de orden y organización); su economía, salud, dictamen y niveles nunca se envían.
 
 ## Preguntas generales de la empresa
 

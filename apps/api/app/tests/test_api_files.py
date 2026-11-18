@@ -370,9 +370,10 @@ def test_revocar_el_acceso_bloquea_la_descarga_de_lo_ya_cargado(vacancy, other, 
     assert other_client.get(f"/api/v1/files/{file['id']}/download").status_code == 404
 
 
-def test_seguridad_8_los_documentos_sensibles_exigen_el_permiso_adicional(
+def test_seguridad_8_los_documentos_sensibles_se_ven_con_la_vacante_compartida(
     vacancy, other, recruiter_client, admin_client
 ):
+    """Decisión del titular (18 nov 2026): ya no hace falta un permiso adicional."""
     other_client, other_id = other
     base = f"/api/v1/vacancies/{vacancy['id']}"
     cv = upload(recruiter_client, vacancy["id"]).json()["file"]
@@ -380,29 +381,31 @@ def test_seguridad_8_los_documentos_sensibles_exigen_el_permiso_adicional(
         recruiter_client, vacancy["id"], name="resultado.pdf", document_type="PSICOMETRIA"
     ).json()["file"]
     assert sensitive["sensitive"] is True
-    share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
+    # Sin la vacante compartida, el documento no existe para esa persona.
+    assert other_client.get(f"/api/v1/files/{sensitive['id']}/download").status_code == 404
 
-    # Compartir la vacante no da acceso al documento sensible.
-    assert [f["id"] for f in other_client.get(f"{base}/files").json()] == [cv["id"]]
-    assert other_client.get(f"/api/v1/files/{sensitive['id']}/download").status_code == 403
-    assert other_client.get(f"/api/v1/files/{sensitive['id']}").status_code == 403
+    # Con lectura lo consulta y lo descarga; no puede cargar.
+    share(recruiter_client, vacancy["id"], other_id, "LECTURA")
+    assert {f["id"] for f in other_client.get(f"{base}/files").json()} == {
+        cv["id"],
+        sensitive["id"],
+    }
+    assert other_client.get(f"/api/v1/files/{sensitive['id']}/download").status_code == 200
+    assert other_client.get(f"/api/v1/files/{sensitive['id']}").status_code == 200
     assert (
         upload(other_client, vacancy["id"], name="p.pdf", document_type="PSICOMETRIA").status_code
         == 403
     )
+    # Con colaboración también carga documentos sensibles.
+    share(recruiter_client, vacancy["id"], other_id, "COLABORACION")
+    assert (
+        upload(other_client, vacancy["id"], name="p.pdf", document_type="PSICOMETRIA").status_code
+        == 201
+    )
 
-    # Con el permiso de esa clase, sí; el de otra clase no sirve.
-    grants = f"{base}/members/{other_id}/sensitive-grants"
-    recruiter_client.put(grants, json={"document_classes": ["ESTUDIO_SOCIOECONOMICO"]})
-    assert other_client.get(f"/api/v1/files/{sensitive['id']}/download").status_code == 403
-    recruiter_client.put(grants, json={"document_classes": ["PSICOMETRIA"]})
-    assert other_client.get(f"/api/v1/files/{sensitive['id']}/download").status_code == 200
-    assert len(other_client.get(f"{base}/files").json()) == 2
-
-    # Al quitar el permiso se bloquea de nuevo.
-    recruiter_client.put(grants, json={"document_classes": []})
-    assert other_client.get(f"/api/v1/files/{sensitive['id']}/download").status_code == 403
-    # La administradora no necesita el permiso adicional.
+    # Al dejar de compartir la vacante se bloquea de nuevo.
+    recruiter_client.delete(f"{base}/members/{other_id}")
+    assert other_client.get(f"/api/v1/files/{sensitive['id']}/download").status_code == 404
     assert admin_client.get(f"/api/v1/files/{sensitive['id']}/download").status_code == 200
 
 

@@ -16,7 +16,12 @@ from pydantic import BaseModel
 
 from app.composition.context import AppContext, client_ip, get_context
 from app.modules.authentication.api.dependencies import Principal, require_user
-from app.modules.cv_processing.application.service import BatchView, ItemView, Overview
+from app.modules.cv_processing.application.service import (
+    BatchView,
+    ItemView,
+    Overview,
+    prompt_preview,
+)
 from app.modules.cv_processing.domain.models import ItemStatus
 
 logger = logging.getLogger(__name__)
@@ -83,6 +88,9 @@ class ApprovedPromptOut(BaseModel):
     version_number: int
     pass_threshold: Decimal
     criteria: int
+    # Vista previa: el texto completo que recibe la IA con cada CV.
+    instructions: str
+    cv_message: str
 
 
 class OverviewOut(BaseModel):
@@ -168,12 +176,15 @@ def _names(repos, views: list[BatchView]) -> dict[uuid.UUID, str]:  # noqa: ANN0
 
 def _overview_out(overview: Overview, names: dict[uuid.UUID, str]) -> OverviewOut:
     rubric = overview.rubric
+    instructions, cv_message = prompt_preview(rubric) if rubric else ("", "")
     return OverviewOut(
         approved_prompt=ApprovedPromptOut(
             id=rubric.prompt_version_id,
             version_number=rubric.version_number,
             pass_threshold=rubric.threshold,
             criteria=len(rubric.criteria),
+            instructions=instructions,
+            cv_message=cv_message,
         )
         if rubric
         else None,

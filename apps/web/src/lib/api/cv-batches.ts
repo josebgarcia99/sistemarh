@@ -62,6 +62,9 @@ const overviewSchema = z.object({
       version_number: z.number(),
       pass_threshold: z.string(),
       criteria: z.number(),
+      /** Vista previa: lo que recibe la IA con cada CV. */
+      instructions: z.string().default(""),
+      cv_message: z.string().default(""),
     })
     .nullable(),
   total_cvs: z.number(),

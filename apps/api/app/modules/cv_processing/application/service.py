@@ -116,6 +116,16 @@ class ItemView:
     file_name: str
 
 
+# Lo que ocupa el lugar del CV en la vista previa del prompt.
+CV_PLACEHOLDER = "[Aquí va el texto de cada CV, con correos y teléfonos ocultos]"
+
+
+def prompt_preview(rubric: Rubric) -> tuple[str, str]:
+    """Lo que recibe la IA al evaluar un CV: las instrucciones con la rúbrica y el
+    mensaje que acompaña a cada currículum. Es el mismo texto que usa un lote."""
+    return rubric.system_prompt, _user_message(CV_PLACEHOLDER, truncated=False, ocr=False)
+
+
 def _user_message(text: str, truncated: bool, ocr: bool) -> str:
     note = " El texto se recortó por su longitud." if truncated else ""
     if ocr:

@@ -234,8 +234,8 @@ function UploadForm({
       )}
       {SENSITIVE_TYPES.includes(documentType) && (
         <p className="text-sm text-ink-muted">
-          Este tipo de documento se guarda cifrado y solo lo ven el responsable, el
-          administrador y quien tenga el permiso adicional.
+          Este tipo de documento se guarda cifrado. Lo ven el administrador, el responsable y
+          las personas con quienes se comparta la vacante.
         </p>
       )}
       <button

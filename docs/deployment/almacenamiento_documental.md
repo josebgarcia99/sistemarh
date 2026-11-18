@@ -65,7 +65,7 @@ PDF, DOCX, DOC, JPG y PNG, hasta 20 MB (`RECLU_MAX_UPLOAD_BYTES`). Se comprueba 
 | --- | --- |
 | `GET /api/v1/vacancies/{id}/files` | Acceso de lectura a la vacante |
 | `POST /api/v1/vacancies/{id}/files?document_type=…&filename=…` (el cuerpo es el archivo) | Acceso de colaboración |
-| `GET /api/v1/files/{id}` y `GET /api/v1/files/{id}/download` | Acceso de lectura; permiso adicional si es sensible |
+| `GET /api/v1/files/{id}` y `GET /api/v1/files/{id}/download` | Acceso de lectura a la vacante (también para los sensibles) |
 | `POST /api/v1/files/{id}/deletion` | Administrador, con motivo |
 | `GET /api/v1/storage/status` y `POST /api/v1/storage/reconciliation` | Administrador |
 

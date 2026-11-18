@@ -48,7 +48,7 @@ Cómo se aplica: (1) la política de documentos y evaluaciones solo le concede l
 | Registrar llamadas, psicometría, entrevistas y pruebas | Sí | Sí | Sí | No | No |
 | En una llamada: quitar preguntas, cambiar su redacción, sumar las de otros bancos o escribir nuevas (solo cambia esa llamada) | Sí | Sí | Sí | No | No |
 | Registrar el resultado final | Sí | Sí | Sí | No | No |
-| Ver documentos psicométricos y socioeconómicos | Con finalidad registrada | Sí | Solo con permiso adicional | Solo con permiso adicional | No |
+| Ver documentos psicométricos y socioeconómicos | Sí | Sí | Sí | Sí | No |
 
 **Funciones globales**
 
@@ -71,7 +71,7 @@ Cómo se aplica: (1) la política de documentos y evaluaciones solo le concede l
 - El worker comprueba de nuevo el permiso antes de procesar y antes de generar exportaciones.
 - Los reportes históricos usan los permisos vigentes hoy, no los del momento del evento.
 - Row-Level Security de SQL Server se propone como segunda barrera (decisión 11). Todavía no está implementada.
-- Documentos (Fase 3): ver la lista y descargar exige acceso de lectura a la vacante; cargar exige colaboración; los de clase sensible exigen además el permiso adicional, salvo para el responsable y el administrador; eliminar es solo del administrador y con motivo. El permiso se evalúa en cada descarga.
+- Documentos (Fase 3): ver la lista y descargar exige acceso de lectura a la vacante; cargar exige colaboración; los de clase sensible (psicometría y estudio socioeconómico) los ve y descarga cualquiera con la vacante compartida, sin permiso adicional, por decisión del titular del 18 de noviembre de 2026; eliminar es solo del administrador y con motivo. El permiso se evalúa en cada descarga.
 - Todo intento rechazado queda en la auditoría como `acceso.denegado`, también cuando la respuesta es "no encontrado" para no revelar que el recurso existe.
 
 ## 12. Reglas de compartición y transferencia

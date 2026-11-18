@@ -179,10 +179,17 @@ class SynthesisOut(BaseModel):
     id: uuid.UUID
     created_at: datetime
     created_by_name: str | None
-    result: dict[str, list[str]]
+    # Listas de la síntesis y, como texto, el veredicto, la conclusión o el análisis
+    # de cierre. Todo es contenido generado por IA.
+    result: dict[str, list[str] | str]
     sources: list[str]
     includes_psychometrics: bool
     includes_study: bool
+
+
+class SynthesisIn(BaseModel):
+    # Análisis de cierre de una postulación que una persona cerró como no viable.
+    closing: bool = False
 
 
 class SynthesisViewOut(BaseModel):
@@ -607,17 +614,21 @@ def get_syntheses(
     "/applications/{application_id}/syntheses",
     response_model=SynthesisOut,
     status_code=status.HTTP_201_CREATED,
-    summary="La IA sintetiza el expediente por tipo de fuente; no puntúa ni recomienda",
+    summary="La IA sintetiza el expediente y da su recomendación, o redacta el cierre",
 )
 def create_synthesis(
     application_id: uuid.UUID,
     request: Request,
+    payload: SynthesisIn | None = None,
     principal: Principal = _user,
     context: AppContext = _context,
 ) -> SynthesisOut:
     with context.require_backend().transaction() as repos:
         outcome = context.assessments(repos).synthesize(
-            principal.user, application_id, ip=client_ip(request)
+            principal.user,
+            application_id,
+            closing=bool(payload and payload.closing),
+            ip=client_ip(request),
         )
         body = _synthesis_out(repos, outcome.content) if outcome.content else None
     if body is None:

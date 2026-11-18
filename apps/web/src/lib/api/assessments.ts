@@ -145,7 +145,16 @@ const digitizationSchema = z.object({
 });
 export type Digitization = z.infer<typeof digitizationSchema>;
 
+/** Los tres veredictos que puede dar la IA. Es una opinión: la decisión es de una persona. */
+export const VERDICT_LABELS: Record<string, string> = {
+  RECOMENDABLE: "Recomendable",
+  RECOMENDABLE_CON_RESERVAS: "Recomendable con reservas",
+  NO_RECOMENDABLE: "No recomendable",
+};
+
 export const SYNTHESIS_SECTIONS: [string, string][] = [
+  ["puntos_de_atencion", "Puntos de atención"],
+  ["contrastes", "Contrastes entre fuentes y conclusión de la IA"],
   ["avance_por_etapa", "Qué aportó cada etapa frente a las anteriores"],
   ["hechos_documentados", "Hechos documentados"],
   ["declaraciones", "Lo que la persona declaró"],
@@ -160,7 +169,8 @@ const synthesisSchema = z.object({
   id: z.string(),
   created_at: z.string(),
   created_by_name: z.string().nullable(),
-  result: z.record(z.string(), z.array(z.string())),
+  // Listas de la síntesis y, como texto, el veredicto, la conclusión o el análisis de cierre.
+  result: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
   sources: z.array(z.string()),
   includes_psychometrics: z.boolean(),
   /** Usó descripciones de fotografías del estudio: verla exige ese permiso. */
@@ -299,9 +309,11 @@ export function getSyntheses(applicationId: string, signal?: AbortSignal) {
   });
 }
 
-export function createSynthesis(applicationId: string) {
+/** Con ``closing``, pide el análisis de cierre de una postulación cerrada como no viable. */
+export function createSynthesis(applicationId: string, closing = false) {
   return apiFetch(`/applications/${applicationId}/syntheses`, {
     method: "POST",
+    body: { closing },
     schema: synthesisSchema,
   });
 }

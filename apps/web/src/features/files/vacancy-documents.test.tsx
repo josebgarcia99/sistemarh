@@ -117,7 +117,7 @@ describe("VacancyDocuments", () => {
     expect(await screen.findByText(/Psicometría · .* · Sensible, cifrado/)).toBeTruthy();
     expect(screen.queryByText(/se guarda cifrado/)).toBeNull();
     await user.selectOptions(screen.getByLabelText("Tipo de documento"), "ESTUDIO_SOCIOECONOMICO");
-    expect(screen.getByText(/se guarda cifrado y solo lo ven/)).toBeTruthy();
+    expect(screen.getByText(/se guarda cifrado\. Lo ven el administrador, el responsable y/)).toBeTruthy();
   });
 
   it("rechaza en pantalla un formato no permitido sin llamar a la API", async () => {

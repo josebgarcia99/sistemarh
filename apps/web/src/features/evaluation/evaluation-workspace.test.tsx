@@ -278,6 +278,9 @@ describe("EvaluationWorkspace", () => {
 
     await user.click(screen.getByRole("button", { name: "Prompt de evaluación" }));
     expect(await screen.findByRole("heading", { name: "Versión 1" })).toBeTruthy();
+    // La vista previa del prompt completo se puede consultar también con lectura.
+    await user.click(screen.getByText("Vista previa: el prompt completo que recibirá la IA"));
+    expect(screen.getByLabelText("Prompt completo").textContent).toContain("## 1. Instrucciones permanentes");
     for (const name of [/Generar/, "Guardar cambios", "Enviar a revisión", "Duplicar", "Archivar"]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }

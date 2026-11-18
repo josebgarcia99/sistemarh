@@ -330,12 +330,13 @@ def test_el_estudio_se_descarga_en_el_formato_con_cada_dato_en_su_lugar(
     assert len(sheet._images) == 2  # el logotipo y la fotografía de localización
     assert _at(cells, "FACHADA DE LA VIVIENDA\nCroquis en PDF.")
 
-    # Quién puede descargarlo: con el permiso del estudio, y la analista de estudios.
+    # Quién puede descargarlo: quien tiene la vacante compartida y la analista de estudios.
     stranger, stranger_id = other
     from app.tests.conftest import share
 
+    assert stranger.get(download).status_code == 404
     share(recruiter, vacancy_id, stranger_id, "COLABORACION")
-    assert stranger.get(download).status_code == 403
+    assert stranger.get(download).status_code == 200
     assert analyst.get(download).status_code == 200
     assert analyst.put(upload_url, content=blank, headers=headers).status_code == 403
     # Solo los estudios se descargan así.
@@ -353,4 +354,4 @@ def test_el_estudio_se_descarga_en_el_formato_con_cada_dato_en_su_lugar(
 
     assert len(audit(admin, "estudio.formato_cargado")) == 2
     events = audit(admin, "estudio.descargado")
-    assert len(events) == 3 and events[0]["details"]["sin_colocar"] == 1
+    assert len(events) == 4 and events[0]["details"]["sin_colocar"] == 1

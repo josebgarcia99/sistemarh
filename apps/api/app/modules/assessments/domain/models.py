@@ -153,10 +153,9 @@ class Synthesis:
     created_at: datetime
     created_by: uuid.UUID
     result: dict[str, Any]
-    # Incluyó resultados psicométricos validados: verla exige el permiso adicional.
+    # Incluyó resultados de pruebas psicométricas.
     includes_psychometrics: bool = False
-    # Incluyó descripciones de fotografías del estudio socioeconómico: verla
-    # exige el permiso adicional del estudio.
+    # Incluyó descripciones de fotografías del estudio socioeconómico.
     includes_study: bool = False
     # Qué fuentes se usaron (por ejemplo, "2 llamadas").
     sources: tuple[str, ...] = ()
@@ -187,12 +186,30 @@ class DossierMaterial:
     cv: dict[str, Any] = field(default_factory=dict)
     evaluation: dict[str, Any] = field(default_factory=dict)
     calls: tuple[dict[str, Any], ...] = ()
+    # Resultado de la evaluación del CV y nombre de cada criterio de su rúbrica.
+    cv_classification: str = ""
+    cv_score: str = ""
+    criteria_names: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Closure:
+    """El cierre que registró una persona: en qué etapa se quedó la postulación,
+    con qué resultado y por qué. Nunca lo decide el sistema ni la IA."""
+
+    stage: str
+    outcome: str
+    reason: str
 
 
 class Applications(Protocol):
     def get(self, application_id: uuid.UUID) -> ApplicationRef | None: ...
 
     def material(self, application_id: uuid.UUID) -> DossierMaterial: ...
+
+    def closure(self, application_id: uuid.UUID) -> Closure | None:
+        """El cierre vigente de una postulación que no terminó en contratación."""
+        ...
 
 
 class AssessmentAccess(Protocol):
@@ -260,6 +277,12 @@ class Documents(Protocol):
 
     def read_text(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> tuple[str, bool]:
         """Texto del documento y si se obtuvo por OCR. Lanza ``DocumentError``."""
+        ...
+
+    def read_pages(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> tuple[Photo, ...]:
+        """Las primeras páginas del documento como imágenes, para que la IA lea lo
+        que el texto no trae (gráficas, agujas, colores). Vacío si no se pueden
+        obtener: quien llama sigue solo con el texto."""
         ...
 
     def read_photo(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> Photo:

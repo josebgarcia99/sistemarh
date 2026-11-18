@@ -11,7 +11,7 @@ Toda descarga pasa por la API, que evalúa el permiso en ese momento, no cuando 
 | --- | --- |
 | Privado por defecto | El disco está fuera del directorio público; no hay carpetas estáticas ni enlaces directos. |
 | Autorización por objeto | `GET /api/v1/files/{id}/download` exige sesión, acceso vigente a la vacante y, si aplica, permiso de documento sensible. |
-| Documentos sensibles | Psicometría, estudios socioeconómicos y fotografías documentales requieren un permiso adicional por persona. Compartir la vacante no lo concede. |
+| Documentos sensibles | Psicometría, estudios socioeconómicos y fotografías documentales los ven el administrador, el responsable y cualquier persona con la vacante compartida (decisión del titular del 18 de noviembre de 2026; antes exigían un permiso adicional por persona). Siguen cifrados en disco y cada acceso se evalúa y se audita. |
 | Analista de estudios socioeconómicos | Rol con acceso por puesto a los estudios y a las referencias laborales y personales de todas las vacantes, y a nada más: la política solo le concede la clase «estudio socioeconómico» y, además, una lista cerrada de rutas deja en 403 cualquier otra operación (también las que se añadan después). No ve CV ni el resto del expediente. |
 | Path traversal | Las claves las genera el servidor; el usuario nunca envía rutas. La ruta resuelta debe quedar dentro de la raíz. |
 | Validación de archivos | Lista de formatos permitidos, verificación del tipo real, límite de 20 MB configurable, rechazo de documentos con macros. |
@@ -202,7 +202,7 @@ Estado al 11 de noviembre de 2026.
 
 | Aspecto | Cómo quedó |
 | --- | --- |
-| Datos sensibles | La psicometría y el estudio socioeconómico exigen, además del acceso a la vacante, el permiso adicional por persona (el mismo de sus documentos). Sin él, la evaluación responde «sin permiso» y en las listas solo se indica que existe. El responsable y el administrador lo tienen siempre. Compartir la vacante no lo concede |
+| Datos sensibles | La psicometría y el estudio socioeconómico se ven con el acceso a la vacante: lectura para consultar, colaboración para capturar. Ya no existe el permiso adicional por persona (decisión del titular del 18 de noviembre de 2026). Sin acceso a la vacante, no existen para esa persona. |
 | Documentos | Los reportes psicométricos y los estudios se guardan cifrados. Para resumirlos o digitalizarlos se descifran en memoria dentro del servidor; el texto es lo único que se envía al proveedor |
 | Sin decisiones automáticas | Registrar o cambiar una evaluación nunca mueve de etapa ni cambia el estado de una postulación |
 | Psicometría | El sistema no diagnostica ni declara aptitud. «Validada» exige el nombre del profesional que la interpretó. A la IA se le pide resumir el reporte, que ya viene interpretado por un profesional, y explicar en lenguaje claro qué significa cada resultado **según el propio reporte**: no puede añadir significados que el texto no respalde y, si el reporte no explica un resultado, debe decirlo y remitir al profesional. Su respuesta se reduce a resumen, resultados documentados, interpretación, datos ilegibles, avisos y hasta cinco preguntas sobre situaciones de trabajo; cualquier diagnóstico o veredicto de aptitud se descarta en el servidor |
@@ -238,3 +238,18 @@ Estado al 11 de noviembre de 2026.
 - **Barrido de acceso directo.** Una prueba pide como persona sin acceso cada ruta con identificador, con datos reales de otra persona; toda ruta nueva entra sola en el barrido.
 - **Imagen de producción** sin herramientas de desarrollo; el contenedor corre con un usuario sin privilegios; solo el proxy publica puertos; la clave maestra se monta en solo lectura.
 - **Amenazas y riesgos abiertos:** en [`modelo_amenazas.md`](modelo_amenazas.md).
+
+## Excepciones decididas por el titular el 18 de noviembre de 2026
+
+El documento maestro fijaba varias reglas que su autor decidió cambiar expresamente. Quedan registradas aquí para que nadie las tome por un descuido.
+
+| Regla original | Qué se decidió | Qué se conserva |
+| --- | --- | --- |
+| No generar un índice global de idoneidad; la IA no recomienda | La síntesis del expediente incluye una **recomendación de la IA**: recomendable, recomendable con reservas o no recomendable, con razones y fuente, marcada «Generado por IA. No es una decisión» | Es un veredicto en palabras: no hay puntuación, índice ni porcentaje global. No mueve, descarta ni contrata. Un veredicto fuera de las tres opciones se descarta |
+| La psicometría solo entra validada por un profesional y la IA no la interpreta | Entra la prueba presentada o validada, con las escalas que la IA lee del reporte (texto e imagen de sus páginas) y su lectura favorable, intermedia o desfavorable; cuentan para la recomendación | La IA no diagnostica: escribe «el reporte ubica la escala en…». El sistema comprueba el número leído contra la frase y aparta lo que no coincide. La pantalla pide comprobarlo contra el documento |
+| No inferir idoneidad laboral a partir de fotografías | Las descripciones de las fotografías del estudio cuentan para la recomendación y los contrastes, **solo** por lo que dicen de orden, organización, limpieza y cuidado del espacio | Sigue prohibido usar o mencionar tipo, tamaño o materiales de la vivienda, mobiliario como señal de recursos, zona, familia o nivel económico. Del estudio no entra nada más (economía, salud, dictamen, niveles) |
+| No compartir automáticamente los documentos sensibles con todos los colaboradores | Administradores y cualquier persona con la vacante compartida ven psicometría, estudio y recomendación | Cifrado en disco, evaluación del acceso en cada consulta y auditoría. Sin la vacante compartida no se ve nada |
+| Las decisiones finales son humanas | Botón «No viable»: una persona cierra el proceso con su motivo y la IA redacta el análisis de cierre | El cierre lo registra la persona (resultado «No contratado», con la etapa y el motivo). La IA solo documenta; no puede cambiar ni reabrir nada |
+
+Riesgo aceptado por el titular: la recomendación puede pesar en quien decide, y usar fotografías de una vivienda en un proceso de selección puede dar pie a un reclamo por discriminación aunque solo se mire el orden. Conviene que un abogado laboral lo revise.
+

@@ -151,6 +151,33 @@ export function CvEvaluationTab({
               puntuación. La clasificación es una sugerencia inicial: la decisión es de RH, que
               puede avanzar también a quien quedó como rechazado.
             </p>
+            {prompt.instructions && (
+              <details className="rounded-2xl bg-white/60 px-4 py-3">
+                <summary className="cursor-pointer font-medium">
+                  Ver el prompt con el que se evaluarán los CV
+                </summary>
+                <p className="mt-2 text-sm text-ink-muted">
+                  Es el texto exacto que recibe la IA con cada currículum: las instrucciones de
+                  la versión {prompt.version_number} aprobada, con su rúbrica, y el mensaje que
+                  acompaña al CV. Para cambiarlo, edita el prompt en el paso anterior y aprueba
+                  una versión nueva.
+                </p>
+                <p className="mt-3 font-medium">Instrucciones y rúbrica</p>
+                <pre
+                  aria-label="Instrucciones y rúbrica"
+                  className="mt-2 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-surface p-4 text-sm"
+                >
+                  {prompt.instructions}
+                </pre>
+                <p className="mt-3 font-medium">Mensaje que acompaña a cada CV</p>
+                <pre
+                  aria-label="Mensaje que acompaña a cada CV"
+                  className="mt-2 overflow-auto whitespace-pre-wrap rounded-2xl bg-surface p-4 text-sm"
+                >
+                  {prompt.cv_message}
+                </pre>
+              </details>
+            )}
             {canEdit && (
               <div className="flex flex-wrap items-center gap-4">
                 <button

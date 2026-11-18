@@ -45,3 +45,36 @@ def prepare_photo(content: bytes) -> bytes:
         raise
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as error:
         raise PhotoError("imagen ilegible") from error
+
+
+# Páginas de un documento que se envían como imagen (reportes con gráficas).
+MAX_REPORT_PAGES = 6
+_PAGE_SIDE = 1500
+_PAGE_QUALITY = 80
+
+
+def pdf_pages(content: bytes) -> list[bytes]:
+    """Las primeras páginas de un PDF como JPEG, para que un modelo lea lo que el
+    texto no trae. Se generan en el servidor y no se guardan."""
+    import pypdfium2
+
+    try:
+        document = pypdfium2.PdfDocument(content)
+    except Exception as error:  # noqa: BLE001 (la biblioteca no documenta sus errores)
+        raise PhotoError("pdf ilegible") from error
+    pages: list[bytes] = []
+    try:
+        for index in range(min(len(document), MAX_REPORT_PAGES)):
+            page = document[index]
+            width, height = page.get_size()
+            scale = _PAGE_SIDE / max(width, height, 1)
+            output = io.BytesIO()
+            page.render(scale=scale).to_pil().convert("RGB").save(
+                output, format="JPEG", quality=_PAGE_QUALITY
+            )
+            pages.append(output.getvalue())
+    except Exception as error:  # noqa: BLE001
+        raise PhotoError("pdf ilegible") from error
+    finally:
+        document.close()
+    return pages

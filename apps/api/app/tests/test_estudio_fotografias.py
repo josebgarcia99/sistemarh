@@ -300,7 +300,7 @@ def _study_with_photo(recruiter, vacancy_id, application_id):
     return saved.json()
 
 
-def test_las_descripciones_de_las_fotos_entran_en_la_sintesis_solo_con_permiso(
+def test_las_descripciones_de_las_fotos_entran_en_la_sintesis_y_solo_cuentan_por_el_orden(
     ana, recruiter, admin, other, vacancy_id, providers
 ):
     _study_with_photo(recruiter, vacancy_id, ana)
@@ -318,7 +318,9 @@ def test_las_descripciones_de_las_fotos_entran_en_la_sintesis_solo_con_permiso(
     assert "2 fotografías del estudio" in synthesis["sources"]
     _, system, sent = fake.prompts[0]
     assert (
-        system == assistant.SYNTHESIS_SYSTEM and "No saques de ellas ninguna conclusión" in system
+        system == assistant.SYNTHESIS_SYSTEM
+        and "orden, organización, limpieza y cuidado del espacio" in " ".join(system.split())
+        and "ninguna conclusión sobre nivel económico" in " ".join(system.split())
     )
     assert "FOTOGRAFÍAS DEL ESTUDIO SOCIOECONÓMICO" in sent
     assert (
@@ -330,20 +332,21 @@ def test_las_descripciones_de_las_fotos_entran_en_la_sintesis_solo_con_permiso(
     for secret in ("RELIGION-SECRETA", "12345", "DICTAMEN-SECRETO", "No es viable"):
         assert secret not in sent
 
-    # Con la vacante compartida pero sin el permiso del estudio, esa síntesis no se ve…
+    # Con la vacante compartida, esa síntesis se ve…
     stranger, stranger_id = other
     from app.tests.conftest import share
 
+    assert stranger.get(url).status_code == 404
     share(recruiter, vacancy_id, stranger_id, "COLABORACION")
-    hidden = stranger.get(url).json()
-    assert hidden["latest"] is None and hidden["hidden"] is True
-    # …y la que esa persona pida no lleva las fotografías.
+    shared = stranger.get(url).json()
+    assert shared["latest"]["id"] == synthesis["id"] and shared["hidden"] is False
+    # …y la que esa persona pida también lleva las fotografías.
     fake.prompts = []
     fake.script = [reply({"hechos_documentados": ["Tiene experiencia en nómina"]})]
     own = stranger.post(url)
     assert own.status_code in (200, 201), own.text
-    assert own.json()["includes_study"] is False
-    assert "FOTOGRAFÍAS" not in fake.prompts[0][2] and "Fachada" not in fake.prompts[0][2]
+    assert own.json()["includes_study"] is True
+    assert "FOTOGRAFÍAS" in fake.prompts[0][2] and "Fachada" in fake.prompts[0][2]
     # Un estudio anulado tampoco aporta fotografías.
     study = next(
         item
@@ -392,12 +395,12 @@ def test_el_reporte_de_postulaciones_lleva_las_fotos_solo_para_quien_tiene_el_pe
     # El administrador también la ve.
     assert export(admin)[0][-1] == column
 
-    # Con la vacante compartida pero sin el permiso del estudio, la columna no existe.
+    # Con la vacante compartida, la columna también sale para esa persona.
     stranger, stranger_id = other
     share(recruiter, vacancy_id, stranger_id, "LECTURA")
     header, rows, about = export(stranger)
-    assert column not in header and "Datos sensibles" not in about
-    assert "Fachada" not in " ".join(str(v) for row in rows.values() for v in row)
+    assert header[-1] == column and "Datos sensibles" in about
+    assert "Fachada" in rows["Ana Pérez Ficticia"][-1]
 
 
 def test_fotografias_adicionales_se_guardan_se_describen_y_entran_a_la_sintesis_y_al_reporte(

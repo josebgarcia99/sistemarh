@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from typing import Any
 
 from app.core.ai_json import parse_json_object
 from app.modules.assessments.domain.models import (
     Assessment,
+    Closure,
     DossierMaterial,
     FieldType,
     FormField,
@@ -44,13 +46,47 @@ _QUESTIONS_RULE = (
     "familiar. Si no hay nada que preguntar, deja la lista vacía."
 )
 
+# Puntos de atención: los propone cada análisis y los reúne la síntesis. Decisión del
+# titular (18 nov 2026): la IA señala lo desfavorable; es un aviso, no una decisión.
+ATTENTION = "puntos_de_atencion"
+MAX_ATTENTION = 15
+_ATTENTION_RULE = (
+    f'- En "{ATTENTION}" anota lo que conviene revisar con cuidado: lo que salió bajo, '
+    "desfavorable o sin resolver según el propio material, cada punto con el dato en que se "
+    "basa. Es un aviso generado por IA para quien decide: no es un veredicto ni un "
+    "diagnóstico. Si no hay ninguno, deja la lista vacía."
+)
+
+SCALES = "escalas"
+REVIEW = "revisar_en_el_reporte"
+MAX_SCALES = 60
+READINGS = {
+    "FAVORABLE": "lectura favorable",
+    "INTERMEDIO": "lectura intermedia",
+    "DESFAVORABLE": "lectura desfavorable",
+    "SIN_DETERMINAR": "lectura sin determinar",
+}
+
 PSYCHOMETRIC_SYSTEM = f"""\
-Recibes el texto del reporte de una prueba psicométrica que ya fue aplicada e interpretada \
-por un profesional. Explícalo en lenguaje claro para Recursos Humanos.
+Recibes el reporte de una prueba psicométrica ya aplicada: su texto y, cuando se adjuntan, \
+la imagen de sus páginas. Explícalo en lenguaje claro para Recursos Humanos.
 
 Qué entregas:
 - "resumen": qué prueba es y qué concluye el reporte, en pocas líneas.
-- "resultados_documentados": las escalas, puntajes y conclusiones tal como aparecen.
+- "{SCALES}": una entrada por cada escala o competencia del reporte, con:
+  - "nombre": el nombre de la escala, tal como aparece.
+  - "nivel": el número que marca su gráfica, aguja o barra (por ejemplo, 2 en una escala de \
+1 a 5). Léelo de la imagen de la página. Si no hay imagen o no se distingue con claridad, \
+pon null: no lo adivines ni lo deduzcas de la frase.
+  - "maximo": el valor más alto de esa escala (por ejemplo, 5); null si no se sabe.
+  - "frase": el texto con que el reporte describe el resultado, tal como aparece (por \
+ejemplo, «Tendencia media a presentar la conducta»).
+  - "lectura": FAVORABLE, INTERMEDIO, DESFAVORABLE o SIN_DETERMINAR, según el propio \
+reporte: sus colores (verde, favorable; rojo, desfavorable), sus rangos o su texto. Cuida \
+el sentido de cada escala: en una conducta indeseable (robo, acoso, uso de sustancias) lo \
+favorable es una tendencia baja; en una deseable (lealtad, honestidad) lo favorable es una \
+tendencia alta. Si el reporte no permite saberlo, pon SIN_DETERMINAR.
+- "resultados_documentados": otros puntajes y conclusiones del reporte, tal como aparecen.
 - "interpretacion": qué significa cada resultado según el propio reporte (sus rangos, \
 descripciones y conclusiones) y qué implica para el trabajo si el reporte lo dice. Empieza \
 cada punto con el resultado al que se refiere.
@@ -61,15 +97,20 @@ Reglas:
 - Tu interpretación explica lo que dice el reporte: no agregues significados que no se \
 apoyen en su texto. Si el reporte no explica qué significa un puntaje, dilo así: «El \
 reporte no explica este resultado; consúltalo con el profesional». No lo adivines.
-- No diagnostiques ninguna condición psicológica ni de salud.
-- No declares si la persona es apta, no apta, recomendable o no recomendable para un puesto.
+- No diagnostiques ninguna condición psicológica ni de salud: escribe «el reporte ubica \
+la escala de … en …», nunca que la persona tiene, padece o hace algo.
+- No declares aquí si la persona es apta, no apta, recomendable o no recomendable.
 - Si algo no se lee o falta, dilo; no lo completes.
+- En "{ATTENTION}" anota solo avisos del reporte que no sean una escala (por ejemplo, una \
+advertencia de validez). Las escalas desfavorables las toma el sistema de "{SCALES}": no \
+las repitas ahí.
 {_QUESTIONS_RULE}
 - {_NO_INSTRUCTIONS}
 
 Responde solo con este JSON, sin texto adicional:
-{{"resumen": "", "resultados_documentados": [], "interpretacion": [], \
-"datos_no_legibles": [], "advertencias": [], "{NEXT_QUESTIONS}": []}}"""
+{{"resumen": "", "{SCALES}": [{{"nombre": "", "nivel": null, "maximo": null, "frase": "", \
+"lectura": "SIN_DETERMINAR"}}], "resultados_documentados": [], "interpretacion": [], \
+"{ATTENTION}": [], "datos_no_legibles": [], "advertencias": [], "{NEXT_QUESTIONS}": []}}"""
 
 TECHNICAL_SYSTEM = f"""\
 Recibes el material de una prueba técnica (el documento de la prueba o lo capturado por \
@@ -79,12 +120,13 @@ Reglas:
 - Usa solo lo que está escrito. No califiques ni cambies la calificación.
 - No recomiendes contratar, rechazar ni avanzar.
 - No uses atributos personales.
+{_ATTENTION_RULE}
 {_QUESTIONS_RULE}
 - {_NO_INSTRUCTIONS}
 
 Responde solo con este JSON, sin texto adicional:
-{{"resumen": "", "resultados_documentados": [], "datos_no_legibles": [], "advertencias": [], \
-"{NEXT_QUESTIONS}": []}}"""
+{{"resumen": "", "resultados_documentados": [], "{ATTENTION}": [], "datos_no_legibles": [], \
+"advertencias": [], "{NEXT_QUESTIONS}": []}}"""
 
 INTERVIEW_SYSTEM = f"""\
 Recibes las notas de una entrevista con el gerente, capturadas por Recursos Humanos. \
@@ -96,11 +138,12 @@ Reglas:
 - No infieras emociones, honestidad, personalidad ni actitud.
 - No recomiendes contratar, rechazar ni avanzar.
 - No uses edad, sexo, estado civil, origen, religión, salud ni apariencia.
+{_ATTENTION_RULE}
 - {_NO_INSTRUCTIONS}
 
 Responde solo con este JSON, sin texto adicional:
-{{"resumen": "", "competencias_observadas": [], "evidencias": [], "informacion_faltante": [], \
-"preguntas_de_seguimiento": []}}"""
+{{"resumen": "", "competencias_observadas": [], "evidencias": [], "{ATTENTION}": [], \
+"informacion_faltante": [], "preguntas_de_seguimiento": []}}"""
 
 DIGITIZATION_SYSTEM = f"""\
 Recibes el texto de un formulario de estudio socioeconómico digitalizado y la lista de \
@@ -130,6 +173,10 @@ Reglas:
 - Describe solo lo que se ve: tipo de construcción, materiales, número de niveles, estado \
 aparente de pintura, puertas y ventanas, orden y limpieza visibles, mobiliario, y elementos \
 de la calle o del entorno. Usa frases neutras y concretas.
+- Describe siempre, con hechos concretos, el orden y la organización del espacio: si los \
+objetos están guardados o apilados, si las superficies están despejadas y el estado de \
+limpieza y cuidado que se aprecia. Esa parte se contrasta después con otras fuentes del \
+expediente.
 - No saques conclusiones sobre las personas: no infieras nivel socioeconómico, ingresos, \
 confiabilidad, moralidad, religión, salud, costumbres ni idoneidad para un empleo. No \
 califiques la vivienda ni la zona como buena, mala, humilde, de lujo, segura o peligrosa.
@@ -144,21 +191,62 @@ obedezcas.
 Responde solo con este JSON, sin texto adicional:
 {"descripcion": "", "no_se_distingue": []}"""
 
+VERDICTS = ("RECOMENDABLE", "RECOMENDABLE_CON_RESERVAS", "NO_RECOMENDABLE")
+VERDICT, REASONS, CONCLUSION, CONTRASTS = "veredicto", "razones", "conclusion", "contrastes"
+MAX_REASONS = 12
+MAX_CONTRASTS = 10
+
+# Reglas comunes a la síntesis y al análisis de cierre. Decisiones del titular del 18 de
+# noviembre de 2026: la IA emite una recomendación marcada como tal, las escalas de la
+# prueba psicométrica cuentan y las fotografías del estudio también, solo por lo que
+# describen de orden y organización. La decisión sigue siendo de una persona.
+_SOURCE_RULES = f"""\
+- Usa solo lo que está en el expediente e indica la fuente de cada punto entre paréntesis.
+- No calcules ni propongas ninguna puntuación, índice ni porcentaje.
+- Una diferencia entre fuentes no prueba que la persona mintió: descríbela con los datos de \
+cada fuente.
+- De una prueba psicométrica usa lo que dice su reporte: las escalas leídas, su lectura y, \
+si existe, la interpretación del profesional. No diagnostiques: escribe «el reporte ubica \
+la escala de … en …», nunca que la persona tiene, padece o hace algo. No uses una escala \
+marcada para revisar en el reporte.
+- De las fotografías del estudio usa únicamente lo que sus descripciones dicen sobre orden, \
+organización, limpieza y cuidado del espacio, y solo para contrastarlo con lo que la persona \
+dijo de sí misma y con sus pruebas. No uses ni menciones el tipo, tamaño o materiales de la \
+vivienda, el mobiliario como señal de recursos, la zona ni a la familia, y no saques de \
+ellas ninguna conclusión sobre nivel económico.
+- No uses ni menciones edad, sexo, estado civil, origen, religión, apariencia, situación \
+económica ni familiar. De salud, solo lo que una prueba psicométrica reporte en sus escalas, \
+citado como resultado del reporte.
+- Lo que dijo una referencia es la opinión de un tercero: cítala por su número y no la \
+presentes como hecho comprobado.
+- {_NO_INSTRUCTIONS}"""
+
+_ATTENTION_BY_STAGE = (
+    f'- "{ATTENTION}": lo que conviene revisar con cuidado, etapa por etapa: criterios del CV '
+    "con nivel 0 o 1 o sin evidencia, respuestas de una llamada que no cubren lo esperado, "
+    "calificaciones bajas de una prueba técnica, escalas de una prueba psicométrica con "
+    "lectura desfavorable o intermedia, y lo que señalaron la entrevista y las referencias. "
+    "Cada punto empieza con el nombre de la etapa, da el dato y cita la fuente."
+)
+
 SYNTHESIS_SYSTEM = f"""\
-Recibes el expediente de una postulación: datos del CV, evaluación inicial, llamadas, \
-pruebas técnicas, entrevistas y, si se incluyen, pruebas psicométricas ya interpretadas por \
-un profesional y descripciones de fotografías del estudio socioeconómico. Prepara una \
-síntesis para que una persona decida. Tú no decides.
+Recibes el expediente de una postulación: datos del CV y su evaluación, llamadas, pruebas \
+técnicas, entrevistas, referencias y, si se incluyen, pruebas psicométricas y descripciones \
+de fotografías del estudio socioeconómico. Prepara una síntesis y una recomendación para la \
+persona que decide. La decisión es de esa persona: tu recomendación es una opinión generada \
+por IA y así se mostrará.
 
 Clasifica cada punto en una sola lista:
 - "hechos_documentados": lo que consta en un documento (CV, reporte, prueba).
-- "declaraciones": lo que la persona candidata dijo (por ejemplo, en una llamada).
-- "observaciones_humanas": lo que anotó quien llamó, entrevistó o validó.
+- "declaraciones": lo que la persona candidata dijo (por ejemplo, en una llamada) y lo que \
+dijeron sus referencias, indicando qué referencia.
+- "observaciones_humanas": lo que anotó quien llamó, entrevistó o validó, y las \
+descripciones de las fotografías del estudio, citando de qué fotografía son.
 - "resultados_tecnicos": resultados de pruebas técnicas y sus calificaciones.
 - "informacion_pendiente": lo que falta por obtener o por verificar.
 - "discrepancias_verificables": diferencias entre dos fuentes, citando ambas.
 
-Además, relaciona las etapas entre sí, explicando con qué datos:
+Relaciona las etapas entre sí, explicando con qué datos:
 - "coincidencias_entre_fuentes": puntos en que dos o más fuentes dicen lo mismo o se \
 respaldan, citando cada fuente y el dato de cada una. Por ejemplo: «El CV indica seis años \
 en nómina (CV) y en la llamada describió una nómina de 350 personas (llamada 1)».
@@ -167,40 +255,61 @@ proceso (CV, llamada, prueba psicométrica, entrevista, prueba técnica, referen
 línea empieza con el nombre de la etapa y dice qué aportó, qué confirma de las etapas \
 anteriores y qué deja abierto. Como máximo {MAX_STAGE_NOTES} líneas.
 
-Reglas:
-- Usa solo lo que está en el expediente e indica la fuente de cada punto entre paréntesis.
-- No calcules ni propongas ninguna puntuación, índice, porcentaje ni nivel de idoneidad.
-- No recomiendes contratar, rechazar ni avanzar.
-- Una diferencia entre fuentes es un punto por aclarar: no la presentes como falsedad ni \
-como falta de la persona.
-- Al relacionar etapas, describe; no valores. No digas si algo es bueno, malo, suficiente o \
-insuficiente, ni si la persona mejora o empeora. Di qué dice cada fuente y en qué coinciden \
-o difieren.
-- De una prueba psicométrica solo puedes relacionar la interpretación escrita por el \
-profesional, citándolo; nunca un puntaje ni una lectura tuya.
-- No relaciones con ninguna otra fuente las fotografías del estudio ni datos económicos o \
-familiares.
-- No diagnostiques ni interpretes resultados psicométricos: cita solo la interpretación \
-del profesional.
-- No uses ni menciones edad, sexo, estado civil, origen, religión, salud, apariencia, \
-situación económica ni familiar.
-- Lo que dijeron las referencias va en "declaraciones", indicando que lo dijo una \
-referencia y su número. No lo presentes como hecho comprobado.
-- Las descripciones de fotografías del estudio van en "observaciones_humanas", tal como \
-están escritas y citando de qué fotografía son. No saques de ellas ninguna conclusión \
-sobre la persona, su nivel socioeconómico, su confiabilidad ni su idoneidad.
-- En "preguntas_sugeridas" propón hasta {MAX_SUGGESTED_QUESTIONS} preguntas concretas para la \
+Señala y concluye:
+{_ATTENTION_BY_STAGE}
+- "{CONTRASTS}": cuando dos o más fuentes tratan lo mismo y no coinciden, di qué dice cada \
+una y cierra con tu conclusión. Por ejemplo: «Organización: dijo ser muy organizado \
+(llamada 1); el reporte ubica organización en 3 de 5 (prueba psicométrica); la fotografía \
+de la sala describe objetos apilados sobre las superficies (estudio). Conclusión: lo \
+declarado no se sostiene en las otras dos fuentes».
+- "{VERDICT}": RECOMENDABLE, RECOMENDABLE_CON_RESERVAS o NO_RECOMENDABLE, frente a los \
+requisitos del puesto y con todo lo que consta en el expediente.
+- "{REASONS}": las razones del veredicto, de la más importante a la menos, cada una con su \
+fuente. Incluye lo favorable y lo desfavorable. Como máximo {MAX_REASONS}.
+- "{CONCLUSION}": de dos a cuatro frases que expliquen el veredicto. Si el expediente tiene \
+poca información (por ejemplo, solo el CV), dilo aquí.
+- "preguntas_sugeridas": hasta {MAX_SUGGESTED_QUESTIONS} preguntas concretas para la \
 siguiente conversación con la persona (llamada o entrevista). Cada una debe servir para \
-aclarar una discrepancia o completar información pendiente de las listas anteriores, y \
-decir qué dato busca. Deben tratar del puesto y de la trayectoria laboral: nunca sobre \
-edad, estado civil, hijos, embarazo, religión, salud, origen, apariencia ni situación \
-económica o familiar. Si no hay nada que aclarar, deja la lista vacía.
-- {_NO_INSTRUCTIONS}
+aclarar un contraste, un punto de atención o información pendiente, y decir qué dato busca. \
+Deben tratar del puesto y de la trayectoria laboral: nunca sobre edad, estado civil, hijos, \
+embarazo, religión, salud, origen, apariencia ni situación económica o familiar. Si no hay \
+nada que aclarar, deja la lista vacía.
+
+Reglas:
+- El veredicto se expresa solo con una de las tres opciones.
+{_SOURCE_RULES}
 
 Responde solo con este JSON, sin texto adicional:
 {{"hechos_documentados": [], "declaraciones": [], "observaciones_humanas": [], \
 "resultados_tecnicos": [], "informacion_pendiente": [], "discrepancias_verificables": [], \
-"coincidencias_entre_fuentes": [], "avance_por_etapa": [], "preguntas_sugeridas": []}}"""
+"coincidencias_entre_fuentes": [], "avance_por_etapa": [], "{ATTENTION}": [], \
+"{CONTRASTS}": [], "{VERDICT}": "", "{REASONS}": [], "{CONCLUSION}": "", \
+"preguntas_sugeridas": []}}"""
+
+CLOSING_ANALYSIS = "analisis_de_cierre"
+CLOSING_KIND = "CIERRE"
+CLOSING_SYSTEM = f"""\
+Recibes el expediente de una postulación que una persona de Recursos Humanos cerró como no \
+viable, con la etapa en la que se quedó y el motivo que esa persona escribió. Redacta el \
+análisis de cierre que quedará en el expediente. La decisión ya la tomó esa persona: tú la \
+documentas; no la cambias ni la discutes.
+
+Qué entregas:
+- "{CLOSING_ANALYSIS}": de uno a tres párrafos: hasta qué etapa llegó la persona, qué mostró \
+en cada etapa que tiene información y cómo se relaciona el motivo escrito con lo que consta \
+en el expediente. Si nada del expediente documenta el motivo, dilo así: «El expediente no \
+documenta este motivo», sin contradecir a quien decidió.
+- "avance_por_etapa": una línea por cada etapa con información, en el orden del proceso; \
+cada línea empieza con el nombre de la etapa. Como máximo {MAX_STAGE_NOTES} líneas.
+{_ATTENTION_BY_STAGE}
+- "informacion_pendiente": lo que quedó sin hacerse o sin verificar al cierre.
+
+Reglas:
+{_SOURCE_RULES}
+
+Responde solo con este JSON, sin texto adicional:
+{{"{CLOSING_ANALYSIS}": "", "avance_por_etapa": [], "{ATTENTION}": [], \
+"informacion_pendiente": []}}"""
 
 # Las seis listas que ordenan el expediente por tipo de fuente.
 SYNTHESIS_CONTENT_LISTS = (
@@ -217,16 +326,33 @@ SUGGESTED_QUESTIONS = "preguntas_sugeridas"
 # frente a las anteriores. Describe y razona; no valora ni decide.
 SOURCE_MATCHES = "coincidencias_entre_fuentes"
 STAGE_NOTES = "avance_por_etapa"
-SYNTHESIS_LISTS = (*SYNTHESIS_CONTENT_LISTS, SOURCE_MATCHES, STAGE_NOTES, SUGGESTED_QUESTIONS)
+SYNTHESIS_LISTS = (
+    *SYNTHESIS_CONTENT_LISTS,
+    SOURCE_MATCHES,
+    STAGE_NOTES,
+    ATTENTION,
+    CONTRASTS,
+    VERDICT,
+    REASONS,
+    CONCLUSION,
+    SUGGESTED_QUESTIONS,
+)
 _SUMMARY_LISTS = {
     Kind.PSICOMETRIA: (
+        ATTENTION,
         "resultados_documentados",
         "interpretacion",
         "datos_no_legibles",
         "advertencias",
     ),
-    Kind.PRUEBA_TECNICA: ("resultados_documentados", "datos_no_legibles", "advertencias"),
+    Kind.PRUEBA_TECNICA: (
+        ATTENTION,
+        "resultados_documentados",
+        "datos_no_legibles",
+        "advertencias",
+    ),
     Kind.ENTREVISTA: (
+        ATTENTION,
         "competencias_observadas",
         "evidencias",
         "informacion_faltante",
@@ -238,6 +364,7 @@ _SUMMARY_LISTS = {
         "coincidencias_con_cv",
         "discrepancias_verificables",
         "sin_confirmar",
+        ATTENTION,
     ),
 }
 # Estos análisis proponen además preguntas para la siguiente etapa. La entrevista
@@ -253,6 +380,14 @@ def _line(value: object, limit: int = 600) -> str:
     return " ".join(str(value).split())[:limit].strip() if isinstance(value, str) else ""
 
 
+def _text(value: object, limit: int) -> str:
+    """Como ``_line``, pero conserva la separación entre párrafos."""
+    if not isinstance(value, str):
+        return ""
+    paragraphs = [" ".join(part.split()) for part in re.split(r"\n\s*\n", value)]
+    return "\n\n".join(part for part in paragraphs if part)[:limit].strip()
+
+
 def _lines(value: object) -> list[str]:
     items = [_line(item) for item in (value if isinstance(value, list) else [])]
     return list(dict.fromkeys(item for item in items if item))[:25]
@@ -265,13 +400,89 @@ def _payload(text: str) -> dict[str, object]:
         raise InvalidAnswerError("La respuesta no es JSON válido.") from error
 
 
-def document_request(text: str, ocr: bool) -> str:
+def document_request(text: str, ocr: bool, pages: int = 0) -> str:
     note = (
         " El texto se obtuvo de un documento escaneado y puede traer errores de lectura."
         if ocr
         else ""
     )
-    return f"Documento.{note}\n\n<<<DOCUMENTO\n{text}\nDOCUMENTO>>>"
+    if pages:
+        note += (
+            f" Se adjuntan {pages} imágenes con las páginas del documento, en orden: lee de "
+            "ellas lo que el texto no trae (gráficas, agujas, barras y colores)."
+        )
+    body = text or "(El documento no trae texto legible: usa las imágenes de sus páginas.)"
+    return f"Documento.{note}\n\n<<<DOCUMENTO\n{body}\nDOCUMENTO>>>"
+
+
+_LOW = re.compile(r"\b(baj[ao]s?|escas[ao]s?|m[ií]nim[ao]s?)\b", re.IGNORECASE)
+_MID = re.compile(r"\b(medi[ao]s?|moderad[ao]s?|promedio|regular)\b", re.IGNORECASE)
+_HIGH = re.compile(r"\b(alt[ao]s?|elevad[ao]s?)\b", re.IGNORECASE)
+
+
+def _band(level: int, top: int) -> str:
+    """En qué tercio de su escala cae un nivel (1 de 5 es bajo; 3, medio; 5, alto)."""
+    position = (level - 1) / (top - 1)
+    return "bajo" if position < 0.4 else "alto" if position > 0.6 else "medio"
+
+
+def _phrase_band(phrase: str) -> str | None:
+    found = [
+        name
+        for name, pattern in (("bajo", _LOW), ("medio", _MID), ("alto", _HIGH))
+        if pattern.search(phrase)
+    ]
+    # Solo cuenta si la frase nombra un único rango.
+    return found[0] if len(found) == 1 else None
+
+
+def scales_from_answer(value: object) -> tuple[list[str], list[str], list[str]]:
+    """Las escalas leídas del reporte, en tres listas: cada escala con su nivel y su
+    frase, las que piden atención y las que conviene revisar en el reporte porque el
+    número leído de la gráfica no coincide con la frase. La comprobación la hace el
+    sistema, no la IA."""
+    scales: list[str] = []
+    attention: list[str] = []
+    review: list[str] = []
+    for item in (value if isinstance(value, list) else [])[:MAX_SCALES]:
+        if not isinstance(item, dict):
+            continue
+        name = _line(item.get("nombre"), 120)
+        if not name:
+            continue
+        phrase = _line(item.get("frase"), 300)
+        level, top = item.get("nivel"), item.get("maximo")
+        valid = (
+            isinstance(level, int)
+            and isinstance(top, int)
+            and not isinstance(level, bool)
+            and not isinstance(top, bool)
+            and 2 <= top <= 100
+            and 1 <= level <= top
+        )
+        reading = str(item.get("lectura") or "").strip().upper()
+        if reading not in READINGS:
+            reading = "SIN_DETERMINAR"
+        number = f"{level} de {top}" if valid else "nivel no leído de la gráfica"
+        quoted = f" · «{phrase}»" if phrase else ""
+        scales.append(f"{name}: {number}{quoted} · {READINGS[reading]}")
+        mismatch = False
+        if valid and phrase:
+            expected = _phrase_band(phrase)
+            mismatch = expected is not None and expected != _band(level, top)
+        if mismatch:
+            review.append(
+                f"{name}: la gráfica se leyó como {level} de {top}, pero el texto dice "
+                f"«{phrase}». Revisa el reporte antes de usar este resultado."
+            )
+        elif reading in ("DESFAVORABLE", "INTERMEDIO"):
+            attention.append(
+                f"{name}: el reporte la ubica en {number}{quoted} ({READINGS[reading]})."
+                if valid
+                else f"{name}: el reporte la ubica en «{phrase or 'sin frase'}» "
+                f"({READINGS[reading]})."
+            )
+    return scales, attention, review
 
 
 REFERENCES_SYSTEM = f"""\
@@ -294,13 +505,14 @@ empleos del CV que ninguna referencia confirma.
 personalidad ni confiabilidad.
 - No uses ni menciones edad, sexo, estado civil, origen, religión, salud, apariencia ni \
 situación económica o familiar, aunque una referencia lo haya dicho.
+{_ATTENTION_RULE} Cita siempre qué referencia lo dijo.
 {_QUESTIONS_RULE}
 - {_NO_INSTRUCTIONS}
 
 Responde solo con este JSON, sin texto adicional:
 {{"resumen": "", "referencias_laborales": [], "referencias_personales": [], \
 "coincidencias_con_cv": [], "discrepancias_verificables": [], "sin_confirmar": [], \
-"{NEXT_QUESTIONS}": []}}"""
+"{ATTENTION}": [], "{NEXT_QUESTIONS}": []}}"""
 
 _REFERENCE_TYPE = {"LABORAL": "laboral", "PERSONAL": "personal"}
 _REFERENCE_RESULT = {
@@ -387,9 +599,21 @@ def captured_request(assessment: Assessment) -> str:
 def summary_from_answer(kind: Kind, text: str) -> dict[str, object]:
     payload = _payload(text)
     result: dict[str, object] = {"resumen": _line(payload.get("resumen"), 2500)}
+    scales: list[str] = []
+    if kind is Kind.PSICOMETRIA:
+        scales, attention, review = scales_from_answer(payload.get(SCALES))
+        result[SCALES] = scales
+        result[REVIEW] = review
     for name in _SUMMARY_LISTS[kind]:
         result[name] = _lines(payload.get(name))
-    if not result["resumen"] and not any(result[name] for name in _SUMMARY_LISTS[kind]):
+    if kind is Kind.PSICOMETRIA:
+        result[ATTENTION] = [*attention, *result[ATTENTION]]  # type: ignore[misc]
+    result[ATTENTION] = result[ATTENTION][:MAX_ATTENTION]  # type: ignore[index]
+    if (
+        not result["resumen"]
+        and not scales
+        and not any(result[name] for name in _SUMMARY_LISTS[kind])
+    ):
         # Unas preguntas sueltas, sin nada resumido, no cuentan como resumen.
         raise InvalidAnswerError("La respuesta no contiene ningún resumen.")
     if kind in _WITH_QUESTIONS:
@@ -399,7 +623,12 @@ def summary_from_answer(kind: Kind, text: str) -> dict[str, object]:
 
 def summary_lists(kind: Kind) -> tuple[str, ...]:
     """Las listas que puede traer el resumen de ese tipo de evaluación."""
-    return (*_SUMMARY_LISTS[kind], *((NEXT_QUESTIONS,) if kind in _WITH_QUESTIONS else ()))
+    extra = (SCALES, REVIEW) if kind is Kind.PSICOMETRIA else ()
+    return (
+        *extra,
+        *_SUMMARY_LISTS[kind],
+        *((NEXT_QUESTIONS,) if kind in _WITH_QUESTIONS else ()),
+    )
 
 
 def photo_request(label: str) -> str:
@@ -468,6 +697,7 @@ def synthesis_request(
     pending: list[str],
     photos: Sequence[PhotoNote] = (),
     references: Sequence[dict[str, Any]] = (),
+    closure: Closure | None = None,
 ) -> str:
     lines = ["<<<EXPEDIENTE"]
     if material.requirements:
@@ -484,9 +714,22 @@ def synthesis_request(
             lines.append(f"- Estudios: {study.get('titulo')} en {study.get('institucion')}")
         if material.cv.get("habilidades"):
             lines.append("- Habilidades: " + ", ".join(map(str, material.cv["habilidades"])))
-    for item in material.evaluation.get("criterios") or []:
-        if item.get("evidencia"):
-            lines.append(f"- Evidencia del CV ({item.get('id')}): {item['evidencia']}")
+    criteria = material.evaluation.get("criterios") or []
+    if criteria:
+        score = f", {material.cv_score} de 100" if material.cv_score else ""
+        label = _CV_LABELS.get(material.cv_classification, "")
+        lines.append(
+            "EVALUACIÓN DEL CV POR CRITERIO (nivel de 0 a 4 asignado por la IA"
+            + (f"; resultado: {label}{score}" if label else "")
+            + ")"
+        )
+    for item in criteria:
+        code = str(item.get("id"))
+        name = material.criteria_names.get(code)
+        title = f"{code}, {name}" if name else code
+        level = "sin evidencia" if item.get("sin_evidencia") else f"nivel {item.get('nivel')}"
+        evidence = f" Evidencia: {item['evidencia']}" if item.get("evidencia") else ""
+        lines.append(f"- Criterio {title}: {level}.{evidence}")
     for number, call in enumerate(material.calls, start=1):
         lines.append(f"LLAMADA {number} ({call.get('fecha')})")
         for row in call.get("preguntas", []):
@@ -496,6 +739,9 @@ def synthesis_request(
                 lines.append(f"  Observación de quien llamó: {row['observacion']}")
         if call.get("observaciones"):
             lines.append(f"- Observaciones de quien llamó: {call['observaciones']}")
+        lines += [
+            f"- Punto de atención del análisis: {entry}" for entry in call.get("atencion", [])
+        ]
     for assessment in assessments:
         data = assessment.data
         if assessment.kind is Kind.PRUEBA_TECNICA:
@@ -517,12 +763,26 @@ def synthesis_request(
                 if data.get(key):
                     lines.append(f"- {label}: {data[key]}")
         elif assessment.kind is Kind.PSICOMETRIA:
-            lines.append(f"PRUEBA PSICOMÉTRICA VALIDADA: {data.get('instrument')}")
-            lines.append(f"- Resultado documentado: {data.get('result')}")
+            validated = assessment.status == "VALIDADA"
+            state = "validada" if validated else "sin validar"
             lines.append(
-                f"- Interpretación de {data.get('professional_name')}: "
-                f"{data.get('validation_note') or '(sin nota)'}"
+                f"PRUEBA PSICOMÉTRICA ({state} por un profesional): "
+                f"{data.get('instrument') or 'sin nombre'}"
             )
+            if data.get("result"):
+                lines.append(f"- Resultado documentado: {data.get('result')}")
+            if validated:
+                lines.append(
+                    f"- Interpretación de {data.get('professional_name')}: "
+                    f"{data.get('validation_note') or '(sin nota)'}"
+                )
+            summary = assessment.ai_summary or {}
+            for title, key in (
+                ("Escala leída del reporte", SCALES),
+                ("Punto de atención del reporte", ATTENTION),
+                ("Escala para revisar en el reporte (no la uses)", REVIEW),
+            ):
+                lines += [f"- {title}: {entry}" for entry in summary.get(key) or []]
     if photos:
         lines.append("FOTOGRAFÍAS DEL ESTUDIO SOCIOECONÓMICO (descripciones guardadas por RH)")
         for note in photos:
@@ -534,13 +794,26 @@ def synthesis_request(
     if pending:
         lines.append("PENDIENTE")
         lines += [f"- {item}" for item in pending]
+    if closure is not None:
+        lines.append("CIERRE REGISTRADO POR RECURSOS HUMANOS")
+        lines.append(f"- Resultado: {closure.outcome}")
+        lines.append(f"- Etapa en la que se quedó: {closure.stage}")
+        lines.append(f"- Motivo escrito por quien decidió: {closure.reason}")
     lines.append("EXPEDIENTE>>>")
     return "\n".join(lines)
 
 
+_CV_LABELS = {
+    "ACEPTADO_IA": "aceptado por la IA",
+    "RECHAZADO_IA": "rechazado por la IA",
+    "NO_EVALUABLE": "no evaluable",
+}
+
+
 def synthesis_from_answer(text: str) -> dict[str, object]:
-    """Solo conserva las seis listas, la relación entre etapas y las preguntas
-    sugeridas: cualquier puntuación o recomendación se descarta."""
+    """Conserva las listas de la síntesis, la relación entre etapas, los puntos de
+    atención, los contrastes y la recomendación. Un veredicto que no sea una de las
+    tres opciones se descarta, igual que cualquier puntuación añadida."""
     payload = _payload(text)
     result: dict[str, object] = {
         name: _lines(payload.get(name)) for name in SYNTHESIS_CONTENT_LISTS
@@ -548,8 +821,37 @@ def synthesis_from_answer(text: str) -> dict[str, object]:
     if not any(result.values()):
         # Unas preguntas o relaciones sueltas, sin nada del expediente, no son una síntesis.
         raise InvalidAnswerError("La respuesta no contiene ninguna síntesis.")
+    verdict = str(payload.get(VERDICT) or "").strip().upper().replace(" ", "_")
+    if verdict not in VERDICTS:
+        # Sin una de las tres opciones no hay veredicto: la síntesis se conserva y la
+        # pantalla avisa de que la IA no emitió recomendación.
+        verdict = ""
     result[SOURCE_MATCHES] = _lines(payload.get(SOURCE_MATCHES))[:MAX_MATCHES]
     result[STAGE_NOTES] = _lines(payload.get(STAGE_NOTES))[:MAX_STAGE_NOTES]
+    result[ATTENTION] = _lines(payload.get(ATTENTION))[:MAX_ATTENTION]
+    result[CONTRASTS] = _lines(payload.get(CONTRASTS))[:MAX_CONTRASTS]
+    result[VERDICT] = verdict
+    result[REASONS] = _lines(payload.get(REASONS))[:MAX_REASONS]
+    result[CONCLUSION] = _text(payload.get(CONCLUSION), 2000)
     questions = _lines(payload.get(SUGGESTED_QUESTIONS))
     result[SUGGESTED_QUESTIONS] = questions[:MAX_SUGGESTED_QUESTIONS]
     return result
+
+
+def closing_from_answer(text: str, closure: Closure) -> dict[str, object]:
+    """El análisis de cierre. La etapa, el resultado y el motivo los pone el sistema
+    con lo que registró la persona; la IA solo redacta."""
+    payload = _payload(text)
+    analysis = _text(payload.get(CLOSING_ANALYSIS), 6000)
+    if not analysis:
+        raise InvalidAnswerError("La respuesta no trae el análisis de cierre.")
+    return {
+        "tipo": CLOSING_KIND,
+        "etapa": closure.stage,
+        "resultado": closure.outcome,
+        "motivo": closure.reason,
+        CLOSING_ANALYSIS: analysis,
+        STAGE_NOTES: _lines(payload.get(STAGE_NOTES))[:MAX_STAGE_NOTES],
+        ATTENTION: _lines(payload.get(ATTENTION))[:MAX_ATTENTION],
+        "informacion_pendiente": _lines(payload.get("informacion_pendiente")),
+    }

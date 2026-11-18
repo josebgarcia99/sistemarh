@@ -468,9 +468,24 @@ class AssessmentService:
         kind = assessment.kind
         if kind is Kind.ESTUDIO_SOCIOECONOMICO:
             raise ValidationFailedError("Un estudio socioeconómico no se resume: se digitaliza.")
+        pages: tuple[Photo, ...] = ()
         if kind is Kind.PSICOMETRIA:
             system, operation = assistant.PSYCHOMETRIC_SYSTEM, assistant.TEST_SUMMARY
-            user = assistant.document_request(*self._document_text(assessment))
+            if assessment.file_id is None:
+                raise ValidationFailedError(
+                    "Adjunta primero el documento a la evaluación y guárdala."
+                )
+            # Las páginas van también como imagen: el nivel de cada escala suele venir
+            # en una gráfica o aguja que el texto no trae.
+            pages = self._documents.read_pages(assessment.vacancy_id, assessment.file_id)
+            try:
+                text, ocr = self._document_text(assessment)
+            except ValidationFailedError:
+                # Un reporte sin texto legible se puede leer por sus imágenes.
+                if not pages:
+                    raise
+                text, ocr = "", False
+            user = assistant.document_request(text, ocr, len(pages))
         elif kind is Kind.REFERENCIAS:
             system, operation = assistant.REFERENCES_SYSTEM, assistant.REFERENCES_ANALYSIS
             if not any(row["comments"] for row in assessment.data.get("references", [])):
@@ -492,7 +507,7 @@ class AssessmentService:
             if not assessment.data.get("questions") and not assessment.data.get("feedback"):
                 raise ValidationFailedError("Captura y guarda la entrevista antes de resumirla.")
             user = assistant.captured_request(assessment)
-        answer = self._ask(actor, assessment.vacancy_id, operation, system, user)
+        answer = self._ask(actor, assessment.vacancy_id, operation, system, user, photos=pages)
         outcome = self._outcome(answer, lambda text: assistant.summary_from_answer(kind, text))
         if outcome.content is not None:
             assessment.ai_summary = outcome.content
@@ -711,19 +726,33 @@ class AssessmentService:
         )
 
     def synthesize(
-        self, actor: Actor, application_id: uuid.UUID, *, ip: str | None = None
+        self,
+        actor: Actor,
+        application_id: uuid.UUID,
+        *,
+        closing: bool = False,
+        ip: str | None = None,
     ) -> AiOutcome:
-        """Pide a la IA una síntesis del expediente, separada por tipo de fuente.
+        """Pide a la IA una síntesis del expediente con su recomendación o, si
+        ``closing``, el análisis de cierre de una postulación que una persona
+        cerró como no viable.
 
-        Entra: CV, evaluación inicial, llamadas, pruebas técnicas, entrevistas y
-        psicometría solo si está validada por un profesional y quien la pide
-        tiene ese permiso. Del estudio socioeconómico entran únicamente las
-        descripciones guardadas junto a sus fotografías, y solo si quien la pide
-        tiene el permiso del estudio; el resto del estudio (economía, salud,
-        dictamen, niveles) nunca entra. No produce puntuaciones ni recomendaciones."""
+        Entra: CV y su evaluación por criterio, llamadas, pruebas técnicas,
+        entrevistas, referencias y la psicometría presentada o validada, con las
+        escalas que la IA leyó de su reporte. Del estudio socioeconómico entran
+        únicamente las descripciones guardadas junto a sus fotografías; el resto
+        del estudio (economía, salud, dictamen, niveles) nunca entra. La
+        recomendación es un veredicto en palabras, marcado como generado por IA:
+        no es una puntuación y no mueve ni cierra la postulación."""
         application = self._application(application_id)
         readable = self._access.readable(actor, application.vacancy_id)
         self._access.require(actor, application.vacancy_id, Kind.ENTREVISTA, write=True)
+        closure = self._applications.closure(application_id) if closing else None
+        if closing and closure is None:
+            raise ValidationFailedError(
+                "El análisis de cierre se genera cuando la postulación ya se cerró con un "
+                "resultado distinto de la contratación."
+            )
         material = self._applications.material(application_id)
         assessments = self._repo.for_application(application_id)
         usable = [
@@ -733,7 +762,7 @@ class AssessmentService:
             or (item.kind is Kind.ENTREVISTA and item.status == "REALIZADA")
             or (
                 item.kind is Kind.PSICOMETRIA
-                and item.status == "VALIDADA"
+                and item.status in ("PRESENTADA", "VALIDADA")
                 and Kind.PSICOMETRIA in readable
             )
         ]
@@ -767,7 +796,7 @@ class AssessmentService:
         for kind, label in (
             (Kind.PRUEBA_TECNICA, "pruebas técnicas"),
             (Kind.ENTREVISTA, "entrevistas"),
-            (Kind.PSICOMETRIA, "pruebas psicométricas validadas"),
+            (Kind.PSICOMETRIA, "pruebas psicométricas"),
         ):
             count = sum(1 for item in usable if item.kind is kind)
             if count:
@@ -784,10 +813,15 @@ class AssessmentService:
             actor,
             application.vacancy_id,
             assistant.DOSSIER_SYNTHESIS,
-            assistant.SYNTHESIS_SYSTEM,
-            assistant.synthesis_request(material, usable, pending, photos, told),
+            assistant.CLOSING_SYSTEM if closure else assistant.SYNTHESIS_SYSTEM,
+            assistant.synthesis_request(material, usable, pending, photos, told, closure),
         )
-        outcome = self._outcome(answer, assistant.synthesis_from_answer)
+        outcome = self._outcome(
+            answer,
+            (lambda text: assistant.closing_from_answer(text, closure))
+            if closure
+            else assistant.synthesis_from_answer,
+        )
         if outcome.content is not None:
             synthesis = Synthesis(
                 id=new_sequential_uuid(),
@@ -809,14 +843,17 @@ class AssessmentService:
             resource_type="postulacion",
             resource_id=application.id,
             ip=ip,
-            details={"vacante": str(application.vacancy_id), "fuentes": sources},
+            details={
+                "vacante": str(application.vacancy_id),
+                "fuentes": sources,
+                "tipo": "CIERRE" if closure else "SINTESIS",
+            },
         )
         return outcome
 
 
 _PENDING_LABELS = {
     (Kind.PSICOMETRIA, "PENDIENTE"): "Prueba psicométrica",
-    (Kind.PSICOMETRIA, "PRESENTADA"): "Prueba psicométrica sin validar por un profesional,",
     (Kind.PSICOMETRIA, "INCOMPLETA"): "Prueba psicométrica",
     (Kind.ENTREVISTA, "PROGRAMADA"): "Entrevista con gerente",
     (Kind.PRUEBA_TECNICA, "PENDIENTE"): "Prueba técnica",

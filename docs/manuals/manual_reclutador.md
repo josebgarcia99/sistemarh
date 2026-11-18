@@ -33,7 +33,7 @@ Con «Compartir» das acceso a otra persona, de dos formas:
 | Lectura | Ver la vacante, los candidatos y los expedientes; descargar CV, Excel y ZIP; ver reportes | Cargar documentos, mover candidatos, registrar resultados |
 | Colaboración | Todo lo anterior y, además, cargar documentos, evaluar CV, mover candidatos, hacer llamadas, registrar evaluaciones y resultados finales | Editar los datos de la vacante, cambiar su estado, compartirla |
 
-Los documentos de psicometría y los estudios socioeconómicos son **datos sensibles**: aunque alguien tenga acceso a la vacante, solo los ve si además le das ese permiso adicional, en el apartado «Documentos sensibles» de la misma pantalla de compartir. Puedes quitar cualquier acceso cuando quieras; deja de ver la vacante en ese momento.
+Quien recibe la vacante ve **todo su contenido**, también las pruebas psicométricas, los estudios socioeconómicos y la recomendación de la IA; lo mismo los administradores. Antes hacía falta un permiso adicional por persona: desde el 18 de noviembre de 2026 ya no, por decisión de la dirección. Tenlo presente al compartir. Puedes quitar cualquier acceso cuando quieras; la persona deja de ver la vacante en ese momento.
 
 ### Documentos
 
@@ -58,7 +58,8 @@ Es la instrucción con la que la IA leerá los CV, con una rúbrica de criterios
 ### 3. Evaluación de CV
 
 1. En «Cargar CV», elige los archivos: puedes seleccionar varios a la vez (hasta 100 por carga). Si alguno no entra, la pantalla dice cuál y por qué. También siguen sirviendo los que subas en los documentos de la vacante con el tipo CV.
-2. Pulsa «Evaluar N CV». El lote se procesa en segundo plano; puedes seguir trabajando.
+2. Antes de evaluar puedes abrir «Ver el prompt con el que se evaluarán los CV»: muestra el texto exacto que recibe la IA con cada currículum (las instrucciones con la rúbrica y el mensaje que acompaña al CV). En el editor del prompt hay una vista previa igual para cada versión.
+3. Pulsa «Evaluar N CV». El lote se procesa en segundo plano; puedes seguir trabajando.
 3. Al terminar, cada CV queda como **aceptado por IA**, **rechazado por IA** o **no evaluable** (por ejemplo, un archivo ilegible), con una calificación de 0 a 100, el nivel alcanzado en cada criterio y la evidencia tomada del propio CV.
 4. Descarga «Reporte_Evaluacion.xlsx» y los ZIP de aceptados, rechazados y no evaluables.
 5. «Ver candidatos y etapas» te lleva a las personas evaluadas para seguir el proceso.
@@ -117,6 +118,12 @@ En el expediente, «Registrar evaluación»:
 
 - **Referencias laborales y personales.** No tienen etapa propia: se registran en cualquier momento, antes o después del estudio socioeconómico, y las puede capturar tanto Recursos Humanos como el analista de estudios. «Agregar referencia» y, en cada una: si es laboral o personal, nombre, empresa o relación, puesto, teléfono, periodo, quién la contactó y cuándo, el resultado del contacto (pendiente, contactada, no se localizó, se negó) y **lo que dijo**, tal como lo dijo. Para marcarlas como completadas, ninguna puede quedar pendiente. «Analizar con IA» resume lo que dijo cada referencia y compara las laborales con los empleos del CV: qué coincide, qué no cuadra y qué quedó sin confirmar. No califica ni recomienda; lo que dice una referencia es su opinión, no un hecho comprobado. A la IA no se le envían el nombre ni el teléfono de las referencias.
 
+**Puntos de atención.** Cada análisis de la IA (llamada, psicometría, prueba técnica, entrevista y referencias) trae ahora una lista de «Puntos de atención (generado por IA)»: lo que salió bajo, desfavorable o sin resolver, con el dato en que se basa. Es un aviso para revisar, no un veredicto.
+
+**Escalas de la prueba psicométrica.** Al pulsar «Resumir e interpretar con IA», la IA recibe el texto del reporte y también la imagen de sus páginas, para leer el nivel que marca cada gráfica o aguja (por ejemplo, 3 de 5). El resumen muestra «Escalas leídas del reporte» con el número, la frase del reporte y su lectura (favorable, intermedia o desfavorable). Bajo no siempre es malo: en robo o uso de sustancias lo favorable es una tendencia baja; en lealtad u honestidad, una alta. El sistema comprueba que el número leído coincida con la frase; si no coinciden, la escala aparece en «Revisar en el reporte» y no se usa. **Compruébalo siempre contra el documento**: la IA puede leer mal una gráfica. La IA no diagnostica: dice «el reporte ubica la escala en…», nunca que la persona tiene o hace algo.
+
+**Recomendación de la IA.** «Generar síntesis» da además una recomendación en palabras: **recomendable, recomendable con reservas o no recomendable**, con su conclusión y sus razones, cada una con la fuente. También reúne los puntos de atención de todas las etapas y los **contrastes**: cuando dos fuentes no coinciden (lo que dijo la persona, su prueba, una fotografía), dice qué dice cada una y cierra con su conclusión. Siempre aparece marcada «Generado por IA. No es una decisión»: no mueve a nadie de etapa, no descarta ni contrata, y no calcula ninguna puntuación global. Cuentan el CV, las llamadas, las pruebas, la entrevista, las referencias, la prueba psicométrica presentada (aunque no la haya validado un profesional) y las fotografías del estudio, estas últimas solo por lo que sus descripciones dicen de orden y organización; nunca por el tipo de vivienda, la zona, los recursos o la familia.
+
 «Generar síntesis» ordena todo el expediente en hechos documentados, declaraciones, observaciones humanas, resultados técnicos, información pendiente y diferencias por aclarar, y añade **preguntas sugeridas para la siguiente etapa** (hasta seis, para aclarar lo que quedó pendiente). Además relaciona las etapas entre sí: **«Qué aportó cada etapa frente a las anteriores»** (una línea por etapa: qué añadió, qué confirma de lo anterior y qué deja abierto) y **«Coincidencias entre fuentes»** (dónde dos fuentes dicen lo mismo, citando ambas). Es un razonamiento con los datos del expediente para ayudarte a decidir: describe, no valora. De la psicometría solo relaciona la interpretación del profesional, y nunca relaciona las fotografías del estudio ni datos económicos o familiares. No produce una calificación global ni una recomendación.
 
 La síntesis **se actualiza sola** cuando, con el expediente abierto, cierras una llamada o registras el resultado de una evaluación; abrir el expediente no consulta a la IA. Cada síntesis queda guardada: en «Síntesis guardadas» puedes abrir las anteriores para ver cómo fue cambiando el análisis.
@@ -133,6 +140,8 @@ Cuando el proceso de una persona termina, pulsa «Registrar resultado final» y 
 | No localizado | No fue posible contactarla |
 | Vacante cancelada | El puesto ya no se cubrirá |
 | Otro cierre | Cualquier otro motivo |
+
+**«No viable».** Si decides que una persona no sigue, pulsa «No viable» y escribe el motivo. El sistema cierra su proceso como «No contratado», anota en qué etapa se quedó y la IA redacta el **análisis de cierre**: hasta dónde llegó, qué mostró en cada etapa, los puntos de atención y cómo se relaciona tu motivo con el expediente. Queda guardado en el expediente, marcado como generado por IA. La decisión es tuya: la IA solo la documenta. Si la IA falla en ese momento, el cierre queda hecho y puedes pedir el análisis después con «Generar análisis de cierre». «Reabrir proceso» lo deshace.
 
 Todos piden motivo, salvo la contratación. No se puede contratar a más personas que plazas tiene la vacante: si se abrió otra plaza, primero actualiza la vacante. Con resultado final la persona ya no se mueve de etapa. Si hubo un error o la situación cambió, «Reabrir proceso» lo deshace: pide motivo y el resultado anterior queda anulado, a la vista, sin borrarse.
 
@@ -170,6 +179,6 @@ Las fechas se cuentan en la hora de Ciudad de México.
 
 **Me equivoqué al registrar un resultado final.** Usa «Reabrir proceso» y regístralo de nuevo. Ambos pasos quedan en el historial.
 
-**No puedo abrir un reporte de psicometría.** Es un dato sensible: necesitas el permiso adicional, además del acceso a la vacante.
+**No puedo abrir un reporte de psicometría.** Lo ve quien tiene la vacante compartida. Si no la ves, pide a su responsable que te la comparta.
 
 **Voy a dejar la empresa o cambio de área.** El administrador transfiere tus vacantes a otra persona. No se pierde nada: candidatos, documentos e historial siguen en la vacante.

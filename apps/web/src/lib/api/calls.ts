@@ -93,6 +93,7 @@ export function proposeQuestions(vacancyId: string, count: number) {
 }
 
 export const ANALYSIS_SECTIONS: [string, string][] = [
+  ["puntos_de_atencion", "Puntos de atención (generado por IA)"],
   ["evidencias", "Evidencias"],
   ["competencias_exploradas", "Competencias exploradas"],
   ["informacion_faltante", "Información que faltó"],

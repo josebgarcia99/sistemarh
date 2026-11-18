@@ -140,9 +140,26 @@ class SimulatedProvider:
         tokens = len(system + user) // 4 + 50
         simulated = None
         note = "Respuesta simulada del modo demostración: no la produjo ningún modelo real."
-        if system.startswith(("Recibes el texto del reporte", "Recibes el material de una prueba")):
+        if system.startswith(("Recibes el reporte de una", "Recibes el material de una prueba")):
             simulated = {
                 "resumen": note,
+                # Solo la psicometría lleva escalas; en otra prueba se descartan.
+                "escalas": [
+                    {
+                        "nombre": "Escala simulada A",
+                        "nivel": 2,
+                        "maximo": 5,
+                        "frase": "Tendencia baja a presentar la conducta",
+                        "lectura": "FAVORABLE",
+                    },
+                    {
+                        "nombre": "Escala simulada B",
+                        "nivel": 3,
+                        "maximo": 5,
+                        "frase": "Tendencia media a presentar la conducta",
+                        "lectura": "INTERMEDIO",
+                    },
+                ],
                 "resultados_documentados": ["Resultado simulado tomado del documento."],
                 # Solo la psicometría lleva interpretación; en otra prueba se descarta.
                 "interpretacion": ["Resultado simulado: lo que el reporte diría que significa."],
@@ -190,8 +207,26 @@ class SimulatedProvider:
                 "analizó de verdad. Aquí aparecería lo que se observa en la fotografía.",
                 "no_se_distingue": ["Detalle simulado que no se distingue"],
             }
+        elif system.startswith("Recibes el expediente de una postulación que una persona"):
+            simulated = {
+                "analisis_de_cierre": "Análisis de cierre simulado del modo demostración: no lo "
+                "produjo ningún modelo real. Aquí aparecería hasta qué etapa llegó la persona, "
+                "qué mostró en cada una y cómo se relaciona el motivo con el expediente.",
+                "avance_por_etapa": ["CV: aporte simulado."],
+                "puntos_de_atencion": ["CV: punto de atención simulado (CV)."],
+                "informacion_pendiente": ["Punto pendiente simulado."],
+            }
         elif system.startswith("Recibes el expediente"):
             simulated = {
+                "puntos_de_atencion": ["CV: punto de atención simulado (CV)."],
+                "contrastes": ["Contraste simulado entre dos fuentes. Conclusión simulada."],
+                "veredicto": "RECOMENDABLE_CON_RESERVAS",
+                "razones": [
+                    "Razón simulada a favor (CV).",
+                    "Razón simulada en contra (llamada 1).",
+                ],
+                "conclusion": "Conclusión simulada del modo demostración: no la produjo ningún "
+                "modelo real.",
                 "hechos_documentados": ["Hecho simulado tomado del CV (CV)."],
                 "declaraciones": ["Declaración simulada de la llamada (llamada 1)."],
                 "observaciones_humanas": ["Observación simulada de quien evaluó."],
@@ -250,6 +285,7 @@ class SimulatedProvider:
         elif "<<<LLAMADA" in user:
             simulated = {
                 "resumen": "Resumen simulado de la llamada: no lo produjo ningún modelo real.",
+                "puntos_de_atencion": ["Punto de atención simulado de la llamada."],
                 "evidencias": ["Evidencia simulada tomada de las respuestas."],
                 "competencias_exploradas": ["Experiencia"],
                 "informacion_faltante": ["Dato simulado que no se preguntó."],

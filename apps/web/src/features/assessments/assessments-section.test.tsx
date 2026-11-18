@@ -8,6 +8,13 @@ import { AssessmentsSection } from "./assessments-section";
 import { DossierSection } from "./dossier-section";
 
 const LIST_URL = "/api/v1/applications/a1/assessments";
+/** Cuerpo de la última solicitud de escritura a una ruta que termina así. */
+const body = (fetchMock: ReturnType<typeof mockApi>, ending: string) => {
+  const calls = fetchMock.mock.calls.filter(
+    ([url, init]) => String(url).endsWith(ending) && init?.method && init.method !== "GET",
+  );
+  return JSON.parse(String(calls.at(-1)?.[1]?.body ?? "null"));
+};
 const FILES_URL = "/api/v1/vacancies/v1/files";
 const file = (id: string, name: string, type: string) => ({
   id,
@@ -353,6 +360,9 @@ describe("AssessmentsSection", () => {
       data: { instrument: "Prueba Inventada" },
       ai_summary: {
         resumen: "El reporte documenta dos escalas.",
+        escalas: ["Soborno: 3 de 5 · «Tendencia media a presentar la conducta» · lectura intermedia"],
+        revisar_en_el_reporte: ["Fraude: la gráfica se leyó como 4 de 5, pero el texto dice «Tendencia baja»."],
+        puntos_de_atencion: ["Soborno: el reporte la ubica en 3 de 5 (lectura intermedia)."],
         resultados_documentados: ["Razonamiento: percentil 70"],
         interpretacion: ["Razonamiento, percentil 70: el reporte lo describe como por encima del promedio."],
         datos_no_legibles: [],
@@ -374,7 +384,13 @@ describe("AssessmentsSection", () => {
     expect(panel.getByText("Qué significa, según el reporte")).toBeTruthy();
     expect(panel.getByText(/por encima del promedio/)).toBeTruthy();
     expect(panel.getByText("Preguntas para la siguiente etapa")).toBeTruthy();
-    expect(panel.getByText(/No es un diagnóstico ni una recomendación/)).toBeTruthy();
+    // Las escalas leídas de la gráfica, lo que pide atención y lo que hay que revisar.
+    expect(panel.getByText("Escalas leídas del reporte")).toBeTruthy();
+    expect(panel.getByText("Puntos de atención (generado por IA)")).toBeTruthy();
+    expect(panel.getByText(/Soborno: el reporte la ubica en 3 de 5/)).toBeTruthy();
+    expect(panel.getByText("Revisar en el reporte: el número y el texto no coinciden")).toBeTruthy();
+    expect(panel.getByText(/Generado por IA .*No es un diagnóstico ni una decisión/)).toBeTruthy();
+    expect(panel.getByText(/se lee de la gráfica del reporte: compruébalo contra el documento/)).toBeTruthy();
   });
 
   it("captura las tablas del formato y marca lo que solo anota una persona", async () => {
@@ -491,12 +507,12 @@ describe("AssessmentsSection", () => {
     mockApi({ [`GET ${LIST_URL}`]: { body: list([interview], { restricted: ["PSICOMETRIA"], writable: [] }) } });
     const user = userEvent.setup();
     renderSection();
-    expect(await screen.findByText(/prueba psicométrica, que requiere un permiso adicional/)).toBeTruthy();
+    expect(await screen.findByText(/prueba psicométrica, que tu acceso no permite consultar/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Registrar evaluación" })).toBeNull();
     await user.click(screen.getByRole("button", { name: /Entrevista con gerente · Gerente Ficticio/ }));
     const summary = screen.getByRole("region", { name: "Resumen de la IA" });
     expect(within(summary).getByText("Competencias observadas")).toBeTruthy();
-    expect(within(summary).getByText(/No es un diagnóstico ni una recomendación/)).toBeTruthy();
+    expect(within(summary).getByText(/No es un diagnóstico ni una decisión/)).toBeTruthy();
     expect((screen.getByLabelText("Conclusión de quien entrevistó") as HTMLTextAreaElement).readOnly).toBe(true);
     expect(screen.queryByRole("button", { name: /Guardar|Organizar con IA/ })).toBeNull();
   });
@@ -519,7 +535,16 @@ describe("DossierSection", () => {
       id: "x1",
       created_at: "2026-11-11T19:00:00Z",
       created_by_name: "Reclutadora de Prueba",
-      result: { hechos_documentados: ["Analista en Uno SA (CV)"], discrepancias_verificables: ["CV: 2 años; llamada: 3 años"], informacion_pendiente: [] },
+      result: {
+        hechos_documentados: ["Analista en Uno SA (CV)"],
+        discrepancias_verificables: ["CV: 2 años; llamada: 3 años"],
+        informacion_pendiente: [],
+        puntos_de_atencion: ["CV: criterio C2 en nivel 1 (CV)"],
+        contrastes: ["Antigüedad: 2 años (CV); 3 años (llamada 1). Conclusión: pesa más el CV."],
+        veredicto: "RECOMENDABLE_CON_RESERVAS",
+        razones: ["Cumple la experiencia (CV)", "Antigüedad por aclarar (llamada 1)"],
+        conclusion: "Cumple lo indispensable.\n\nConviene aclarar la antigüedad.",
+      },
       sources: ["CV", "1 entrevistas"],
       includes_psychometrics: false,
       includes_study: false,
@@ -541,13 +566,24 @@ describe("DossierSection", () => {
     expect(rows[0].textContent).toContain("Cubierta");
     expect(rows[0].textContent).toContain("CV «cv ana.pdf»");
     expect(rows[1].textContent).toContain("Omitida");
-    expect(rows[1].textContent).toContain("requiere un permiso adicional");
+    expect(rows[1].textContent).toContain("tu acceso no permite consultarla");
     expect(rows[2].textContent).toContain("Etapa actual");
     expect(rows[3].textContent).toContain("Por venir");
-    expect(screen.getByText(/síntesis más reciente que incluye psicometría/)).toBeTruthy();
+    expect(screen.getByText(/síntesis más reciente que tu acceso no permite consultar/)).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Generar síntesis" }));
     const panel = await screen.findByRole("region", { name: "Síntesis" });
+    // La recomendación va primero, en palabras y marcada como generada por IA.
+    const advice = within(within(panel).getByRole("region", { name: "Recomendación de la IA" }));
+    expect(advice.getByText("Recomendable con reservas")).toBeTruthy();
+    expect(advice.getByText(/Generado por IA\. No es una decisión/)).toBeTruthy();
+    expect(advice.getByText("Conviene aclarar la antigüedad.")).toBeTruthy();
+    expect(advice.getByText("Antigüedad por aclarar (llamada 1)")).toBeTruthy();
+    expect(within(panel).getByText("Puntos de atención")).toBeTruthy();
+    expect(within(panel).getByText("Contrastes entre fuentes y conclusión de la IA")).toBeTruthy();
+    expect(within(panel).getByText(/Conclusión: pesa más el CV/)).toBeTruthy();
+    expect(within(panel).queryByText(/\d+ de 100/)).toBeNull(); // sin puntuación global
+    expect(body(fetchMock, "/syntheses")).toEqual({ closing: false });
     expect(within(panel).getByText("Hechos documentados")).toBeTruthy();
     expect(within(panel).getByText("Diferencias por aclarar entre fuentes")).toBeTruthy();
     expect(within(panel).queryByText("Información pendiente")).toBeNull();
@@ -555,7 +591,52 @@ describe("DossierSection", () => {
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true);
   });
 
-  const makeSynthesis = (id: string, at: string, result: Record<string, string[]>) => ({
+  it("en una postulación cerrada pide y muestra el análisis de cierre", async () => {
+    const closing = {
+      id: "x9",
+      created_at: "2026-11-12T19:00:00Z",
+      created_by_name: "Reclutadora de Prueba",
+      result: {
+        tipo: "CIERRE",
+        etapa: "Entrevista con gerente",
+        resultado: "No contratado",
+        motivo: "No viable: no acepta el horario",
+        analisis_de_cierre: "Llegó hasta la entrevista.\n\nEl expediente no documenta este motivo.",
+        avance_por_etapa: ["CV: tres años en nómina."],
+        puntos_de_atencion: ["CV: sin evidencia de finiquitos (CV)"],
+        informacion_pendiente: [],
+      },
+      sources: ["CV"],
+      includes_psychometrics: false,
+      includes_study: false,
+    };
+    let created = false;
+    const fetchMock = mockApi({
+      ["GET /api/v1/applications/a1/calls"]: { body: [] },
+      [`GET ${LIST_URL}`]: { body: list([]) },
+      ["GET /api/v1/applications/a1/syntheses"]: () => ({ body: { latest: created ? closing : null, total: created ? 1 : 0, hidden: false } }),
+      ["POST /api/v1/applications/a1/syntheses"]: () => {
+        created = true;
+        return { status: 201, body: closing };
+      },
+    });
+    const closed = { ...detail, application: { ...detail.application, status: "DESCARTADA" } } as ApplicationDetail;
+    const user = userEvent.setup();
+    renderApp(<DossierSection detail={closed} canEdit />, { session: makeUser() });
+    await user.click(await screen.findByRole("button", { name: "Generar análisis de cierre" }));
+    const panel = await screen.findByRole("region", { name: "Síntesis" });
+    const analysis = within(within(panel).getByRole("region", { name: "Análisis de cierre" }));
+    expect(analysis.getByText("Entrevista con gerente")).toBeTruthy();
+    expect(analysis.getByText("No viable: no acepta el horario")).toBeTruthy();
+    expect(analysis.getByText("El expediente no documenta este motivo.")).toBeTruthy();
+    expect(analysis.getByText(/La decisión, la etapa y el motivo los registró una persona/)).toBeTruthy();
+    // Un cierre no lleva recomendación: la decisión ya está tomada.
+    expect(within(panel).queryByRole("region", { name: "Recomendación de la IA" })).toBeNull();
+    expect(within(panel).getByText("Puntos de atención")).toBeTruthy();
+    expect(body(fetchMock, "/syntheses")).toEqual({ closing: true });
+  });
+
+  const makeSynthesis = (id: string, at: string, result: Record<string, string | string[]>) => ({
     id,
     created_at: at,
     created_by_name: "Reclutadora de Prueba",

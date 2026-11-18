@@ -126,6 +126,7 @@ def test_la_ia_ordena_las_referencias_y_las_contrasta_con_el_cv(ana, recruiter, 
     summary = analyzed.json()["ai_summary"]
     assert set(summary) == {
         "resumen",
+        "puntos_de_atencion",
         "referencias_laborales",
         "referencias_personales",
         "coincidencias_con_cv",

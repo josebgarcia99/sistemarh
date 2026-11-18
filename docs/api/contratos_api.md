@@ -55,7 +55,7 @@ Versión de la API: `0.8.0`. Rutas: 115. Todas cuelgan de `/api/v1`.
 | GET | `/applications/{application_id}/assessments` | Evaluaciones posteriores de una postulación que el usuario puede ver | — | 200 `AssessmentListOut` |
 | POST | `/applications/{application_id}/assessments` | Registra una evaluación de la postulación | `NewAssessmentIn` | 201 `AssessmentOut` |
 | GET | `/applications/{application_id}/syntheses` | Última síntesis del expediente que el usuario puede ver | — | 200 `SynthesisViewOut` |
-| POST | `/applications/{application_id}/syntheses` | La IA sintetiza el expediente por tipo de fuente; no puntúa ni recomienda | — | 201 `SynthesisOut` |
+| POST | `/applications/{application_id}/syntheses` | La IA sintetiza el expediente y da su recomendación, o redacta el cierre | — | 201 `SynthesisOut` |
 | GET | `/assessments/{assessment_id}` | Una evaluación | — | 200 `AssessmentOut` |
 | PUT | `/assessments/{assessment_id}` | Guarda la evaluación | `AssessmentUpdateIn` | 200 `AssessmentOut` |
 | POST | `/assessments/{assessment_id}/digitization` | La IA lee un formulario escaneado y propone valores, sin guardar ni verificar | `DigitizationIn` | 200 `DigitizationOut` |

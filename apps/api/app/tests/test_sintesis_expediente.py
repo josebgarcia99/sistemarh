@@ -84,7 +84,9 @@ def test_la_sintesis_propone_preguntas_y_guarda_su_historial(
     assert recruiter.get(url).json()["total"] == 2
 
 
-def test_la_sintesis_relaciona_las_etapas_sin_valorar_ni_decidir(ana, recruiter, admin, providers):
+def test_la_sintesis_relaciona_las_etapas_y_da_un_veredicto_marcado_como_ia(
+    ana, recruiter, admin, providers
+):
     assign(admin, "SINTESIS_EXPEDIENTES")
     fake = providers[ProviderCode.ANTHROPIC]
     url = f"{API}/applications/{ana}/syntheses"
@@ -121,14 +123,20 @@ def test_la_sintesis_relaciona_las_etapas_sin_valorar_ni_decidir(ana, recruiter,
     ]
     assert len(result["avance_por_etapa"]) == assistant.MAX_STAGE_NOTES
 
-    # Las instrucciones piden relacionar con datos, y prohíben valorar o decidir.
+    # La conclusión se conserva; un nivel de idoneidad inventado, no.
+    assert result["conclusion"] == "Conviene avanzar" and "nivel_de_idoneidad" not in result
+
+    # Las instrucciones piden relacionar con datos y dar un veredicto en palabras,
+    # marcado como opinión de la IA; siguen prohibidas las puntuaciones y el diagnóstico.
     system = " ".join(fake.prompts[0][1].split())
     assert "citando cada fuente y el dato de cada una" in system
     assert "qué confirma de las etapas anteriores y qué deja abierto" in system
-    assert "describe; no valores" in system
-    assert "solo puedes relacionar la interpretación escrita por el profesional" in system
-    assert "No relaciones con ninguna otra fuente las fotografías del estudio" in system
-    assert "No recomiendes contratar, rechazar ni avanzar" in system
+    assert "tu recomendación es una opinión generada por IA" in system
+    assert "RECOMENDABLE, RECOMENDABLE_CON_RESERVAS o NO_RECOMENDABLE" in system
+    assert "El veredicto se expresa solo con una de las tres opciones" in system
+    assert "No calcules ni propongas ninguna puntuación, índice ni porcentaje" in system
+    assert "nunca que la persona tiene, padece o hace algo" in system
+    assert "y no saques de ellas ninguna conclusión sobre nivel económico" in system
 
     # Relaciones sueltas, sin nada del expediente, no cuentan como síntesis.
     fake.script = [reply({"avance_por_etapa": ["CV: algo"], "coincidencias_entre_fuentes": ["x"]})]

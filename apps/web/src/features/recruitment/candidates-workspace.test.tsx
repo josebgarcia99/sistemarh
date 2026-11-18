@@ -304,4 +304,84 @@ describe("CandidatesWorkspace", () => {
     expect(voided[0].textContent).toContain("Contratado");
     expect(voided[0].textContent).toContain("No se presentó");
   });
+
+  it("«No viable» cierra el proceso con el motivo y pide a la IA el análisis de cierre", async () => {
+    const closed = makeDetail({
+      application: makeApplication({ status: "DESCARTADA", outcome: "NO_CONTRATADO" }),
+      outcomes: [
+        {
+          id: "o2",
+          outcome: "NO_CONTRATADO",
+          reason: "No viable: no acepta el horario",
+          notes: null,
+          start_date: null,
+          recorded_at: "2026-11-13T18:00:00Z",
+          recorded_by_name: "Reclutadora de Prueba",
+          voided_at: null,
+          voided_by_name: null,
+          void_reason: null,
+        },
+      ],
+    });
+    const analysis = {
+      id: "x9",
+      created_at: "2026-11-13T18:01:00Z",
+      created_by_name: "Reclutadora de Prueba",
+      result: {
+        tipo: "CIERRE",
+        etapa: "Revisión local RH",
+        resultado: "No contratado",
+        motivo: "No viable: no acepta el horario",
+        analisis_de_cierre: "Llegó a la revisión de RH.",
+      },
+      sources: ["CV"],
+      includes_psychometrics: false,
+      includes_study: false,
+    };
+    let current = makeDetail();
+    let written = false;
+    const fetchMock = mockApi({
+      [`GET ${BOARD_URL}`]: { body: makeBoard() },
+      ["GET /api/v1/applications/a1"]: () => ({ body: current }),
+      ["GET /api/v1/applications/a1/calls"]: { body: [] },
+      ["GET /api/v1/applications/a1/assessments"]: { body: { items: [], restricted: [], writable: [] } },
+      ["GET /api/v1/applications/a1/syntheses"]: () => ({
+        body: { latest: written ? analysis : null, total: written ? 1 : 0, hidden: false },
+      }),
+      ["POST /api/v1/applications/a1/outcome"]: () => {
+        current = closed;
+        return { body: closed };
+      },
+      ["POST /api/v1/applications/a1/syntheses"]: () => {
+        written = true;
+        return { status: 201, body: analysis };
+      },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(await screen.findByRole("button", { name: "Ana Pérez" }));
+    await user.click(await screen.findByRole("button", { name: "No viable" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/La decisión es tuya; después puedes reabrir el proceso/)).toBeTruthy();
+    // Sin motivo no se cierra nada.
+    await user.click(within(dialog).getByRole("button", { name: "Marcar como no viable" }));
+    expect(within(dialog).getByRole("alert").textContent).toContain("Escribe el motivo");
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+
+    await user.type(within(dialog).getByLabelText("Motivo"), "no acepta el horario");
+    await user.click(within(dialog).getByRole("button", { name: "Marcar como no viable" }));
+    expect((await screen.findByRole("status")).textContent).toContain("Quedó como no viable");
+    // Lo decide la persona: se registra como «No contratado» con su motivo…
+    expect(body(fetchMock, "/outcome")).toEqual({
+      outcome: "NO_CONTRATADO",
+      reason: "No viable: no acepta el horario",
+      notes: null,
+      start_date: null,
+    });
+    // …y después se pide a la IA el análisis de cierre.
+    expect(body(fetchMock, "/syntheses")).toEqual({ closing: true });
+    const shown = await screen.findByRole("region", { name: "Análisis de cierre" });
+    expect(within(shown).getByText("Llegó a la revisión de RH.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "No viable" })).toBeNull();
+  });
 });

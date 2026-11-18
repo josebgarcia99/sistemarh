@@ -31,11 +31,11 @@ class VacancyFileAccessPolicy:
         self._access = VacancyAccess(vacancies)
 
     def _granted(self, actor: Actor, vacancy_id: uuid.UUID, level: AccessLevel) -> frozenset[str]:
-        # El responsable y el administrador no necesitan el permiso adicional.
-        if level >= AccessLevel.RESPONSABLE:
-            return _ALL_CLASSES
-        grants = self._vacancies.active_grants(vacancy_id=vacancy_id, user_id=actor.id)
-        return frozenset(grant.document_class.value for grant in grants)
+        # Decisión del titular (18 nov 2026): quien tiene la vacante compartida, su
+        # responsable y el administrador ven la psicometría y el estudio completos.
+        # Ya no hace falta el permiso adicional por clase de documento; el acceso
+        # sigue evaluándose en cada consulta y queda en la auditoría.
+        return _ALL_CLASSES
 
     def _require(
         self,

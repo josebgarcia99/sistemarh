@@ -28,11 +28,7 @@ import {
   MY_ACCESS_LABELS,
   ownershipHistory,
   revokeMember,
-  SENSITIVE_CLASS_LABELS,
-  type SensitiveClass,
-  sensitiveClassSchema,
   setMember,
-  setSensitiveGrants,
   STATUS_LABELS,
   STATUS_TRANSITIONS,
   type Vacancy,
@@ -260,12 +256,6 @@ export function VacancyPanel({
                     `${member.user!.full_name} ahora tiene acceso de ${ACCESS_TYPE_LABELS[accessType].toLowerCase()}.`,
                   )
                 }
-                onSensitiveChange={(classes) =>
-                  run(
-                    () => setSensitiveGrants(vacancy.id, member.user!.id, classes),
-                    `Se actualizaron los permisos de documentos sensibles de ${member.user!.full_name}.`,
-                  )
-                }
                 onRevoke={() =>
                   run(
                     () => revokeMember(vacancy.id, member.user!.id),
@@ -288,8 +278,9 @@ export function VacancyPanel({
           />
         )}
         <p className="text-sm text-ink-muted">
-          Compartir no transfiere la propiedad ni da acceso a psicometría o estudios
-          socioeconómicos: esos permisos se otorgan aparte, por persona.
+          Compartir no transfiere la propiedad. Quien recibe la vacante ve todo su contenido,
+          incluidas las pruebas psicométricas, los estudios socioeconómicos y la recomendación
+          de la IA.
         </p>
       </section>
 
@@ -405,13 +396,11 @@ function MemberRow({
   member,
   canManage,
   onAccessChange,
-  onSensitiveChange,
   onRevoke,
 }: {
   member: Member;
   canManage: boolean;
   onAccessChange: (accessType: AccessType) => void;
-  onSensitiveChange: (classes: SensitiveClass[]) => void;
   onRevoke: () => void;
 }) {
   const name = member.user?.full_name ?? "Usuario sin datos";
@@ -451,31 +440,6 @@ function MemberRow({
           </span>
         )}
       </div>
-      {canManage && member.user && (
-        <fieldset className="flex flex-col gap-1">
-          <legend className="text-sm text-ink-muted">Documentos sensibles</legend>
-          {sensitiveClassSchema.options.map((documentClass) => {
-            const checked = member.sensitive_classes.includes(documentClass);
-            return (
-              <label key={documentClass} className="flex min-h-11 items-center gap-3">
-                <input
-                  type="checkbox"
-                  className="size-5 accent-ink"
-                  checked={checked}
-                  onChange={() =>
-                    onSensitiveChange(
-                      checked
-                        ? member.sensitive_classes.filter((c) => c !== documentClass)
-                        : [...member.sensitive_classes, documentClass],
-                    )
-                  }
-                />
-                {SENSITIVE_CLASS_LABELS[documentClass]}
-              </label>
-            );
-          })}
-        </fieldset>
-      )}
     </li>
   );
 }

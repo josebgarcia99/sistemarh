@@ -320,6 +320,22 @@ function PromptEditor({
           {" · "}
           {version.length} de {version.max_length} caracteres
         </p>
+        <details className="rounded-2xl bg-surface px-4 py-3">
+          <summary className="cursor-pointer font-medium">
+            Vista previa: el prompt completo que recibirá la IA
+          </summary>
+          <p className="mt-2 text-sm text-ink-muted">
+            Es el texto exacto de esta versión, con las partes fijas del sistema y la rúbrica,
+            tal como está guardada. Si acabas de cambiar algo, pulsa «Guardar cambios» para
+            verlo aquí.
+          </p>
+          <pre
+            aria-label="Prompt completo"
+            className="mt-3 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-white/60 p-4 text-sm"
+          >
+            {version.rendered}
+          </pre>
+        </details>
         {version.status === "APROBADO" && (
           <p className="rounded-2xl bg-surface px-4 py-3">
             Esta versión está aprobada y no se modifica. Para cambiarla, duplícala: se crea un

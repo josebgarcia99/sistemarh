@@ -122,6 +122,9 @@ const EMPTY_REFERENCE: Row = {
   comments: "",
 };
 const SUMMARY_LABELS: Record<string, string> = {
+  escalas: "Escalas leídas del reporte",
+  revisar_en_el_reporte: "Revisar en el reporte: el número y el texto no coinciden",
+  puntos_de_atencion: "Puntos de atención (generado por IA)",
   resultados_documentados: "Resultados que constan en el documento",
   interpretacion: "Qué significa, según el reporte",
   preguntas_para_la_siguiente_etapa: "Preguntas para la siguiente etapa",
@@ -178,7 +181,7 @@ export function AssessmentsSection({ applicationId, vacancyId, active }: Props) 
       {data && data.restricted.length > 0 && (
         <p className="rounded-2xl bg-surface px-4 py-3">
           Esta postulación tiene {data.restricted.map((kind) => KIND_LABELS[kind].toLowerCase()).join(" y ")}
-          , que requiere un permiso adicional sobre la vacante para consultarse.
+          , que tu acceso no permite consultar.
         </p>
       )}
       {adding && data && (
@@ -821,8 +824,10 @@ function AssessmentEditor({
         <section aria-label="Resumen de la IA" className="flex flex-col gap-2 rounded-3xl bg-white/60 p-5">
           <h3 className="text-lg font-medium">Resumen de la IA</h3>
           <p className="text-sm text-ink-muted">
-            Resume lo documentado{item.ai_summary_at ? ` (${dateTimeFormat.format(new Date(item.ai_summary_at))})` : ""}. No
-            es un diagnóstico ni una recomendación.
+            Generado por IA{item.ai_summary_at ? ` (${dateTimeFormat.format(new Date(item.ai_summary_at))})` : ""}. Resume
+            lo documentado y señala lo que conviene revisar. No es un diagnóstico ni una decisión.
+            {kind === "PSICOMETRIA" &&
+              " El nivel de cada escala se lee de la gráfica del reporte: compruébalo contra el documento."}
             {kind === "REFERENCIAS" &&
               " Lo que dijo una referencia es su opinión, no un hecho comprobado."}
           </p>

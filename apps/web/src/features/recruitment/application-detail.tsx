@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import {
   cardClass,
@@ -11,8 +11,10 @@ import {
   secondaryButtonClass,
 } from "@/components/ui/styles";
 import { AssessmentsSection } from "@/features/assessments/assessments-section";
+import { AiWaitNotice, useAiWait } from "@/components/ui/ai-wait";
 import { DossierSection } from "@/features/assessments/dossier-section";
 import { CallsSection } from "@/features/calls/calls-section";
+import { createSynthesis } from "@/lib/api/assessments";
 import { describeError } from "@/lib/api/client";
 import { downloadUrl } from "@/lib/api/files";
 import {
@@ -51,7 +53,7 @@ type Props = {
   canEdit: boolean;
   onBack: () => void;
 };
-type Dialog = "move" | "note" | "outcome" | "reopen" | null;
+type Dialog = "move" | "note" | "outcome" | "unviable" | "reopen" | null;
 
 /** Expediente de una postulación: datos, evaluación de la IA, historial y llamadas. */
 export function ApplicationDetailView({ applicationId, vacancyId, vacancyName, canEdit, onBack }: Props) {
@@ -78,6 +80,47 @@ export function ApplicationDetailView({ applicationId, vacancyId, vacancyName, c
     } finally {
       setBusy(false);
     }
+  }
+
+  const aiWait = useAiWait();
+  /** «No viable»: la persona cierra el proceso con su motivo y la IA redacta el análisis
+   * de cierre. Si la IA falla, el cierre queda hecho y el análisis se puede pedir después. */
+  async function markUnviable(reason: string) {
+    const written = reason.trim();
+    if (written.length < 5) {
+      setFeedback({ kind: "error", text: "Escribe el motivo." });
+      return;
+    }
+    setBusy(true);
+    setFeedback(null);
+    try {
+      await recordOutcome(applicationId, {
+        outcome: "NO_CONTRATADO",
+        reason: `No viable: ${written}`,
+        notes: null,
+        start_date: null,
+      });
+    } catch (caught) {
+      setFeedback({ kind: "error", text: describeError(caught) });
+      setBusy(false);
+      return;
+    }
+    let result: Feedback = {
+      kind: "ok",
+      text: "Quedó como no viable. El análisis de cierre de la IA está en el expediente.",
+    };
+    try {
+      await aiWait.run(() => createSynthesis(applicationId, true));
+    } catch (caught) {
+      result = {
+        kind: "error",
+        text: `Quedó como no viable, pero la IA no pudo redactar el análisis de cierre: ${describeError(caught)} Puedes pedirlo después con «Generar análisis de cierre».`,
+      };
+    }
+    await queryClient.invalidateQueries({ queryKey });
+    setDialog(null);
+    setFeedback(result);
+    setBusy(false);
   }
 
   const back = (
@@ -137,9 +180,14 @@ export function ApplicationDetailView({ applicationId, vacancyId, vacancyName, c
             Incidencia o reprogramación
           </button>
           {active ? (
-            <button type="button" className={dangerButtonClass} onClick={() => setDialog("outcome")}>
-              Registrar resultado final
-            </button>
+            <>
+              <button type="button" className={dangerButtonClass} onClick={() => setDialog("unviable")}>
+                No viable
+              </button>
+              <button type="button" className={dangerButtonClass} onClick={() => setDialog("outcome")}>
+                Registrar resultado final
+              </button>
+            </>
           ) : (
             <button type="button" className={secondaryButtonClass} onClick={() => setDialog("reopen")}>
               Reabrir proceso
@@ -225,6 +273,19 @@ export function ApplicationDetailView({ applicationId, vacancyId, vacancyName, c
             run(() => recordOutcome(application.id, input), "Resultado final registrado.")
           }
         />
+      )}
+      {dialog === "unviable" && (
+        <ReasonDialog
+          title={`Marcar a ${application.full_name} como no viable`}
+          description={`Cierra su proceso en la vacante como «No contratado». Queda anotado que se quedó en la etapa «${pipeline.stages.find((stage) => stage.id === application.stage_id)?.name ?? "actual"}» y la IA redacta un análisis de cierre con lo que hay en el expediente y tu motivo. La decisión es tuya; después puedes reabrir el proceso.`}
+          confirmLabel="Marcar como no viable"
+          busy={busy}
+          feedback={feedback}
+          onClose={() => setDialog(null)}
+          onSubmit={markUnviable}
+        >
+          <AiWaitNotice wait={aiWait} />
+        </ReasonDialog>
       )}
       {dialog === "reopen" && (
         <ReasonDialog
@@ -519,7 +580,15 @@ function ReasonDialog({
   feedback,
   onClose,
   onSubmit,
-}: DialogProps & { title: string; description: string; onSubmit: (note: string) => void }) {
+  confirmLabel = "Confirmar",
+  children,
+}: DialogProps & {
+  title: string;
+  description: string;
+  onSubmit: (note: string) => void;
+  confirmLabel?: string;
+  children?: ReactNode;
+}) {
   const [note, setNote] = useState("");
   return (
     <Modal title={title} description={description} onClose={onClose}>
@@ -532,13 +601,14 @@ function ReasonDialog({
         className="flex flex-col gap-4"
       >
         <Field id="reason" label="Motivo" value={note} onChange={setNote} />
+        {children}
         <FeedbackLine feedback={feedback} />
         <div className="flex flex-wrap justify-end gap-3">
           <button type="button" className={secondaryButtonClass} onClick={onClose}>
             Cancelar
           </button>
           <button type="submit" className={primaryButtonClass} disabled={busy}>
-            Confirmar
+            {busy ? "Trabajando…" : confirmLabel}
           </button>
         </div>
       </form>

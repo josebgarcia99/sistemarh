@@ -4,14 +4,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { AiWaitNotice, useAiWait } from "@/components/ui/ai-wait";
 import { cardClass, fieldClass, primaryButtonClass } from "@/components/ui/styles";
-import { dateTimeFormat, type Feedback, FeedbackLine } from "@/features/recruitment/shared";
+import { dateTimeFormat, type Feedback, FeedbackLine, pillClass } from "@/features/recruitment/shared";
 import {
   createSynthesis,
   getSyntheses,
   KIND_LABELS,
   listAssessments,
   STATUS_LABELS,
+  type Synthesis,
   SYNTHESIS_SECTIONS,
+  VERDICT_LABELS,
 } from "@/lib/api/assessments";
 import { listCalls } from "@/lib/api/calls";
 import { describeError } from "@/lib/api/client";
@@ -23,6 +25,96 @@ const STAGE_KINDS: Record<string, string> = {
   PRUEBA_TECNICA: "PRUEBA_TECNICA",
   ESTUDIO_SOCIOECONOMICO: "ESTUDIO_SOCIOECONOMICO",
 };
+
+const VERDICT_STYLES: Record<string, string> = {
+  RECOMENDABLE: "bg-accent-blue-soft text-accent-blue-ink",
+  RECOMENDABLE_CON_RESERVAS: "bg-neutral-soft text-neutral-ink",
+  NO_RECOMENDABLE: "bg-accent-red-soft text-accent-red-ink",
+};
+
+const lines = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+const words = (value: unknown): string => (typeof value === "string" ? value : "");
+
+function Listed({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <p className="font-medium">{title}</p>
+      <ul className="list-disc pl-5">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Paragraphs({ text }: { text: string }) {
+  return (
+    <>
+      {text.split("\n\n").map((paragraph) => (
+        <p key={paragraph}>{paragraph}</p>
+      ))}
+    </>
+  );
+}
+
+/** La recomendación de la IA: veredicto en palabras, conclusión y razones con su fuente. */
+function Recommendation({ result }: { result: Synthesis["result"] }) {
+  const verdict = words(result.veredicto);
+  return (
+    <section aria-label="Recomendación de la IA" className="flex flex-col gap-2 rounded-2xl bg-white/60 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h4 className="text-lg font-medium">Recomendación de la IA</h4>
+        {verdict ? (
+          <span className={`${pillClass} ${VERDICT_STYLES[verdict] ?? ""}`}>
+            {VERDICT_LABELS[verdict] ?? verdict}
+          </span>
+        ) : (
+          <span className={`${pillClass} bg-neutral-soft text-neutral-ink`}>Sin veredicto</span>
+        )}
+      </div>
+      <p className="text-sm text-ink-muted">
+        Generado por IA. No es una decisión: no mueve ni cierra la postulación. Decide una
+        persona, que puede no estar de acuerdo.
+      </p>
+      {!verdict && (
+        <p>La IA no emitió un veredicto en esta síntesis. Genera una nueva para obtenerlo.</p>
+      )}
+      {words(result.conclusion) && <Paragraphs text={words(result.conclusion)} />}
+      <Listed title="Razones" items={lines(result.razones)} />
+    </section>
+  );
+}
+
+/** El análisis de cierre que redactó la IA cuando una persona marcó «No viable». */
+function ClosingAnalysis({ result }: { result: Synthesis["result"] }) {
+  return (
+    <section aria-label="Análisis de cierre" className="flex flex-col gap-2 rounded-2xl bg-white/60 p-4">
+      <h4 className="text-lg font-medium">Análisis de cierre</h4>
+      <p className="text-sm text-ink-muted">
+        Generado por IA a partir del expediente. La decisión, la etapa y el motivo los
+        registró una persona.
+      </p>
+      <dl className="grid gap-2 sm:grid-cols-3">
+        <div>
+          <dt className="text-sm text-ink-muted">Resultado</dt>
+          <dd>{words(result.resultado)}</dd>
+        </div>
+        <div>
+          <dt className="text-sm text-ink-muted">Etapa en la que se quedó</dt>
+          <dd>{words(result.etapa)}</dd>
+        </div>
+        <div>
+          <dt className="text-sm text-ink-muted">Motivo</dt>
+          <dd>{words(result.motivo)}</dd>
+        </div>
+      </dl>
+      <Paragraphs text={words(result.analisis_de_cierre)} />
+    </section>
+  );
+}
 
 /** Estados con los que una evaluación ya aporta un resultado al expediente. */
 const SETTLED_STATUSES = new Set(["PRESENTADA", "VALIDADA", "REALIZADA", "COMPLETADO", "NO_APLICA"]);
@@ -50,18 +142,22 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
   const [shownId, setShownId] = useState("");
 
   const aiWait = useAiWait();
+  // Una postulación cerrada sin contratación recibe un análisis de cierre.
+  const closed = !["ACTIVA", "CONTRATADA"].includes(detail.application.status);
   async function synthesize(automatic = false) {
     setBusy(true);
     setFeedback(null);
     try {
-      await aiWait.run(() => createSynthesis(applicationId));
+      await aiWait.run(() => createSynthesis(applicationId, closed));
       await queryClient.invalidateQueries({ queryKey: synthesisKey });
       setShownId("");
       setFeedback({
         kind: "ok",
         text: automatic
           ? "La síntesis se actualizó sola con lo que acabas de registrar."
-          : "Síntesis lista.",
+          : closed
+            ? "Análisis de cierre listo."
+            : "Síntesis y recomendación listas.",
       });
     } catch (caught) {
       setFeedback({
@@ -125,7 +221,7 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
           `${KIND_LABELS[item.kind]}: ${STATUS_LABELS[item.status] ?? item.status}${item.file_id ? ", con documento" : ""}`,
       );
     if (assessments.data?.restricted.some((item) => item === assessmentKind)) {
-      found.push("Existe, pero requiere un permiso adicional para consultarse");
+      found.push("Existe, pero tu acceso no permite consultarla");
     }
     return found;
   }
@@ -169,27 +265,34 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
       </ol>
 
       <div className="flex flex-col gap-3 border-t border-line pt-4">
-        <h3 className="text-lg font-medium">Síntesis del expediente con IA</h3>
+        <h3 className="text-lg font-medium">Síntesis y recomendación de la IA</h3>
         <p className="text-sm text-ink-muted">
-          Ordena lo que hay en el expediente según de dónde viene, explica qué aportó cada etapa
-          frente a las anteriores, en qué coinciden o difieren las fuentes, y propone qué
-          preguntar en la siguiente. Razona con los datos, pero no valora ni decide: no calcula
-          ninguna puntuación ni índice y no recomienda una decisión.
-          Se actualiza sola cuando cierras una llamada o registras el resultado de una
-          evaluación. La psicometría solo entra si un profesional la validó; del estudio
-          socioeconómico solo entran las descripciones de sus fotografías.
+          Ordena lo que hay en el expediente según de dónde viene, señala los puntos de
+          atención de cada etapa, contrasta las fuentes que no coinciden y da una
+          recomendación en palabras (recomendable, con reservas o no recomendable) con sus
+          razones. Es una opinión generada por IA: no calcula ninguna puntuación y no mueve ni
+          cierra la postulación; la decisión es tuya. Se actualiza sola cuando cierras una
+          llamada o registras el resultado de una evaluación. Entran la prueba psicométrica
+          presentada, con las escalas que la IA leyó de su reporte, y del estudio
+          socioeconómico solo las descripciones de sus fotografías, por lo que dicen de orden
+          y organización.
         </p>
         {canEdit && (
           <button type="button" className={`${primaryButtonClass} self-start`} disabled={busy} onClick={() => synthesize()}>
-            {busy ? "Consultando a la IA…" : latest ? "Generar una síntesis nueva" : "Generar síntesis"}
+            {busy
+              ? "Consultando a la IA…"
+              : closed
+                ? "Generar análisis de cierre"
+                : latest
+                  ? "Generar una síntesis nueva"
+                  : "Generar síntesis"}
           </button>
         )}
         <AiWaitNotice wait={aiWait} />
         <FeedbackLine feedback={feedback} />
         {syntheses.data?.hidden && (
           <p className="rounded-2xl bg-surface px-4 py-3">
-            Hay una síntesis más reciente que incluye psicometría o fotografías del estudio; verla requiere un permiso
-            adicional sobre la vacante.
+            Hay una síntesis más reciente que tu acceso no permite consultar.
           </p>
         )}
         {history.length > 1 && (
@@ -223,20 +326,14 @@ export function DossierSection({ detail, canEdit }: { detail: ApplicationDetail;
               {dateTimeFormat.format(new Date(shown.created_at))} · {shown.created_by_name ?? "Sin datos"} ·
               fuentes: {shown.sources.join(", ")}
             </p>
-            {SYNTHESIS_SECTIONS.map(([key, label]) => {
-              const items = shown.result[key] ?? [];
-              if (items.length === 0) return null;
-              return (
-                <div key={key}>
-                  <p className="font-medium">{label}</p>
-                  <ul className="list-disc pl-5">
-                    {items.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
+            {shown.result.tipo === "CIERRE" ? (
+              <ClosingAnalysis result={shown.result} />
+            ) : (
+              <Recommendation result={shown.result} />
+            )}
+            {SYNTHESIS_SECTIONS.map(([key, label]) => (
+              <Listed key={key} title={label} items={lines(shown.result[key])} />
+            ))}
           </div>
         )}
       </div>

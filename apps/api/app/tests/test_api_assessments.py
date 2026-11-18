@@ -171,19 +171,32 @@ def test_los_formularios_se_validan_y_un_dato_solo_lo_verifica_una_persona():
             rules.template_sections(bad)
 
 
-def test_la_sintesis_descarta_puntuaciones_y_recomendaciones():
-    result = assistant.synthesis_from_answer(
-        json.dumps(
-            {
-                "hechos_documentados": ["Analista en Uno SA (CV)", "Analista en Uno SA (CV)", 5],
-                "declaraciones": ["Dijo tres años (llamada 1)"],
-                "idoneidad": 87,
-                "recomendacion": "Contratar",
-            }
-        )
-    )
+def test_la_sintesis_descarta_puntuaciones_y_solo_admite_los_tres_veredictos():
+    answer = {
+        "hechos_documentados": ["Analista en Uno SA (CV)", "Analista en Uno SA (CV)", 5],
+        "declaraciones": ["Dijo tres años (llamada 1)"],
+        "idoneidad": 87,
+        "recomendacion": "Contratar",
+        "veredicto": "apto",
+    }
+    result = assistant.synthesis_from_answer(json.dumps(answer))
     assert set(result) == set(assistant.SYNTHESIS_LISTS)
     assert result["hechos_documentados"] == ["Analista en Uno SA (CV)"]
+    # Un veredicto fuera de las tres opciones no se conserva; uno válido, sí.
+    assert result["veredicto"] == "" and result["razones"] == []
+    valid = {
+        **answer,
+        "veredicto": "recomendable con reservas",
+        "razones": ["Tres años en nómina (CV)", *[f"Razón {n}" for n in range(30)]],
+        "conclusion": "Cumple lo indispensable.\n\nFalta confirmar el motivo de salida.",
+        "puntos_de_atencion": ["CV: criterio C2 en nivel 1 (CV)"],
+        "contrastes": ["Antigüedad: 3 años (CV); 2 años (llamada 1). Conclusión: aclarar."],
+    }
+    result = assistant.synthesis_from_answer(json.dumps(valid))
+    assert result["veredicto"] == "RECOMENDABLE_CON_RESERVAS"
+    assert len(result["razones"]) == assistant.MAX_REASONS
+    assert result["conclusion"].count("\n\n") == 1 and result["contrastes"]
+    assert result["puntos_de_atencion"] == ["CV: criterio C2 en nivel 1 (CV)"]
     with pytest.raises(assistant.InvalidAnswerError):
         assistant.synthesis_from_answer(json.dumps({"idoneidad": 87}))
 
@@ -306,6 +319,9 @@ def test_psicometria_estados_validacion_profesional_y_resumen_del_documento(
     summary = summarized.json()["ai_summary"]
     assert summary["resumen"].startswith("El reporte") and set(summary) == {
         "resumen",
+        "escalas",
+        "revisar_en_el_reporte",
+        "puntos_de_atencion",
         "resultados_documentados",
         "interpretacion",
         "datos_no_legibles",
@@ -318,11 +334,12 @@ def test_psicometria_estados_validacion_profesional_y_resumen_del_documento(
     _, system, user = fake.prompts[0]
     assert system == assistant.PSYCHOMETRIC_SYSTEM and "percentil 70" in user
     rules_text = " ".join(system.split())
-    assert "ya fue aplicada e interpretada por un profesional" in rules_text
+    assert "su texto y, cuando se adjuntan, la imagen de sus páginas" in rules_text
     assert "no agregues significados que no se apoyen en su texto" in rules_text
     assert "consúltalo con el profesional" in rules_text
     assert "No diagnostiques ninguna condición psicológica ni de salud" in rules_text
-    assert "No declares si la persona es apta, no apta" in rules_text
+    assert "nunca que la persona tiene, padece o hace algo" in rules_text
+    assert "No declares aquí si la persona es apta, no apta" in rules_text
     assert "nunca de edad, estado civil, hijos, embarazo, religión, salud" in rules_text
     assert recruiter.post(url).status_code == 503
     test = recruiter.get(f"{API}/assessments/{test['id']}").json()
@@ -350,7 +367,10 @@ def test_psicometria_estados_validacion_profesional_y_resumen_del_documento(
     )
 
 
-def test_la_psicometria_y_el_estudio_exigen_el_permiso_adicional(ana, recruiter, vacancy_id, other):
+def test_quien_tiene_la_vacante_compartida_ve_la_psicometria_y_el_estudio(
+    ana, recruiter, vacancy_id, other
+):
+    """Decisión del titular (18 nov 2026): compartir la vacante da acceso a todo."""
     other_client, other_id = other
     psychometric = create(recruiter, ana, "PSICOMETRIA", data={"instrument": "Prueba X"}).json()
     interview = create(
@@ -363,35 +383,33 @@ def test_la_psicometria_y_el_estudio_exigen_el_permiso_adicional(ana, recruiter,
     assert other_client.get(f"{API}/applications/{ana}/assessments").status_code == 404
     assert other_client.get(f"{API}/assessments/{interview['id']}").status_code == 404
 
-    # Con colaboración se trabaja la entrevista, pero no se ve lo sensible.
+    # Con colaboración se ve y se trabaja todo, también la psicometría y el estudio,
+    # sin ningún permiso adicional.
     share(recruiter, vacancy_id, other_id, "COLABORACION")
-    seen = listing(other_client, ana)
-    assert [item["kind"] for item in seen["items"]] == ["ENTREVISTA"]
-    assert seen["restricted"] == ["ESTUDIO_SOCIOECONOMICO", "PSICOMETRIA"]
-    assert seen["writable"] == ["ENTREVISTA", "PRUEBA_TECNICA", "REFERENCIAS"]
-    for item in (psychometric, study):
-        assert other_client.get(f"{API}/assessments/{item['id']}").status_code == 403
-        assert update(other_client, item).status_code == 403
-    assert create(other_client, ana, "PSICOMETRIA", data={"instrument": "Otra"}).status_code == 403
-    assert (
-        create(other_client, ana, "PRUEBA_TECNICA", data={"test_type": "Excel"}).status_code == 201
-    )
-
-    # El permiso adicional es por clase: psicometría sí, estudio no.
-    grants = f"{API}/vacancies/{vacancy_id}/members/{other_id}/sensitive-grants"
-    recruiter.put(grants, json={"document_classes": ["PSICOMETRIA"]})
     seen = listing(other_client, ana)
     assert {item["kind"] for item in seen["items"]} == {
         "ENTREVISTA",
         "PSICOMETRIA",
-        "PRUEBA_TECNICA",
+        "ESTUDIO_SOCIOECONOMICO",
     }
-    assert seen["restricted"] == ["ESTUDIO_SOCIOECONOMICO"]
+    assert seen["restricted"] == []
+    assert set(seen["writable"]) == {
+        "ENTREVISTA",
+        "PRUEBA_TECNICA",
+        "REFERENCIAS",
+        "PSICOMETRIA",
+        "ESTUDIO_SOCIOECONOMICO",
+    }
+    for item in (psychometric, study):
+        assert other_client.get(f"{API}/assessments/{item['id']}").status_code == 200
     assert update(other_client, psychometric, status="PRESENTADA").status_code == 200
-    # Con lectura y permiso se consulta, pero no se captura.
+    assert create(other_client, ana, "PSICOMETRIA", data={"instrument": "Otra"}).status_code == 201
+
+    # Con lectura se consulta todo, pero no se captura nada.
     share(recruiter, vacancy_id, other_id, "LECTURA")
-    recruiter.put(grants, json={"document_classes": ["PSICOMETRIA"]})
-    assert other_client.get(f"{API}/assessments/{psychometric['id']}").status_code == 200
+    for item in (psychometric, study):
+        assert other_client.get(f"{API}/assessments/{item['id']}").status_code == 200
+        assert update(other_client, item).status_code == 403
     assert listing(other_client, ana)["writable"] == []
     assert create(other_client, ana, "ENTREVISTA", data={"interviewer": "X"}).status_code == 403
 
@@ -764,15 +782,24 @@ def test_sintesis_del_expediente_por_tipo_de_fuente_sin_puntuar(
     assert created.status_code == 201, created.text
     synthesis = created.json()
     assert set(synthesis["result"]) == set(assistant.SYNTHESIS_LISTS)  # sin índice de idoneidad
-    assert synthesis["sources"] == ["CV", "1 llamadas", "1 pruebas técnicas", "1 entrevistas"]
-    assert synthesis["includes_psychometrics"] is False
+    assert synthesis["sources"] == [
+        "CV",
+        "1 llamadas",
+        "1 pruebas técnicas",
+        "1 entrevistas",
+        "1 pruebas psicométricas",
+    ]
+    assert synthesis["includes_psychometrics"] is True
     _, system, user = fake.prompts[0]
     assert system == assistant.SYNTHESIS_SYSTEM
     assert "Calculé nómina tres años." in user and "Recomiendo continuar." in user
     assert "Calificación calculada: 75.00 de 100" in user and "Uno SA (2020-01 a 2022-06)" in user
-    # La psicometría sin validar y el contenido del estudio socioeconómico NUNCA entran.
-    assert "SECRETO-SIN-VALIDAR" not in user and "DOMICILIO-SECRETO" not in user
-    assert "Prueba psicométrica sin validar por un profesional" in user
+    # La evaluación del CV entra criterio por criterio, con su nombre y su nivel.
+    assert "EVALUACIÓN DEL CV POR CRITERIO" in user and "resultado: aceptado por la IA" in user
+    # La psicometría presentada entra aunque no la haya validado un profesional, y así se
+    # indica. El contenido del estudio socioeconómico NUNCA entra.
+    assert "PRUEBA PSICOMÉTRICA (sin validar por un profesional): Prueba X" in user
+    assert "Interpretación de" not in user and "DOMICILIO-SECRETO" not in user
     assert "Estudio socioeconómico en estado EN_PROCESO" in user
     # Tampoco el nombre ni el contacto de la persona.
     assert "Ana Pérez" not in user and "ana@ejemplo.test" not in user
@@ -794,29 +821,28 @@ def test_sintesis_del_expediente_por_tipo_de_fuente_sin_puntuar(
     fake.script = [reply(SYNTHESIS), reply({"indice": 90})]
     second = recruiter.post(url).json()
     assert (
-        second["includes_psychometrics"] is True
-        and "1 pruebas psicométricas validadas" in second["sources"]
+        second["includes_psychometrics"] is True and "1 pruebas psicométricas" in second["sources"]
     )
     assert "Interpretación de Psic. Laura Ficticia: Adecuado para el puesto." in fake.prompts[0][2]
     assert recruiter.post(url).status_code == 503  # una respuesta sin las listas no sirve
     view = recruiter.get(url).json()
     assert view["total"] == 2 and view["latest"]["id"] == second["id"] and view["hidden"] is False
 
-    # Quien no tiene el permiso de psicometría no ve la síntesis que la incluye, ni la provoca.
+    # Sin la vacante compartida no existe; con ella se ve todo, también la psicometría.
     assert other_client.get(url).status_code == 404
     share(recruiter, vacancy_id, other_id, "LECTURA")
-    limited = other_client.get(url).json()
+    shared = other_client.get(url).json()
     assert (
-        limited["latest"]["id"] == synthesis["id"]
-        and limited["total"] == 1
-        and limited["hidden"] is True
+        shared["latest"]["id"] == second["id"]
+        and shared["total"] == 2
+        and shared["hidden"] is False
     )
-    assert other_client.post(url).status_code == 403
+    assert other_client.post(url).status_code == 403  # con lectura no se genera
     share(recruiter, vacancy_id, other_id, "COLABORACION")
     fake.prompts = []
     fake.script = [reply(SYNTHESIS)]
     mine = other_client.post(url).json()
-    assert mine["includes_psychometrics"] is False and "Psic. Laura" not in fake.prompts[0][2]
+    assert mine["includes_psychometrics"] is True and "Psic. Laura" in fake.prompts[0][2]
     events = audit(admin, "expediente.sintetizado")
     assert {e["result"] for e in events} == {"PERMITIDO", "FALLIDO"}
 

@@ -9,7 +9,12 @@ from typing import Any
 
 from app.composition.file_access import VacancyFileAccessPolicy, is_study_analyst
 from app.core.security.master_key import DecryptionError, MasterKey
-from app.infrastructure.documents.photos import PHOTO_EXTENSIONS, PhotoError, prepare_photo
+from app.infrastructure.documents.photos import (
+    PHOTO_EXTENSIONS,
+    PhotoError,
+    pdf_pages,
+    prepare_photo,
+)
 from app.infrastructure.documents.text import Ocr, TextExtractionError, extract_text
 from app.infrastructure.documents.xlsx_template import TemplateError
 from app.infrastructure.storage.local import LocalFileStorage, StorageError, build_key
@@ -20,6 +25,7 @@ from app.modules.assessments.domain.models import (
     Actor,
     ApplicationRef,
     AssistantAnswer,
+    Closure,
     DocumentError,
     DossierMaterial,
     FormTemplateVersion,
@@ -32,7 +38,11 @@ from app.modules.cv_processing.domain.models import CvBatchRepository
 from app.modules.evaluation_setup.domain.models import EvaluationSetupRepository
 from app.modules.file_management.domain.models import DocumentType, FileRepository, FileStatus
 from app.modules.phone_calls.domain.models import PhoneCallRepository
-from app.modules.recruitment.domain.models import ApplicationStatus, RecruitmentRepository
+from app.modules.recruitment.domain.models import (
+    ApplicationStatus,
+    OutcomeKind,
+    RecruitmentRepository,
+)
 from app.modules.vacancies.domain.models import VacancyRepository
 
 _DOCUMENT_TYPES = {
@@ -41,6 +51,13 @@ _DOCUMENT_TYPES = {
     Kind.ESTUDIO_SOCIOECONOMICO: DocumentType.ESTUDIO_SOCIOECONOMICO,
     Kind.ENTREVISTA: DocumentType.ADJUNTO,
     Kind.REFERENCIAS: DocumentType.ADJUNTO,
+}
+_OUTCOME_LABELS = {
+    OutcomeKind.NO_CONTRATADO: "No contratado",
+    OutcomeKind.DESISTIO: "Desistió",
+    OutcomeKind.NO_LOCALIZADO: "No localizado",
+    OutcomeKind.VACANTE_CANCELADA: "Vacante cancelada",
+    OutcomeKind.OTRO_CIERRE: "Otro cierre",
 }
 _UNREADABLE = {
     "sin_texto": "No se encontró texto legible en el documento.",
@@ -131,13 +148,41 @@ class AssessmentApplications:
                         "fecha": call.called_at.date().isoformat(),
                         "preguntas": rows,
                         "observaciones": call.notes,
+                        "atencion": (call.analysis or {}).get("puntos_de_atencion") or [],
                     }
                 )
+        names: dict[str, str] = {}
+        batch = self._batches.get_batch(item.batch_id) if item else None
+        version = self._setup.prompt_version(batch.prompt_version_id) if batch else None
+        if version is not None:
+            names = {criterion.code: criterion.name for criterion in version.criteria}
         return DossierMaterial(
             requirements=requirements,
             cv=(item.extraction if item else None) or {},
             evaluation=(item.result if item else None) or {},
             calls=tuple(calls),
+            cv_classification=application.ai_classification or "",
+            cv_score=str(application.ai_score) if application.ai_score is not None else "",
+            criteria_names=names,
+        )
+
+    def closure(self, application_id: uuid.UUID) -> Closure | None:
+        application = self._recruitment.application(application_id)
+        if application is None or application.status is ApplicationStatus.ACTIVA:
+            return None
+        outcome = self._recruitment.current_outcome(application.id)
+        if outcome is None or outcome.outcome is OutcomeKind.CONTRATADO:
+            return None
+        campaign = self._recruitment.campaign(application.campaign_id)
+        pipeline = self._recruitment.pipeline(campaign.pipeline_version_id) if campaign else None
+        stage = next(
+            (s.name for s in (pipeline.stages if pipeline else ()) if s.id == application.stage_id),
+            "Sin datos",
+        )
+        return Closure(
+            stage=stage,
+            outcome=_OUTCOME_LABELS.get(outcome.outcome, outcome.outcome.value),
+            reason=outcome.reason or "Sin motivo escrito",
         )
 
 
@@ -193,6 +238,18 @@ class AssessmentDocuments:
         except TextExtractionError as error:
             raise DocumentError(_UNREADABLE[error.code]) from error
         return found.text, found.ocr
+
+    def read_pages(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> tuple[Photo, ...]:
+        try:
+            extension, content = self._content(vacancy_id, file_id)
+            if extension == "pdf":
+                return tuple(Photo("image/jpeg", page) for page in pdf_pages(content))
+            if extension in PHOTO_EXTENSIONS:
+                return (Photo("image/jpeg", prepare_photo(content)),)
+        except (DocumentError, PhotoError):
+            # Sin imágenes se sigue con el texto: no es motivo para detener el resumen.
+            pass
+        return ()
 
     def read_photo(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> Photo:
         extension, content = self._content(vacancy_id, file_id)

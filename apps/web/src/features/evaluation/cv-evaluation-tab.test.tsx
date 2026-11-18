@@ -65,7 +65,14 @@ function makeItem(overrides: Partial<CvBatchItem> = {}): CvBatchItem {
 
 function makeOverview(overrides: Partial<CvOverview> = {}): CvOverview {
   return {
-    approved_prompt: { id: "p1", version_number: 2, pass_threshold: "60.00", criteria: 5 },
+    approved_prompt: {
+      id: "p1",
+      version_number: 2,
+      pass_threshold: "60.00",
+      criteria: 5,
+      instructions: "Eres analista de selección.\nRÚBRICA\nC1. Experiencia en nómina (peso 3)",
+      cv_message: "Evalúa el siguiente CV con la rúbrica.\n<<<CV\n[Aquí va el texto de cada CV]\nCV>>>",
+    },
     total_cvs: 3,
     pending_cvs: 3,
     batches: [],
@@ -159,6 +166,20 @@ describe("CvEvaluationTab", () => {
     expect(posts.every((url) => url.includes("document_type=CV"))).toBe(true);
     // El conteo se actualiza y ya se pueden evaluar.
     expect(await screen.findByRole("button", { name: "Evaluar 2 CV" })).toBeTruthy();
+  });
+
+  it("deja ver el prompt completo con el que se evaluarán los CV", async () => {
+    mockApi({ [`GET ${OVERVIEW_URL}`]: { body: makeOverview() } });
+    const user = userEvent.setup();
+    renderTab();
+    await user.click(await screen.findByText("Ver el prompt con el que se evaluarán los CV"));
+    expect(screen.getByLabelText("Instrucciones y rúbrica").textContent).toContain(
+      "C1. Experiencia en nómina (peso 3)",
+    );
+    expect(screen.getByLabelText("Mensaje que acompaña a cada CV").textContent).toContain(
+      "[Aquí va el texto de cada CV]",
+    );
+    expect(screen.getByText(/las instrucciones de la versión 2 aprobada/)).toBeTruthy();
   });
 
   it("con CV evaluados ofrece pasar a los candidatos", async () => {

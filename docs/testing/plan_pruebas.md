@@ -28,7 +28,7 @@ Ninguna funcionalidad se da por terminada sin pruebas automatizadas, y todas usa
 5. Un usuario desactivado pierde sus sesiones.
 6. El administrador puede transferir vacantes.
 7. Una transferencia no pierde documentos.
-8. Los archivos sensibles exigen el permiso adicional.
+8. Los archivos sensibles se ven solo con la vacante compartida (hasta el 18 nov 2026 exigían además un permiso adicional).
 9. Las API keys no aparecen en respuestas ni en logs.
 10. Los reportes históricos respetan los permisos vigentes.
 
@@ -49,9 +49,9 @@ Lo que sigue describe las pruebas que existen hoy y dónde están. Todas corren 
 ### Cómo ejecutarlas
 
 ```bash
-cd apps/api && pytest            # 405 pruebas de la API
+cd apps/api && pytest            # 410 pruebas de la API
 cd apps/worker && pytest         # 5 pruebas del worker
-cd apps/web && npm test          # 122 pruebas de pantallas
+cd apps/web && npm test          # 125 pruebas de pantallas
 python scripts/generate_docs.py --check   # la documentación generada está al día
 python scripts/medir_rendimiento.py       # medición con volumen sintético
 python tests/e2e/run.py                   # seis recorridos en navegador (requiere las pantallas compiladas)
@@ -68,7 +68,7 @@ python tests/e2e/run.py                   # seis recorridos en navegador (requie
 | 5 | Un usuario desactivado pierde sus sesiones | `test_api_auth_users.py::test_un_usuario_desactivado_pierde_sus_sesiones_y_no_puede_entrar` |
 | 6 | El administrador transfiere vacantes | `test_api_vacancies.py::test_seguridad_6_y_7_…` |
 | 7 | Una transferencia no pierde documentos | `test_api_files.py::test_una_transferencia_no_pierde_los_documentos` y el flujo completo |
-| 8 | Los archivos sensibles exigen el permiso adicional | `test_api_files.py::test_seguridad_8_…` y `test_api_vacancies.py::test_seguridad_8_…` |
+| 8 | Los archivos sensibles se ven solo con la vacante compartida | `test_api_files.py::test_seguridad_8_…` y `test_api_vacancies.py::test_seguridad_8_…` |
 | 9 | Las API keys no aparecen en respuestas ni en registros | `test_api_ai_settings.py::test_seguridad_9_…` |
 | 10 | Los reportes históricos respetan los permisos vigentes | `test_api_reporting.py::test_cada_persona_ve_solo_sus_vacantes_y_el_administrador_todas` |
 
