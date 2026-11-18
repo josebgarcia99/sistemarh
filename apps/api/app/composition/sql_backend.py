@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.composition.backend import Repositories
 from app.composition.study_queue import SqlStudyQueue
+from app.composition.vacancy_deletion import SqlVacancyPurge
 from app.modules.ai_settings.infrastructure.sql_repository import SqlAiRepository
 from app.modules.assessments.infrastructure.sql_repository import SqlAssessmentRepository
 from app.modules.audit.infrastructure.sql_repository import SqlAuditRepository
@@ -49,6 +50,7 @@ class SqlBackend:
                 assessments=SqlAssessmentRepository(session),
                 reporting=SqlReportingSource(session),
                 study_queue=SqlStudyQueue(session),
+                vacancy_purge=SqlVacancyPurge(session),
             )
             session.commit()
         except BaseException:

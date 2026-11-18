@@ -177,6 +177,7 @@ Si Sistemas prefiere ejecutar T-SQL en lugar de Alembic, los scripts equivalente
 | `actualizacion_0016_a_0017.sql` | Base que ya tiene la versión `0016` |
 | `actualizacion_0017_a_0018.sql` | Base que ya tiene la versión `0017` |
 | `permisos_usuario_aplicacion.sql` | Plantilla de permisos mínimos para el usuario de la aplicación |
+| `permisos_eliminar_vacantes.sql` | Solo para una base instalada antes del 18 de noviembre de 2026: da el permiso de borrado que necesita «Eliminar vacante». En una instalación nueva ya va incluido en la plantilla anterior |
 | `validaciones_integridad.sql` | Solo lectura. Comprueba la coherencia de los datos tras instalar, actualizar o restaurar: todas las filas deben dar 0 |
 | `reversion_completa.sql` | Elimina todo. Solo para bases de prueba |
 

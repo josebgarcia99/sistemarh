@@ -40,6 +40,24 @@ Menú «Bajas»:
 
 La cuenta queda desactivada, no borrada: lo que esa persona hizo sigue apareciendo a su nombre en los historiales.
 
+## Eliminar una vacante
+
+Solo los administradores ven esta opción. Es la única operación del sistema que **borra de verdad** datos de reclutamiento, y **no se puede deshacer**: no hay papelera. Está pensada para quitar vacantes de prueba o creadas por error.
+
+1. En «Vacantes», abre la vacante. Al final del panel está «Eliminar vacante».
+2. El sistema te muestra qué contiene y se borraría: postulaciones, candidatos, CV evaluados, llamadas, evaluaciones, síntesis y documentos.
+3. Escribe el nombre de la vacante para confirmar y pulsa «Eliminar definitivamente».
+
+Qué se borra: la vacante, su perfil y sus prompts; los lotes de CV con sus evaluaciones; las postulaciones con su historial de etapas; las llamadas; las evaluaciones posteriores (psicometría, entrevista, prueba técnica, referencias, estudio socioeconómico); las síntesis; los resultados finales; todos sus documentos, también el archivo guardado en el servidor; y los permisos sobre la vacante.
+
+Qué conviene saber:
+
+- **Candidatos.** Una persona se borra solo si no tiene postulación en otra vacante. Si está en otra, se conserva.
+- **Lo que no se borra.** El registro de auditoría (incluido quién eliminó la vacante, cuándo y qué contenía), el costo de IA ya registrado y los reportes que ya se hubieran descargado. Los respaldos anteriores de la base y de los documentos tampoco cambian: lo borrado sigue en ellos hasta que caduquen.
+- **CV en proceso.** Si la vacante tiene un lote de CV procesándose, hay que esperar a que termine o cancelarlo.
+- **Si avisa que la base de datos no lo permite.** En un servidor instalado antes del 18 de noviembre de 2026, Sistemas debe ejecutar una vez el script `permisos_eliminar_vacantes.sql`. Mientras no lo haga, el botón no borra nada.
+- **Para lo que no es una prueba**, lo normal sigue siendo cerrar o cancelar la vacante y archivarla: así se conserva el historial.
+
 ## Inteligencia artificial
 
 Menú «IA». Hasta que configures un proveedor, las funciones de IA no están disponibles; el resto del sistema funciona igual.

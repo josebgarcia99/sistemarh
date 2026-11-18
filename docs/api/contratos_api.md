@@ -2,7 +2,7 @@
 
 > Generado por `scripts/generate_docs.py` a partir del contrato OpenAPI. No editar a mano.
 
-Versión de la API: `0.8.0`. Rutas: 113. Todas cuelgan de `/api/v1`.
+Versión de la API: `0.8.0`. Rutas: 115. Todas cuelgan de `/api/v1`.
 
 **Reglas comunes**
 
@@ -189,6 +189,8 @@ Versión de la API: `0.8.0`. Rutas: 113. Todas cuelgan de `/api/v1`.
 | POST | `/vacancies` | Alta | `VacancyIn` | 201 `app__modules__vacancies__api__schemas__VacancyOut` |
 | GET | `/vacancies/{vacancy_id}` | Detalle | — | 200 `app__modules__vacancies__api__schemas__VacancyOut` |
 | PUT | `/vacancies/{vacancy_id}` | Editar datos | `VacancyUpdateIn` | 200 `app__modules__vacancies__api__schemas__VacancyOut` |
+| GET | `/vacancies/{vacancy_id}/deletion` | Lo que se borraría al eliminar la vacante (solo administradores) | — | 200 `DeletionPreviewOut` |
+| POST | `/vacancies/{vacancy_id}/deletion` | Elimina la vacante con todo su contenido, sin vuelta atrás (solo administradores) | `DeletionIn` | 200 `DeletionOut` |
 | GET | `/vacancies/{vacancy_id}/members` | Con quién está compartida | — | 200 lista de `MemberOut` |
 | PUT | `/vacancies/{vacancy_id}/members/{user_id}` | Compartir o cambiar el tipo de acceso | `MemberIn` | 204 — |
 | DELETE | `/vacancies/{vacancy_id}/members/{user_id}` | Revocar el acceso | — | 204 — |

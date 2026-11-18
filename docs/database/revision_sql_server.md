@@ -62,7 +62,7 @@ Los tableros no tienen tablas de cifras: se calculan al consultarlos. Con un per
 
 ## Permisos
 
-`permisos_usuario_aplicacion.sql` da al usuario de la aplicación lo mínimo por esquema y le niega modificar o borrar la auditoría y el historial de movimientos. **Por comprobar:** ejecutar la aplicación completa con ese usuario y confirmar que no le falta ni le sobra ningún permiso. La aplicación nunca debe conectarse con un usuario administrador.
+`permisos_usuario_aplicacion.sql` da al usuario de la aplicación lo mínimo por esquema y le niega modificar o borrar la auditoría y modificar el historial de movimientos. Desde el 18 de noviembre de 2026 le permite además borrar, tabla por tabla, lo que toca la eliminación de una vacante (`permisos_eliminar_vacantes.sql` aplica lo mismo a una base ya instalada). **Por comprobar:** ejecutar la aplicación completa con ese usuario y confirmar que no le falta ni le sobra ningún permiso. La aplicación nunca debe conectarse con un usuario administrador.
 
 ## Lista para Sistemas
 

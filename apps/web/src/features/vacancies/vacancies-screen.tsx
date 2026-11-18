@@ -59,6 +59,8 @@ export function VacanciesScreen() {
   const [creating, setCreating] = useState(false);
   // Aviso de alta: se muestra dentro del panel de la vacante recién creada.
   const [created, setCreated] = useState<{ id: string; message: string } | null>(null);
+  // Aviso tras eliminar una vacante: su panel ya no existe, se muestra sobre la lista.
+  const [deleted, setDeleted] = useState<string | null>(null);
   // Vacante cuyo perfil y prompt se están editando; ocupa toda la pantalla.
   const [evaluating, setEvaluating] = useState<{ vacancy: Vacancy; tab: EvaluationTab } | null>(
     null,
@@ -181,6 +183,11 @@ export function VacanciesScreen() {
             </select>
           </div>
 
+          {deleted && (
+            <p role="status" className="rounded-tile bg-accent-blue-soft px-5 py-4 text-accent-blue-ink">
+              {deleted}
+            </p>
+          )}
           {error ? (
             <p role="alert" className="rounded-tile bg-accent-red-soft px-5 py-4 text-accent-red-ink">
               {describeError(error)}
@@ -293,6 +300,11 @@ export function VacanciesScreen() {
               onOpenEvaluation={(vacancy, tab) => setEvaluating({ vacancy, tab })}
               onOpenCandidates={setRecruiting}
               onClose={() => setSelectedId(null)}
+              onDeleted={(message) => {
+                setSelectedId(null);
+                setDeleted(message);
+                void queryClient.invalidateQueries({ queryKey: ["vacancies"] });
+              }}
             />
           </div>
         )}

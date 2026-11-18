@@ -129,3 +129,32 @@ class SensitiveGrantsIn(BaseModel):
 
 class SensitiveGrantsOut(BaseModel):
     document_classes: list[SensitiveClass]
+
+
+class DeletionPreviewOut(BaseModel):
+    """Lo que contiene la vacante y se borraría con ella."""
+
+    name: str
+    status: str
+    applications: int
+    # Candidatos que no tienen postulación en otra vacante.
+    candidates: int
+    cv_files: int
+    calls: int
+    assessments: int
+    syntheses: int
+    documents: int
+    # Lotes de CV en proceso: mientras haya, no se puede eliminar.
+    active_batches: int
+
+
+class DeletionIn(BaseModel):
+    # El nombre de la vacante, escrito por quien confirma.
+    confirm_name: str = Field(max_length=200)
+
+
+class DeletionOut(DeletionPreviewOut):
+    # Archivos quitados del servidor y los que no se pudieron quitar (los
+    # recoge la conciliación del almacenamiento).
+    files_removed: int
+    files_pending: int

@@ -18,7 +18,10 @@ import {
   type AccessType,
   accessTypeSchema,
   changeVacancyStatus,
+  type DeletionPreview,
+  deleteVacancy,
   type DirectoryEntry,
+  getDeletionPreview,
   getVacancy,
   listMembers,
   type Member,
@@ -54,6 +57,8 @@ type Props = {
   onOpenEvaluation?: (vacancy: Vacancy, tab: EvaluationTab) => void;
   /** Abre los candidatos de la vacante: etapas, movimientos y llamadas. */
   onOpenCandidates?: (vacancy: Vacancy) => void;
+  /** La vacante se eliminó: ya no hay panel que mostrar. */
+  onDeleted?: (message: string) => void;
 };
 
 /** Panel de una vacante: datos, estado, con quién se comparte e historial. */
@@ -63,11 +68,12 @@ export function VacancyPanel({
   initialNotice,
   onOpenEvaluation,
   onOpenCandidates,
+  onDeleted,
 }: Props) {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<"edit" | "transfer" | null>(null);
+  const [dialog, setDialog] = useState<"edit" | "transfer" | "delete" | null>(null);
 
   const vacancyQuery = useQuery({
     queryKey: ["vacancy", vacancyId],
@@ -330,6 +336,39 @@ export function VacancyPanel({
         </ol>
       </section>
 
+      {isAdmin && (
+        <section aria-labelledby="delete-title" className="flex flex-col gap-3 border-t border-line pt-5">
+          <h3 id="delete-title" className="text-lg font-medium">
+            Eliminar vacante
+          </h3>
+          <p className="text-sm text-ink-muted">
+            Borra de forma definitiva la vacante con todo lo que contiene: CV, candidatos, llamadas,
+            evaluaciones y documentos. No se puede deshacer. Solo los administradores ven esta opción.
+          </p>
+          <div>
+            <button type="button" className={dangerButtonClass} onClick={() => setDialog("delete")}>
+              Eliminar vacante
+            </button>
+          </div>
+        </section>
+      )}
+
+      {dialog === "delete" && (
+        <Modal
+          title="Eliminar vacante"
+          description={`Vas a eliminar «${vacancy.name}». No hay papelera: lo que se borra no se puede recuperar.`}
+          onClose={() => setDialog(null)}
+        >
+          <DeleteVacancyForm
+            vacancy={vacancy}
+            onCancel={() => setDialog(null)}
+            onDone={(message) => {
+              setDialog(null);
+              onDeleted?.(message);
+            }}
+          />
+        </Modal>
+      )}
       {dialog === "edit" && (
         <Modal title="Editar vacante" onClose={() => setDialog(null)}>
           <VacancyForm
@@ -571,6 +610,134 @@ function TransferForm({
         </button>
         <button type="submit" disabled={busy} className={primaryButtonClass}>
           {busy ? "Transfiriendo…" : "Transferir"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Lo que se borra, en palabras: solo se nombran las cosas que sí hay. */
+function describeContents(preview: DeletionPreview): string[] {
+  const plural = (count: number, one: string, many: string) =>
+    `${count} ${count === 1 ? one : many}`;
+  return [
+    preview.applications > 0 && plural(preview.applications, "postulación", "postulaciones"),
+    preview.candidates > 0 &&
+      `${plural(preview.candidates, "candidato", "candidatos")} que no ${preview.candidates === 1 ? "está" : "están"} en otra vacante`,
+    preview.cv_files > 0 && plural(preview.cv_files, "CV evaluado", "CV evaluados"),
+    preview.calls > 0 && plural(preview.calls, "llamada", "llamadas"),
+    preview.assessments > 0 && plural(preview.assessments, "evaluación", "evaluaciones"),
+    preview.syntheses > 0 && plural(preview.syntheses, "síntesis", "síntesis"),
+    preview.documents > 0 && plural(preview.documents, "documento", "documentos"),
+  ].filter(Boolean) as string[];
+}
+
+const sameName = (typed: string, name: string) =>
+  typed.trim().replace(/\s+/g, " ").toLocaleLowerCase() ===
+  name.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+
+function DeleteVacancyForm({
+  vacancy,
+  onDone,
+  onCancel,
+}: {
+  vacancy: Vacancy;
+  onDone: (message: string) => void;
+  onCancel: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const preview = useQuery({
+    queryKey: ["vacancy", vacancy.id, "deletion"],
+    queryFn: ({ signal }) => getDeletionPreview(vacancy.id, signal),
+    // Siempre se consulta de nuevo: lo que se muestra debe ser lo que hay ahora.
+    gcTime: 0,
+    staleTime: 0,
+  });
+  const contents = preview.data ? describeContents(preview.data) : [];
+  const blocked = (preview.data?.active_batches ?? 0) > 0;
+
+  return (
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError(null);
+        try {
+          const result = await deleteVacancy(vacancy.id, typed);
+          onDone(
+            `Se eliminó la vacante «${result.name}» con todo su contenido.` +
+              (result.files_pending > 0
+                ? ` ${result.files_pending} archivos no se pudieron quitar del servidor; avisa a Sistemas.`
+                : ""),
+          );
+        } catch (caught) {
+          setError(describeError(caught));
+          setBusy(false);
+        }
+      }}
+    >
+      {preview.isPending && (
+        <p role="status" className="text-ink-muted">
+          Revisando qué contiene la vacante…
+        </p>
+      )}
+      {preview.error && (
+        <p role="alert" className="rounded-tile bg-accent-red-soft px-5 py-4 text-accent-red-ink">
+          {describeError(preview.error)}
+        </p>
+      )}
+      {preview.data && (
+        <div className="flex flex-col gap-2">
+          <p className="font-medium">Se borrará de forma definitiva:</p>
+          <ul aria-label="Lo que se borrará" className="list-disc pl-6">
+            <li>La vacante, su perfil de puesto y sus prompts.</li>
+            {contents.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+            {contents.length === 0 && <li>No tiene candidatos, llamadas ni documentos.</li>}
+          </ul>
+          <p className="text-sm text-ink-muted">
+            Se conservan el registro de auditoría (incluido quién eliminó la vacante) y el costo de IA
+            ya registrado. Los reportes que ya se hayan descargado no cambian.
+          </p>
+        </div>
+      )}
+      {blocked && (
+        <p role="alert" className="rounded-tile bg-accent-red-soft px-5 py-4 text-accent-red-ink">
+          La vacante tiene CV en proceso. Espera a que termine el lote o cancélalo antes de eliminar.
+        </p>
+      )}
+      <div className="flex flex-col gap-2">
+        <label htmlFor="delete-confirm" className="text-sm text-ink-muted">
+          Para confirmar, escribe el nombre de la vacante: {vacancy.name}
+        </label>
+        <input
+          id="delete-confirm"
+          value={typed}
+          maxLength={200}
+          autoComplete="off"
+          onChange={(event) => setTyped(event.target.value)}
+          className={fieldClass}
+        />
+      </div>
+      {error && (
+        <p role="alert" className="rounded-tile bg-accent-red-soft px-5 py-4 text-accent-red-ink">
+          {error}
+        </p>
+      )}
+      <div className="flex flex-wrap justify-end gap-3">
+        <button type="button" onClick={onCancel} className={secondaryButtonClass}>
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={busy || blocked || !preview.data || !sameName(typed, vacancy.name)}
+          className={dangerButtonClass}
+        >
+          {busy ? "Eliminando…" : "Eliminar definitivamente"}
         </button>
       </div>
     </form>

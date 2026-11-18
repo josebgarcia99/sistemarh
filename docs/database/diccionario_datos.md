@@ -361,7 +361,7 @@ Un CV dentro de un lote, con su resultado. La clasificación es la sugerencia in
 
 ## Esquema `recruitment`: reclutamiento operativo
 
-La aplicación nunca borra filas de este esquema.
+En el uso normal la aplicación no borra filas de este esquema. La única excepción es eliminar una vacante (solo administradores), que borra sus postulaciones, movimientos, llamadas, evaluaciones, síntesis, resultados, campañas y los candidatos que no tengan postulación en otra vacante.
 
 ### `recruitment.pipeline_versions` y `recruitment.pipeline_stages`
 

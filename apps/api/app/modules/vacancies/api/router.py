@@ -11,8 +11,11 @@ import uuid
 from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.composition.context import AppContext, client_ip, get_context
-from app.modules.authentication.api.dependencies import Principal, require_user
+from app.modules.authentication.api.dependencies import Principal, require_admin, require_user
 from app.modules.vacancies.api.schemas import (
+    DeletionIn,
+    DeletionOut,
+    DeletionPreviewOut,
     MemberIn,
     MemberOut,
     SensitiveGrantsIn,
@@ -187,3 +190,66 @@ def set_sensitive_grants(
             ip=client_ip(request),
         )
     return SensitiveGrantsOut(document_classes=classes)
+
+
+def _preview(summary: object) -> dict[str, object]:
+    names = (
+        "name",
+        "status",
+        "applications",
+        "candidates",
+        "cv_files",
+        "calls",
+        "assessments",
+        "syntheses",
+        "documents",
+        "active_batches",
+    )
+    return {name: getattr(summary, name) for name in names}
+
+
+@router.get(
+    "/{vacancy_id}/deletion",
+    response_model=DeletionPreviewOut,
+    summary="Lo que se borraría al eliminar la vacante (solo administradores)",
+)
+def deletion_preview(
+    vacancy_id: uuid.UUID,
+    principal: Principal = Depends(require_admin),  # noqa: B008
+    context: AppContext = Depends(get_context),  # noqa: B008
+) -> DeletionPreviewOut:
+    with context.require_backend().transaction() as repos:
+        summary = context.vacancy_deletion(repos).preview(principal.user, vacancy_id)
+    return DeletionPreviewOut(**_preview(summary))
+
+
+@router.post(
+    "/{vacancy_id}/deletion",
+    response_model=DeletionOut,
+    summary="Elimina la vacante con todo su contenido, sin vuelta atrás (solo administradores)",
+)
+def delete_vacancy(
+    vacancy_id: uuid.UUID,
+    body: DeletionIn,
+    request: Request,
+    principal: Principal = Depends(require_admin),  # noqa: B008
+    context: AppContext = Depends(get_context),  # noqa: B008
+) -> DeletionOut:
+    with context.require_backend().transaction() as repos:
+        summary, keys = context.vacancy_deletion(repos).delete(
+            principal.user, vacancy_id, confirm_name=body.confirm_name, ip=client_ip(request)
+        )
+    # Los archivos se quitan cuando el borrado ya quedó confirmado en la base: si
+    # alguno falla, queda sin dueño y lo aparta la conciliación del almacenamiento.
+    removed = pending = 0
+    storage = context.storage
+    for key in keys:
+        try:
+            if storage is not None:
+                storage.delete(key)
+                removed += 1
+            else:
+                pending += 1
+        except Exception:  # noqa: BLE001  (un archivo que no se deja borrar no detiene a los demás)
+            pending += 1
+    return DeletionOut(**_preview(summary), files_removed=removed, files_pending=pending)

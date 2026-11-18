@@ -34,6 +34,7 @@ from app.composition.recruitment import (
     VacancyProfiles,
 )
 from app.composition.reporting import StoredReports, can_read_study
+from app.composition.vacancy_deletion import VacancyDeletion
 from app.core.clock import Clock
 from app.core.config.settings import Environment, Settings
 from app.core.exceptions.errors import ServiceUnavailableError
@@ -244,6 +245,9 @@ class AppContext:
             self.audit(repos),
             self.clock,
         )
+
+    def vacancy_deletion(self, repos: Repositories) -> VacancyDeletion:
+        return VacancyDeletion(repos.vacancy_purge, self.audit(repos))
 
     def vacancy_service(self, repos: Repositories) -> VacancyService:
         return VacancyService(

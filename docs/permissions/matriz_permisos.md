@@ -40,6 +40,7 @@ Cómo se aplica: (1) la política de documentos y evaluaciones solo le concede l
 | Editar datos de la vacante y cambiar su estado | Sí | Sí | No | No | No |
 | Compartir y revocar accesos | Sí | Sí | No | No | No |
 | Transferir el responsable | Sí | No | No | No | No |
+| Eliminar la vacante con todo su contenido (definitivo) | Sí | No | No | No | No |
 | Cargar perfil y editar borradores de prompt y rúbrica | Sí | Sí | Sí | No | No |
 | Aprobar prompt, rúbrica y umbral | Sí | Sí | No | No | No |
 | Cargar CV e iniciar lotes | Sí | Sí | Sí | No | No |

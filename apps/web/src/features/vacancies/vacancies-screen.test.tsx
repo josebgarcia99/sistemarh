@@ -275,6 +275,102 @@ describe("VacanciesScreen", () => {
     expect(within(panel).queryByLabelText("Compartir con")).toBeNull();
   });
 
+  it("solo una administradora puede eliminar una vacante, y debe escribir su nombre", async () => {
+    const vacancy = makeVacancy({ status: "ABIERTA", my_access: "ADMINISTRADOR" });
+    const preview = {
+      name: vacancy.name,
+      status: "ABIERTA",
+      applications: 11,
+      candidates: 1,
+      cv_files: 11,
+      calls: 6,
+      assessments: 5,
+      syntheses: 0,
+      documents: 14,
+      active_batches: 0,
+    };
+    let gone = false;
+    const fetchMock = mockApi({
+      "GET /api/v1/vacancies": () => page(gone ? [] : [vacancy]),
+      [`GET ${VACANCY_URL}`]: { body: vacancy },
+      [`GET ${VACANCY_URL}/members`]: { body: [] },
+      [`GET ${VACANCY_URL}/files`]: { body: [] },
+      [`GET ${VACANCY_URL}/ownership-history`]: initialHistory,
+      [`GET ${VACANCY_URL}/deletion`]: { body: preview },
+      [`POST ${VACANCY_URL}/deletion`]: () => {
+        gone = true;
+        return { body: { ...preview, files_removed: 14, files_pending: 0 } };
+      },
+    });
+    const user = userEvent.setup();
+    renderApp(<VacanciesScreen />, { session: admin });
+    await user.click(await screen.findByRole("button", { name: "Abrir Analista de Nómina" }));
+    const panel = await screen.findByRole("complementary", { name: "Detalle de Analista de Nómina" });
+    await user.click(within(panel).getByRole("button", { name: "Eliminar vacante" }));
+
+    // Antes de borrar se ve qué contiene; solo se nombra lo que sí hay.
+    const dialog = await screen.findByRole("dialog", { name: "Eliminar vacante" });
+    const contents = within(await within(dialog).findByRole("list", { name: "Lo que se borrará" }));
+    expect(contents.getByText("11 postulaciones")).toBeTruthy();
+    expect(contents.getByText("1 candidato que no está en otra vacante")).toBeTruthy();
+    expect(contents.getByText("14 documentos")).toBeTruthy();
+    expect(contents.queryByText(/síntesis/)).toBeNull();
+
+    // No se puede eliminar sin escribir el nombre de la vacante.
+    const confirm = within(dialog).getByRole("button", { name: "Eliminar definitivamente" });
+    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    const field = within(dialog).getByLabelText(/Para confirmar, escribe el nombre de la vacante/);
+    await user.type(field, "Analista");
+    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    await user.type(field, " de nómina ");
+    expect((confirm as HTMLButtonElement).disabled).toBe(false);
+    await user.click(confirm);
+
+    // El panel se cierra y la lista avisa de lo que pasó.
+    expect((await screen.findByRole("status")).textContent).toContain(
+      "Se eliminó la vacante «Analista de Nómina» con todo su contenido.",
+    );
+    expect(screen.queryByRole("complementary", { name: "Detalle de Analista de Nómina" })).toBeNull();
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ confirm_name: "Analista de nómina " });
+  });
+
+  it("quien no es administradora no ve la opción de eliminar, y los CV en proceso la bloquean", async () => {
+    const own = makeVacancy({ status: "ABIERTA", my_access: "RESPONSABLE" });
+    mockApi({
+      "GET /api/v1/vacancies": page([own]),
+      [`GET ${VACANCY_URL}`]: { body: own },
+      [`GET ${VACANCY_URL}/members`]: { body: [] },
+      [`GET ${VACANCY_URL}/files`]: { body: [] },
+      [`GET ${VACANCY_URL}/ownership-history`]: initialHistory,
+    });
+    const user = userEvent.setup();
+    const view = renderApp(<VacanciesScreen />, { session: recruiter });
+    await user.click(await screen.findByRole("button", { name: "Abrir Analista de Nómina" }));
+    const panel = await screen.findByRole("complementary", { name: "Detalle de Analista de Nómina" });
+    expect(within(panel).queryByRole("button", { name: "Eliminar vacante" })).toBeNull();
+    view.unmount();
+
+    const managed = makeVacancy({ status: "ABIERTA", my_access: "ADMINISTRADOR" });
+    mockApi({
+      "GET /api/v1/vacancies": page([managed]),
+      [`GET ${VACANCY_URL}`]: { body: managed },
+      [`GET ${VACANCY_URL}/members`]: { body: [] },
+      [`GET ${VACANCY_URL}/files`]: { body: [] },
+      [`GET ${VACANCY_URL}/ownership-history`]: initialHistory,
+      [`GET ${VACANCY_URL}/deletion`]: {
+        body: { name: managed.name, status: "ABIERTA", applications: 0, candidates: 0, cv_files: 3, calls: 0, assessments: 0, syntheses: 0, documents: 3, active_batches: 1 },
+      },
+    });
+    renderApp(<VacanciesScreen />, { session: admin });
+    await user.click(await screen.findByRole("button", { name: "Abrir Analista de Nómina" }));
+    await user.click(await screen.findByRole("button", { name: "Eliminar vacante" }));
+    const dialog = await screen.findByRole("dialog", { name: "Eliminar vacante" });
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("CV en proceso");
+    await user.type(within(dialog).getByLabelText(/Para confirmar/), "Analista de Nómina");
+    expect((within(dialog).getByRole("button", { name: "Eliminar definitivamente" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("avisa cuando otra persona cambió la vacante antes", async () => {
     const vacancy = makeVacancy();
     mockApi({

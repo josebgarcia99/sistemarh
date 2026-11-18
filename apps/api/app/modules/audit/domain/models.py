@@ -33,6 +33,8 @@ class AuditAction(StrEnum):
     VACANTE_ACCESO_REVOCADO = "vacante.acceso_revocado"
     VACANTE_PERMISO_SENSIBLE = "vacante.permiso_sensible_cambiado"
     VACANTE_TRANSFERIDA = "vacante.transferida"
+    # Borrado definitivo de la vacante y todo su contenido (solo administradores).
+    VACANTE_ELIMINADA = "vacante.eliminada"
     TRANSFERENCIA_MASIVA = "transferencia_masiva.completada"
     DOCUMENTO_CARGADO = "documento.cargado"
     DOCUMENTO_RECHAZADO = "documento.rechazado"

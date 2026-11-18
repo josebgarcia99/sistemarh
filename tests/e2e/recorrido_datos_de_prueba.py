@@ -6,6 +6,7 @@ Se ejecuta con ``python tests/e2e/run.py``, sobre el modo demostración con
 """
 
 # ruff: noqa
+import re
 from playwright.sync_api import sync_playwright, expect
 from comun import BASE, PW, SHOTS
 
@@ -67,5 +68,26 @@ with sync_playwright() as p:
     pm.get_by_role("button", name="Paso 4: Candidatos y etapas").click(); expect(pm.get_by_role("list", name="Candidatos")).to_be_visible()
     overflow = pm.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth"); assert overflow == 0, overflow
     print("5 móvil sin desbordamiento:", overflow)
+    # 6. La reclutadora no puede eliminar; una administradora elimina la vacante de prueba
+    page.goto(BASE + "/vacantes"); page.get_by_role("button", name=f"Abrir {NAME}", exact=True).click()
+    expect(page.get_by_role("complementary", name=f"Detalle de {NAME}")).to_be_visible()
+    expect(page.get_by_role("button", name="Eliminar vacante")).to_have_count(0)
+    ad = browser.new_context(viewport={"width": 1440, "height": 1000}); pd = ad.new_page(); watch(pd, "A ")
+    login(pd, "admin@demo.test"); pd.goto(BASE + "/vacantes")
+    pd.get_by_role("button", name=f"Abrir {NAME}", exact=True).click()
+    pd.get_by_role("button", name="Eliminar vacante").click()
+    dialogo = pd.get_by_role("dialog", name="Eliminar vacante")
+    expect(dialogo.get_by_role("list", name="Lo que se borrará")).to_contain_text("11 postulaciones")
+    confirmar = dialogo.get_by_role("button", name="Eliminar definitivamente")
+    expect(confirmar).to_be_disabled()
+    pd.screenshot(path=f"{SHOTS}/dp6_eliminar.png")
+    dialogo.get_by_label(re.compile("Para confirmar")).fill(NAME)
+    confirmar.click()
+    expect(pd.get_by_role("status").filter(has_text="Se eliminó la vacante")).to_be_visible()
+    expect(pd.get_by_role("button", name=f"Abrir {NAME}", exact=True)).to_have_count(0)
+    page.goto(BASE + "/vacantes"); expect(page.get_by_role("button", name=re.compile("^Abrir ")).first).to_be_visible()
+    expect(page.get_by_role("button", name=f"Abrir {NAME}", exact=True)).to_have_count(0)
+    sa.reload(); expect(sa.get_by_role("button", name="Abrir el estudio de Mariana Ficticia Ortega")).to_have_count(0)
+    print("6 una administradora elimina la vacante de prueba con todo su contenido; ya no aparece para nadie")
     browser.close()
 print("errores:", sorted(set(errors)))

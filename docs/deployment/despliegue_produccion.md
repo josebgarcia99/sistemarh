@@ -180,7 +180,7 @@ Las métricas son por proceso y se pierden al reiniciar. Si Sistemas usa una her
 
 1. Respaldar base y documentos.
 2. Obtener la versión nueva del repositorio y revisar `docs/estado_proyecto.md` («Cambios recientes»).
-3. Si cambió la versión del esquema, ejecutar en orden los scripts `actualizacion_NNNN_a_MMMM.sql` que falten. La versión instalada está en `dbo.alembic_version`. Si se añadieron tablas, revisar `permisos_usuario_aplicacion.sql`.
+3. Si cambió la versión del esquema, ejecutar en orden los scripts `actualizacion_NNNN_a_MMMM.sql` que falten. La versión instalada está en `dbo.alembic_version`. Si se añadieron tablas, revisar `permisos_usuario_aplicacion.sql`. En una base instalada antes del 18 de noviembre de 2026 hay que ejecutar una vez `permisos_eliminar_vacantes.sql` para que funcione «Eliminar vacante»; no cambia la estructura ni exige detener la aplicación.
 4. Reconstruir y levantar: `docker compose ... up -d --build`. Si cambió `infrastructure/nginx/reclutamiento.conf`, reiniciar además el proxy para que tome la configuración nueva: `docker compose ... restart proxy`. Si la versión del esquema de la base no es la que espera la aplicación, `/api/v1/health/ready` responde 503 con el componente «esquema» en fallo y lo deja escrito en los registros: no dar servicio hasta corregirlo.
 5. Repetir las comprobaciones de la sección 3.5.
 

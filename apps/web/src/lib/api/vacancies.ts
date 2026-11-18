@@ -217,3 +217,37 @@ export function searchDirectory(search: string, signal?: AbortSignal): Promise<D
     signal,
   });
 }
+
+/** Lo que contiene una vacante y se borraría con ella. */
+export const deletionPreviewSchema = z.object({
+  name: z.string(),
+  status: z.string(),
+  applications: z.number(),
+  /** Candidatos que no tienen postulación en otra vacante. */
+  candidates: z.number(),
+  cv_files: z.number(),
+  calls: z.number(),
+  assessments: z.number(),
+  syntheses: z.number(),
+  documents: z.number(),
+  /** Lotes de CV en proceso: mientras haya, no se puede eliminar. */
+  active_batches: z.number(),
+});
+export type DeletionPreview = z.infer<typeof deletionPreviewSchema>;
+
+/** Qué se borraría al eliminar la vacante. Solo administradores. No cambia nada. */
+export function getDeletionPreview(id: string, signal?: AbortSignal) {
+  return apiFetch(`/vacancies/${id}/deletion`, { schema: deletionPreviewSchema, signal });
+}
+
+/** Elimina la vacante con todo su contenido, sin vuelta atrás. Solo administradores. */
+export function deleteVacancy(id: string, confirmName: string) {
+  return apiFetch(`/vacancies/${id}/deletion`, {
+    method: "POST",
+    body: { confirm_name: confirmName },
+    schema: deletionPreviewSchema.extend({
+      files_removed: z.number(),
+      files_pending: z.number(),
+    }),
+  });
+}

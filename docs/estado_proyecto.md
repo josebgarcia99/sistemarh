@@ -40,6 +40,8 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 
 **Respuestas de la IA por partes (17 de noviembre de 2026, rama `pruebas`).** A petición del responsable, para saber en cada solicitud si la conexión fue exitosa y si el modelo está respondiendo: los tres proveedores (Anthropic, OpenAI y Gemini) se consultan ahora por partes, con el formato que documenta cada uno. El sistema distingue tres pasos (el proveedor aceptó la solicitud, llegó el primer texto, llegó la señal de fin) y nombra cada fallo por el paso en que ocurrió: sin conexión, el modelo no empezó a responder, la respuesta se interrumpió, o rebasó el tope total. Espera mientras sigan llegando pedazos (silencio máximo 90 s, tope total 4 min; el proxy admite 360 s). Solo se reintenta lo que falló antes de generar. «Probar» informa cuánto tardó cada paso y las pantallas muestran el tiempo transcurrido mientras la IA trabaja. Sin cambios de base de datos; cambia la configuración de nginx (hay que reiniciar el proxy). Comprobado con respuestas simuladas en el formato de cada proveedor y con un servidor local que imita a Anthropic por una conexión real. **Ninguno de los tres se ha ejecutado contra el servicio real**; el de Gemini usa `streamGenerateContent`, no la API de interacciones más nueva de Google.
 
+**Eliminar una vacante (18 de noviembre de 2026).** A petición del responsable, para quitar las vacantes de prueba que quedaron en producción: un administrador puede eliminar una vacante con todo su contenido, de forma definitiva. Es la única operación que borra datos de reclutamiento y es una excepción decidida por el responsable a la regla de no eliminar documentos originales; antes de construirla se le propuso archivar en su lugar. Se exige escribir el nombre de la vacante, no procede con CV en proceso y queda en la auditoría. Se conservan la auditoría, el costo de IA, los reportes ya exportados y los candidatos con postulación en otra vacante. Sin cambio de estructura en la base, pero **el usuario de la aplicación necesita permiso de borrado**: Sistemas debe ejecutar `permisos_eliminar_vacantes.sql`; mientras no lo haga, el botón avisa y no borra nada. Probado sobre SQLite con claves foráneas activas, con la vacante de prueba completa; **ni el borrado ni el script de permisos se han ejecutado contra un SQL Server real**.
+
 ## Funcionalidades terminadas
 
 | Elemento | Detalle |
@@ -132,11 +134,11 @@ Ejecutadas el 12 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 402 pruebas, todas pasan |
+| API: `pytest` | 404 pruebas, todas pasan |
 | Worker: `pytest` | 5 pruebas, todas pasan |
 | `ruff check` y `lint-imports` | Sin errores; 13 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |
-| Frontend: `vitest` | 120 pruebas, todas pasan |
+| Frontend: `vitest` | 122 pruebas, todas pasan |
 | Frontend: `next build` | Compila |
 | Recorrido en navegador real, identidad | 10 pasos: redirección sin sesión, credenciales erróneas, inicio de sesión, alta de usuario, restablecer contraseña, recarga, cierre de sesión, contraseña anterior rechazada, reclutador sin acceso a Usuarios y respuesta 403 de la API |
 | Recorrido en navegador real, vacantes | 11 pasos: alta de dos reclutadores, alta de dos vacantes, cambio de estado, compartir en lectura, la otra persona solo ve la compartida y no puede editarla, la API le niega cambiar el estado, transferencia individual, baja con transferencia, auditoría con el acceso denegado, la persona dada de baja ya no entra y el receptor queda como responsable |

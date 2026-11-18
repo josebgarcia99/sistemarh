@@ -43,6 +43,7 @@ Todo lo que influye en una evaluación se versiona y lo aprobado no se modifica.
 | Rúbrica y umbral | Versión nueva ante cualquier cambio de criterio o peso | Cada evaluación guarda su versión |
 | Flujo de etapas | Plantilla con versiones | Cada convocatoria usa la versión con la que se abrió |
 | Banco de preguntas | Editar o quitar preguntas crea una versión | Cada llamada guarda su propia lista de preguntas |
+| Eliminar una vacante | Solo un administrador, escribiendo el nombre de la vacante y sin CV en proceso | Se borra de forma definitiva con todo su contenido; se conservan la auditoría, el costo de IA y los candidatos con postulación en otra vacante |
 | Preguntas de una llamada | Empieza con las generales de la empresa y las de los bancos elegidos; en la llamada se quitan, se redactan distinto, se suman de otros bancos o se escriben nuevas | Los cambios valen solo para esa llamada: los bancos no se modifican. Una pregunta quitada no se analiza ni cuenta para cerrar |
 | Plantilla de estudio | Versión nueva ante cualquier cambio de campos | Cada estudio guarda su versión |
 | Evaluación de CV | Solo inserción; un reanálisis crea otra evaluación | La original siempre se puede consultar |

@@ -62,7 +62,13 @@ GO
 
 
 # Scripts escritos a mano: el generador no los toca.
-HAND_WRITTEN = frozenset({"permisos_usuario_aplicacion.sql", "validaciones_integridad.sql"})
+HAND_WRITTEN = frozenset(
+    {
+        "permisos_usuario_aplicacion.sql",
+        "permisos_eliminar_vacantes.sql",
+        "validaciones_integridad.sql",
+    }
+)
 
 
 def _config(buffer: io.StringIO) -> Config:

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.composition.study_queue import SqlStudyQueue
+from app.composition.vacancy_deletion import SqlVacancyPurge
 from app.modules.ai_settings.domain.models import AiRepository
 from app.modules.assessments.domain.models import AssessmentRepository
 from app.modules.audit.domain.models import AuditRepository
@@ -44,6 +45,7 @@ class Repositories:
     assessments: AssessmentRepository
     reporting: ReportingSource
     study_queue: SqlStudyQueue
+    vacancy_purge: SqlVacancyPurge
 
 
 class Backend(Protocol):
