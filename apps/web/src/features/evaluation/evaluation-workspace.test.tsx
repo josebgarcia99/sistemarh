@@ -308,7 +308,7 @@ describe("EvaluationWorkspace", () => {
     // La capa del sistema no se edita; las demás sí.
     expect((screen.getByLabelText("2. Rúbrica (la escribe el sistema)") as HTMLTextAreaElement).readOnly).toBe(true);
     await user.type(screen.getByLabelText("1. Instrucciones permanentes"), " Sé breve.");
-    const weight = screen.getByLabelText("Peso");
+    const weight = screen.getAllByLabelText("Peso")[0];
     await user.clear(weight);
     await user.type(weight, "5");
     const threshold = screen.getByLabelText("Umbral de aceptación (0 a 100)");
@@ -316,6 +316,18 @@ describe("EvaluationWorkspace", () => {
     await user.type(threshold, "70");
     await user.click(screen.getByRole("button", { name: "Agregar criterio" }));
     await user.type(screen.getByLabelText(/Criterio C2/), "Timbrado de CFDI");
+    // El peso sigue al tipo: un criterio deseable (peso 1) pasa a 3 al volverse
+    // indispensable y regresa a 1 al volver a deseable.
+    const [, kind] = screen.getAllByLabelText("Tipo");
+    const [, second] = screen.getAllByLabelText("Peso") as HTMLInputElement[];
+    await user.selectOptions(kind, "INDISPENSABLE");
+    expect(second.value).toBe("3");
+    await user.selectOptions(kind, "DESEABLE");
+    expect(second.value).toBe("1");
+    // Un peso puesto a mano se respeta aunque cambie el tipo.
+    await user.selectOptions(screen.getAllByLabelText("Tipo")[0], "DESEABLE");
+    expect((screen.getAllByLabelText("Peso")[0] as HTMLInputElement).value).toBe("5");
+    await user.selectOptions(screen.getAllByLabelText("Tipo")[0], "INDISPENSABLE");
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     expect((await screen.findByRole("status")).textContent).toContain("Cambios guardados");

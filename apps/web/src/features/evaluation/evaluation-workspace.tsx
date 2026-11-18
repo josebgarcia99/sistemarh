@@ -114,6 +114,9 @@ export function EvaluationWorkspace({
   );
 }
 
+/** Peso que el sistema pone por omisión a cada tipo de criterio. */
+const USUAL_WEIGHT = { INDISPENSABLE: "3", DESEABLE: "1" } as const;
+
 // --- Prompt ----------------------------------------------------------------------------
 
 function PromptTab({
@@ -406,7 +409,10 @@ function PromptEditor({
             </h2>
             <p className="mt-1 max-w-3xl text-ink-muted">
               La IA asigna a cada criterio un nivel de 0 a 4. El sistema calcula la puntuación (0 a
-              100) como promedio ponderado; la IA no calcula porcentajes.
+              100) como promedio ponderado; la IA no calcula porcentajes. Para la puntuación cuenta
+              el peso de cada criterio: al cambiar el tipo, el peso pasa a 3 (indispensable) o a 1
+              (deseable), salvo que ya le hayas puesto uno propio. La IA solo califica lo que está
+              en esta rúbrica.
             </p>
           </div>
           <div className="flex flex-col gap-2">
@@ -448,9 +454,13 @@ function PromptEditor({
                     id={`criterion-kind-${index}`}
                     disabled={!editable}
                     value={criterion.kind}
-                    onChange={(event) =>
-                      change(index, { kind: event.target.value === "DESEABLE" ? "DESEABLE" : "INDISPENSABLE" })
-                    }
+                    onChange={(event) => {
+                      const kind = event.target.value === "DESEABLE" ? "DESEABLE" : "INDISPENSABLE";
+                      // El peso sigue al tipo mientras sea el de costumbre; si la
+                      // persona ya puso uno propio, se respeta.
+                      const usual = Number(criterion.weight) === Number(USUAL_WEIGHT[criterion.kind]);
+                      change(index, usual ? { kind, weight: USUAL_WEIGHT[kind] } : { kind });
+                    }}
                     className={fieldClass}
                   >
                     <option value="INDISPENSABLE">Indispensable</option>

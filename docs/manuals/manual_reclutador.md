@@ -52,7 +52,7 @@ El perfil sigue el formato de la empresa «SGC.F15.RH. Perfil de puesto»: ident
 Es la instrucción con la que la IA leerá los CV, con una rúbrica de criterios.
 
 1. «Generar borrador desde el perfil» crea un criterio por cada requisito.
-2. Ajusta los criterios, su peso y el umbral de aceptación. «Proponer mejoras con IA» sugiere mejor redacción para los criterios que ya existen; tú decides cuáles aplicar.
+2. Ajusta los criterios, su peso y el umbral de aceptación. **Para la calificación cuenta el peso**, no el tipo: al generar el borrador, los criterios indispensables salen con peso 3 y los deseables con peso 1, y al cambiar el tipo el peso cambia con él (salvo que ya le hayas puesto un peso propio, que se respeta). Los pesos son relativos: si quitas criterios, los que quedan se reparten el total. La IA solo califica lo que está en la rúbrica: si quieres que valore algo más (por ejemplo, cuánto tiempo permaneció la persona en sus empleos), agrégalo como criterio con «Agregar criterio» y describe sus niveles. «Proponer mejoras con IA» sugiere mejor redacción para los criterios que ya existen; tú decides cuáles aplicar.
 3. «Enviar a revisión» y después «Aprobar». Solo un prompt aprobado puede evaluar CV, y una vez aprobado no se modifica: para cambiarlo se usa «Duplicar» y se aprueba la copia.
 
 ### 3. Evaluación de CV
