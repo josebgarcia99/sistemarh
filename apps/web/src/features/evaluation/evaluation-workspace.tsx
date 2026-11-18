@@ -308,8 +308,36 @@ function PromptEditor({
     });
   }
 
+  // Hay cambios en pantalla que todavía no se guardaron.
+  const dirty =
+    editable &&
+    (threshold !== version.pass_threshold ||
+      version.layers.some((layer) => layers[layer.key] !== layer.content) ||
+      JSON.stringify(criteria) !==
+        JSON.stringify(
+          version.criteria.map(({ id, name, description, kind, weight, levels }) => ({
+            id,
+            name,
+            description,
+            kind,
+            weight,
+            levels,
+          })),
+        ));
+  const save = () =>
+    updatePrompt(version.id, { layers, criteria, pass_threshold: threshold, revision: version.revision });
   const act = (action: PromptAction) =>
     run(() => promptAction(version.id, action, version.revision), () => ACTION_MESSAGES[action]);
+  /** Enviar a revisión guarda antes lo que haya en pantalla: lo que se revisa y se aprueba
+   * es lo que la persona está viendo, no una versión anterior. */
+  const submit = () =>
+    run(
+      async () => {
+        const saved = dirty ? await save() : version;
+        return promptAction(saved.id, "submit", saved.revision);
+      },
+      () => (dirty ? "Cambios guardados. El borrador pasó a revisión." : ACTION_MESSAGES.submit),
+    );
   const change = (index: number, patch: Partial<CriterionInput>) =>
     setCriteria(criteria.map((item, i) => (i === index ? { ...item, ...patch } : item)));
 
@@ -364,30 +392,25 @@ function PromptEditor({
             </ul>
           </div>
         )}
+        {dirty && (
+          <p role="note" className="rounded-2xl bg-accent-red-soft px-4 py-3 text-accent-red-ink">
+            Tienes cambios sin guardar. Mientras no pulses «Guardar cambios», el prompt sigue
+            siendo el anterior. «Enviar a revisión» los guarda antes de enviar.
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           {editable && (
             <button
               type="button"
               className={primaryButtonClass}
               disabled={busy}
-              onClick={() =>
-                run(
-                  () =>
-                    updatePrompt(version.id, {
-                      layers,
-                      criteria,
-                      pass_threshold: threshold,
-                      revision: version.revision,
-                    }),
-                  () => "Cambios guardados.",
-                )
-              }
+              onClick={() => run(save, () => "Cambios guardados.")}
             >
               Guardar cambios
             </button>
           )}
           {editable && (
-            <button type="button" className={secondaryButtonClass} disabled={busy} onClick={() => act("submit")}>
+            <button type="button" className={secondaryButtonClass} disabled={busy} onClick={submit}>
               Enviar a revisión
             </button>
           )}

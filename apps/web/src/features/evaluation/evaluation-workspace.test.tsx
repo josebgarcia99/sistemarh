@@ -611,6 +611,39 @@ describe("EvaluationWorkspace", () => {
     expect(body.criteria[0].levels).toEqual(levels);
   });
 
+  it("avisa de los cambios sin guardar y «Enviar a revisión» los guarda antes de enviar", async () => {
+    const fetchMock = mockApi({
+      [`GET ${PROMPTS_URL}`]: { body: [makePrompt()] },
+      [`PUT /api/v1/prompts/${PROMPT_ID}`]: { body: makePrompt({ revision: 2, pass_threshold: "70.00" }) },
+      [`POST /api/v1/prompts/${PROMPT_ID}/submit`]: {
+        body: makePrompt({ revision: 3, pass_threshold: "70.00", status: "EN_REVISION" }),
+      },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(screen.getByRole("button", { name: "Prompt de evaluación" }));
+    await screen.findByRole("heading", { name: "Versión 1" });
+    // Sin cambios no hay aviso.
+    expect(screen.queryByRole("note")).toBeNull();
+    const threshold = screen.getByLabelText(/Umbral/);
+    await user.clear(threshold);
+    await user.type(threshold, "70.00");
+    expect(screen.getByRole("note").textContent).toContain("Tienes cambios sin guardar");
+
+    await user.click(screen.getByRole("button", { name: "Enviar a revisión" }));
+    expect((await screen.findByRole("status")).textContent).toContain(
+      "Cambios guardados. El borrador pasó a revisión.",
+    );
+    // Primero se guarda lo que estaba en pantalla y después se envía esa misma versión.
+    const writes = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT" || init?.method === "POST");
+    expect(writes.map(([url, init]) => `${init?.method} ${String(url).split("/").pop()}`)).toEqual([
+      `PUT ${PROMPT_ID}`,
+      "POST submit",
+    ]);
+    expect(JSON.parse(String(writes[0][1]?.body)).pass_threshold).toBe("70.00");
+    expect(JSON.parse(String(writes[1][1]?.body))).toEqual({ revision: 2 });
+  });
+
   it("si se quitan criterios, las mejoras de la IA siguen a su criterio y no a su número", async () => {
     const criterion = (n: number, name: string) => ({
       id: `70000000-0000-0000-0000-00000000000${n}`,
