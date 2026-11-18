@@ -139,7 +139,7 @@ Ejecutadas el 12 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 | Worker: `pytest` | 5 pruebas, todas pasan |
 | `ruff check` y `lint-imports` | Sin errores; 13 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |
-| Frontend: `vitest` | 127 pruebas, todas pasan |
+| Frontend: `vitest` | 128 pruebas, todas pasan |
 | Frontend: `next build` | Compila |
 | Recorrido en navegador real, identidad | 10 pasos: redirección sin sesión, credenciales erróneas, inicio de sesión, alta de usuario, restablecer contraseña, recarga, cierre de sesión, contraseña anterior rechazada, reclutador sin acceso a Usuarios y respuesta 403 de la API |
 | Recorrido en navegador real, vacantes | 11 pasos: alta de dos reclutadores, alta de dos vacantes, cambio de estado, compartir en lectura, la otra persona solo ve la compartida y no puede editarla, la API le niega cambiar el estado, transferencia individual, baja con transferencia, auditoría con el acceso denegado, la persona dada de baja ya no entra y el receptor queda como responsable |

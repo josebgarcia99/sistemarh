@@ -392,12 +392,6 @@ function PromptEditor({
             </ul>
           </div>
         )}
-        {dirty && (
-          <p role="note" className="rounded-2xl bg-accent-red-soft px-4 py-3 text-accent-red-ink">
-            Tienes cambios sin guardar. Mientras no pulses «Guardar cambios», el prompt sigue
-            siendo el anterior. «Enviar a revisión» los guarda antes de enviar.
-          </p>
-        )}
         <div className="flex flex-wrap gap-2">
           {editable && (
             <button
@@ -447,7 +441,8 @@ function PromptEditor({
         </div>
         {editable && (
           <p className="text-sm text-ink-muted">
-            Guarda los cambios antes de enviar a revisión: se envía lo último guardado.
+            «Enviar a revisión» guarda antes lo que tengas en pantalla. En revisión el prompt ya no se
+            puede editar: «Aprobar» aprueba lo guardado.
           </p>
         )}
       </section>
@@ -616,16 +611,19 @@ function PromptEditor({
               <button
                 type="button"
                 className={secondaryButtonClass}
-                disabled={proposing}
+                disabled={proposing || dirty}
                 onClick={propose}
               >
                 {proposing ? "Consultando a la IA…" : "Proponer mejoras con IA"}
               </button>
               <p className="flex-[1_1_300px] text-sm text-ink-muted">
+                {dirty && (
+                  <strong className="font-medium text-ink">
+                    Primero guarda los cambios: la IA trabaja sobre lo guardado.{" "}
+                  </strong>
+                )}
                 La IA sugiere una redacción más clara para la descripción y los niveles de cada
                 criterio. No añade criterios ni requisitos, y nada cambia hasta que lo apliques.
-                Trabaja sobre lo último guardado: si quitaste o cambiaste criterios, pulsa antes
-                «Guardar cambios».
               </p>
             </div>
             <AiWaitNotice wait={aiWait} />
@@ -716,6 +714,25 @@ function PromptEditor({
           </div>
         ))}
       </section>
+      {dirty && (
+        <div
+          role="note"
+          className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-accent-red-soft px-5 py-3 text-accent-red-ink shadow-lg"
+        >
+          <p className="flex-[1_1_320px]">
+            Tienes cambios sin guardar. Mientras no los guardes, el prompt sigue siendo el
+            anterior. «Enviar a revisión» también los guarda antes de enviar.
+          </p>
+          <button
+            type="button"
+            className={primaryButtonClass}
+            disabled={busy}
+            onClick={() => run(save, () => "Cambios guardados.")}
+          >
+            Guardar ahora
+          </button>
+        </div>
+      )}
     </>
   );
 }

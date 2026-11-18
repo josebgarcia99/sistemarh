@@ -39,7 +39,14 @@ with sync_playwright() as p:
     page.screenshot(path=f"{SHOTS}/ia2_criterios.png", full_page=True)
     panel.get_by_role("button", name="Aplicar todas").click()
     expect(page.get_by_role("list", name="Criterios").get_by_role("listitem")).to_have_count(3)
-    page.get_by_role("button", name="Guardar cambios").click()
+    # Con cambios sin guardar: barra fija al pie, a la vista sin desplazarse, y la IA bloqueada
+    barra = page.get_by_role("note").filter(has_text="Tienes cambios sin guardar"); expect(barra).to_be_visible()
+    page.evaluate("window.scrollTo(0, 0)"); caja = barra.bounding_box(); alto = page.viewport_size["height"]
+    assert caja and 0 <= caja["y"] and caja["y"] + caja["height"] <= alto, (caja, alto)
+    expect(page.get_by_role("button", name="Proponer mejoras con IA")).to_be_disabled()
+    expect(page.get_by_text("Primero guarda los cambios: la IA trabaja sobre lo guardado.")).to_be_visible()
+    page.screenshot(path=f"{SHOTS}/ia2b_sin_guardar.png"); print("3b con cambios sin guardar aparece la barra fija y no se pueden pedir mejoras a la IA")
+    barra.get_by_role("button", name="Guardar ahora").click()
     expect(page.get_by_role("status").filter(has_text="Cambios guardados")).to_be_visible()
     expect(page.get_by_label("Descripción del criterio C1")).to_have_value("Redacción simulada: busca en el CV evidencia con fechas."); print("4 al aplicar y guardar, siguen siendo 3 criterios con la nueva redacción")
     page.get_by_role("button", name="Perfil de puesto").click()

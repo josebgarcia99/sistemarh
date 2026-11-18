@@ -629,6 +629,12 @@ describe("EvaluationWorkspace", () => {
     await user.clear(threshold);
     await user.type(threshold, "70.00");
     expect(screen.getByRole("note").textContent).toContain("Tienes cambios sin guardar");
+    // Con cambios pendientes no se pueden pedir mejoras a la IA: primero hay que guardar.
+    const propose = screen.getByRole("button", { name: "Proponer mejoras con IA" }) as HTMLButtonElement;
+    expect(propose.disabled).toBe(true);
+    expect(screen.getByText(/Primero guarda los cambios: la IA trabaja sobre lo guardado/)).toBeTruthy();
+    // La barra al pie trae su propio botón para guardar sin subir por la pantalla.
+    expect(within(screen.getByRole("note")).getByRole("button", { name: "Guardar ahora" })).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Enviar a revisión" }));
     expect((await screen.findByRole("status")).textContent).toContain(
@@ -642,6 +648,24 @@ describe("EvaluationWorkspace", () => {
     ]);
     expect(JSON.parse(String(writes[0][1]?.body)).pass_threshold).toBe("70.00");
     expect(JSON.parse(String(writes[1][1]?.body))).toEqual({ revision: 2 });
+  });
+
+  it("la barra de cambios sin guardar guarda sin subir por la pantalla", async () => {
+    const fetchMock = mockApi({
+      [`GET ${PROMPTS_URL}`]: { body: [makePrompt()] },
+      [`PUT /api/v1/prompts/${PROMPT_ID}`]: { body: makePrompt({ revision: 2, pass_threshold: "70.00" }) },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(screen.getByRole("button", { name: "Prompt de evaluación" }));
+    await screen.findByRole("heading", { name: "Versión 1" });
+    const threshold = screen.getByLabelText(/Umbral/);
+    await user.clear(threshold);
+    await user.type(threshold, "70.00");
+    await user.click(screen.getByRole("button", { name: "Guardar ahora" }));
+    await screen.findByText(/Cambios guardados/);
+    expect(sent(fetchMock, "PUT").body.pass_threshold).toBe("70.00");
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
   });
 
   it("si se quitan criterios, las mejoras de la IA siguen a su criterio y no a su número", async () => {
