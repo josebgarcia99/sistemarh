@@ -180,6 +180,12 @@ export function CvEvaluationTab({
                 </label>
               </div>
             )}
+            {canEdit && !running && amount > 0 && (reevaluate || overview.batches.length > 0) && (
+              <p className="text-sm text-ink-muted">
+                Si un CV ya se había evaluado, el candidato mostrará el resultado nuevo y el
+                anterior quedará anotado en su historial. Nadie cambia de etapa por esto.
+              </p>
+            )}
             {canEdit && running && (
               <p className="text-ink-muted">Hay un lote en curso; espera a que termine.</p>
             )}

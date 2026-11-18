@@ -18,6 +18,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import date, datetime
+from decimal import Decimal
 
 from app.core.exceptions.errors import (
     ConflictError,
@@ -370,15 +371,65 @@ class RecruitmentService:
         self._repo.add_candidate(candidate)
         return candidate
 
+    @staticmethod
+    def _ai_summary(classification: str | None, score: Decimal | None) -> str:
+        if classification is None:
+            return ""
+        label = _AI_LABELS.get(classification, classification)
+        return f"{label}, {score} de 100" if score is not None else label
+
+    def _refresh_evaluations(
+        self, vacancy_id: uuid.UUID, latest: dict[uuid.UUID, EvaluatedCv]
+    ) -> None:
+        """Pone al día la evaluación de las postulaciones activas cuyo CV se volvió a
+        evaluar. No mueve a nadie de etapa; la evaluación anterior queda en el historial
+        de la persona y en su lote."""
+        now = self._clock()
+        entries = []
+        for campaign in self._repo.campaigns(vacancy_id):
+            for application in self._repo.applications(campaign.id):
+                cv = latest.get(application.cv_file_id) if application.cv_file_id else None
+                if (
+                    cv is None
+                    or application.status is not ApplicationStatus.ACTIVA
+                    or application.evaluation_item_id == cv.item_id
+                ):
+                    continue
+                before = self._ai_summary(application.ai_classification, application.ai_score)
+                after = self._ai_summary(cv.classification, cv.score)
+                application.evaluation_item_id = cv.item_id
+                application.ai_classification = cv.classification
+                application.ai_score = cv.score
+                application.updated_at = now
+                self._repo.save_application(application)
+                entries.append(
+                    Movement(
+                        new_sequential_uuid(),
+                        application.id,
+                        MovementKind.INCIDENCIA,
+                        now,
+                        None,
+                        from_stage_id=application.stage_id,
+                        note=(
+                            f"La IA volvió a evaluar el CV: antes {before}; ahora {after}."
+                            if before
+                            else f"La IA evaluó el CV: {after}."
+                        ),
+                    )
+                )
+        if entries:
+            self._movements(entries)
+
     def sync_evaluated(self, vacancy_id: uuid.UUID) -> int:
-        """Crea la postulación de cada CV evaluado que aún no la tiene. Lo
-        ejecuta el sistema al terminar un lote; repetirlo no duplica nada."""
+        """Crea la postulación de cada CV evaluado que aún no la tiene y pone al día
+        la evaluación de las que ya existen si su CV se volvió a evaluar. Lo ejecuta
+        el sistema al terminar un lote; repetirlo no duplica nada."""
+        evaluations = self._evaluated.latest_evaluations(vacancy_id)
+        if not evaluations:
+            return 0
+        self._refresh_evaluations(vacancy_id, {cv.file_id: cv for cv in evaluations})
         registered = self._repo.files_with_application(vacancy_id)
-        pending = [
-            cv
-            for cv in self._evaluated.first_evaluations(vacancy_id)
-            if cv.file_id not in registered
-        ]
+        pending = [cv for cv in evaluations if cv.file_id not in registered]
         if not pending:
             return 0
         campaign = self._open_campaign(vacancy_id) or self._create_campaign(vacancy_id, None, None)

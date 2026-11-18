@@ -36,11 +36,12 @@ class BatchEvaluatedCvs:
             result=item.result or {},
         )
 
-    def first_evaluations(self, vacancy_id: uuid.UUID) -> list[EvaluatedCv]:
-        first: dict[uuid.UUID, BatchItem] = {}
+    def latest_evaluations(self, vacancy_id: uuid.UUID) -> list[EvaluatedCv]:
+        # Vienen del lote más antiguo al más reciente: se queda la última de cada CV.
+        latest: dict[uuid.UUID, BatchItem] = {}
         for item in self._batches.evaluated_items(vacancy_id):
-            first.setdefault(item.file_id, item)
-        return [self._evaluated(item) for item in first.values()]
+            latest[item.file_id] = item
+        return [self._evaluated(item) for item in latest.values()]
 
     def evaluation(self, item_id: uuid.UUID) -> EvaluatedCv | None:
         item = self._batches.get_item(item_id)

@@ -93,7 +93,8 @@ export function CandidatesWorkspace({ vacancyId, vacancyName, canEdit, canManage
         <p className="text-sm text-ink-muted">{vacancyName}</p>
         <h1 className="text-4xl font-medium tracking-tight sm:text-5xl">Candidatos</h1>
         <p className="mt-2 max-w-3xl text-ink-muted">
-          Cada CV evaluado entra aquí en revisión de RH con la clasificación inicial de la IA.
+          Cada CV evaluado entra aquí en revisión de RH con la clasificación de la IA. Si vuelves
+          a evaluar los CV, se muestra el resultado más reciente.
           Avanzar, descartar o reactivar a una persona es siempre decisión tuya y queda en su
           historial.
         </p>

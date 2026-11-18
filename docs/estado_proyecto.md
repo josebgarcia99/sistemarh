@@ -89,7 +89,7 @@ Ninguna de las dos se declara cerrada hasta ejecutar los scripts y las pruebas e
 | Lectura de CV escaneados (OCR) | Un PDF sin texto o una imagen (JPG, PNG) se lee con Tesseract, instalado en el propio servidor: nada sale hacia servicios externos. A la IA se le avisa de que el texto viene de un escaneo, para que no cuente los errores de lectura como faltas de la persona. Si Tesseract no está instalado, esos CV quedan como «no evaluable» |
 | Datos ordenados del CV | Al evaluar un lote, y si el administrador asignó un modelo a «Extracción de CV», la IA ordena nombre, experiencia, estudios, habilidades, certificaciones y proyectos, sin completar fechas ni inferir atributos personales. El correo y el teléfono se toman del texto con reglas locales, sin IA. Si esta parte falla, el CV queda evaluado igualmente |
 | Permanencia laboral | Calculada en Python: duración por empleo, promedio, mediana, tiempo total documentado sin contar dos veces los periodos simultáneos, traslapes y empleos sin fechas completas. Es información de apoyo, nunca un criterio de rechazo |
-| Candidatos y postulaciones | Cada persona tiene un identificador global; cada participación en una convocatoria es una postulación independiente, con su CV, su evaluación inicial, su etapa, su historial y sus llamadas. Al terminar un lote, cada CV evaluado entra como postulación en «Revisión local RH» con la clasificación inicial de la IA; también se dan de alta a mano |
+| Candidatos y postulaciones | Cada persona tiene un identificador global; cada participación en una convocatoria es una postulación independiente, con su CV, su evaluación inicial, su etapa, su historial y sus llamadas. Al terminar un lote, cada CV evaluado entra como postulación en «Revisión local RH» con la clasificación de la IA (si el CV se vuelve a evaluar, la postulación activa muestra el resultado más reciente y el anterior queda en su historial); también se dan de alta a mano |
 | Convocatorias | Periodos de reclutamiento de una vacante. Cerrar una la deja solo para consulta; abrir otra permite reutilizar la vacante sin alterar el pasado, y la misma persona puede volver a participar |
 | Etapas configurables | Ocho etapas iniciales. El administrador las cambia desde «Etapas»; cada cambio es una versión nueva que usan las convocatorias que se abran después. Las abiertas conservan las suyas |
 | Movimientos | Avanzar, regresar, omitir etapas, mover en grupo, desistimiento, descarte, cancelación, reactivación, incidencia y reprogramación. Todo queda en un historial que solo crece. Exigen motivo: regresar, omitir una etapa no opcional, cualquier baja o reactivación, y **avanzar a quien la IA no clasificó como aceptado** |
@@ -134,7 +134,7 @@ Ejecutadas el 12 de noviembre de 2026 en el entorno de construcción (Linux, Pyt
 
 | Prueba | Resultado |
 | --- | --- |
-| API: `pytest` | 404 pruebas, todas pasan |
+| API: `pytest` | 405 pruebas, todas pasan |
 | Worker: `pytest` | 5 pruebas, todas pasan |
 | `ruff check` y `lint-imports` | Sin errores; 13 contratos cumplidos |
 | Frontend: `tsc --noEmit`, `eslint` | Sin errores |

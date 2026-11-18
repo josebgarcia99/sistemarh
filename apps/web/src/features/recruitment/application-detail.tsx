@@ -53,7 +53,7 @@ type Props = {
 };
 type Dialog = "move" | "note" | "outcome" | "reopen" | null;
 
-/** Expediente de una postulación: datos, evaluación inicial, historial y llamadas. */
+/** Expediente de una postulación: datos, evaluación de la IA, historial y llamadas. */
 export function ApplicationDetailView({ applicationId, vacancyId, vacancyName, canEdit, onBack }: Props) {
   const queryClient = useQueryClient();
   const queryKey = ["application", applicationId];
@@ -290,7 +290,7 @@ function EvaluationCard({ detail }: { detail: ApplicationDetail }) {
   if (!evaluation) {
     return (
       <section className={`${cardClass} flex flex-col gap-2`}>
-        <h2 className="text-xl font-medium">Evaluación inicial de la IA</h2>
+        <h2 className="text-xl font-medium">Evaluación de la IA</h2>
         <p className="text-ink-muted">Esta persona se dio de alta a mano; no tiene evaluación de CV.</p>
       </section>
     );
@@ -300,15 +300,16 @@ function EvaluationCard({ detail }: { detail: ApplicationDetail }) {
   return (
     <section className={`${cardClass} flex flex-col gap-4`}>
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-medium">Evaluación inicial de la IA</h2>
+        <h2 className="text-xl font-medium">Evaluación de la IA</h2>
         <span className={`${pillClass} ${AI_STYLES[evaluation.classification] ?? ""}`}>
           {AI_LABELS[evaluation.classification] ?? evaluation.classification}
           {application.ai_score !== null ? ` · ${Number(application.ai_score)} de 100` : ""}
         </span>
       </div>
       <p className="text-sm text-ink-muted">
-        Es una sugerencia inicial sobre «{evaluation.file_name}». No cambia cuando mueves a la
-        persona y no decide nada.
+        Es la evaluación más reciente de «{evaluation.file_name}». Si el CV se vuelve a evaluar,
+        aquí aparece el resultado nuevo y el anterior queda anotado en el historial. Es una
+        sugerencia: no cambia cuando mueves a la persona y no decide nada.
       </p>
       {evaluation.result.motivo && <p>{evaluation.result.motivo}</p>}
       {criteria.length > 0 && (

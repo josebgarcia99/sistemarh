@@ -68,12 +68,12 @@ Qué conviene saber:
 - La calificación **la calcula el sistema** con los niveles que la IA asigna a cada criterio; la IA no pone el número final.
 - Los CV escaneados se leen con reconocimiento de texto. Si un escaneo sale mal, quedará como no evaluable.
 - Antes de enviar un CV a la IA se ocultan correos y teléfonos.
-- Volver a evaluar no borra la evaluación anterior.
+- **Volver a evaluar** (porque aprobaste un prompt nuevo o marcaste «Volver a evaluar también los ya evaluados») no duplica candidatos: cada persona muestra el **resultado más reciente** de su CV y en su historial queda anotado el anterior («La IA volvió a evaluar el CV: antes…; ahora…»). Nadie cambia de etapa por esto. Las personas cuya postulación ya está cerrada (contratadas, no contratadas, desistieron) conservan la evaluación con la que se decidió. Los resultados de cada lote anterior siguen disponibles en su lote.
 - Si el proveedor de IA falla, el lote se detiene y puedes usar «Reintentar» o «Reanudar».
 
 ## Candidatos y etapas
 
-Desde la vacante, el paso 4, «Candidatos y etapas» (o el botón «Ver candidatos y etapas» al terminar de evaluar los CV). Las personas evaluadas entran solas a la etapa «Revisión local RH» con la clasificación inicial de la IA. También puedes dar de alta a alguien a mano.
+Desde la vacante, el paso 4, «Candidatos y etapas» (o el botón «Ver candidatos y etapas» al terminar de evaluar los CV). Las personas evaluadas entran solas a la etapa «Revisión local RH» con la clasificación de la IA. También puedes dar de alta a alguien a mano.
 
 ### Mover de etapa
 

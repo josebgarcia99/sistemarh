@@ -14,7 +14,7 @@ La IA clasifica, extrae y resume; cada avance de etapa y el resultado final los 
 5. Carga los CV en bloque. El lote queda atado a las versiones aprobadas.
 6. El worker procesa cada CV y lo clasifica como `ACEPTADO_IA`, `RECHAZADO_IA` o `NO_EVALUABLE`.
 7. Se generan `Reporte_Evaluacion.xlsx`, `Aceptados.zip` y `Rechazados.zip`.
-8. RH descarga ambos ZIP, revisa todos los CV y decide quién avanza, incluidos los rechazados por la IA. La evaluación original no cambia.
+8. RH descarga ambos ZIP, revisa todos los CV y decide quién avanza, incluidos los rechazados por la IA. Las decisiones de RH no cambian la evaluación de la IA; si un CV se vuelve a evaluar, el candidato muestra el resultado más reciente y el anterior queda en su historial.
 9. Llamada telefónica: las preguntas generales de la empresa entran solas y se suman las de los bancos elegidos; en cada llamada se pueden quitar, redactar distinto o escribir preguntas; se guardan respuestas y análisis.
 10. Pruebas psicométricas: registro, documento y validación profesional.
 11. Entrevista con gerente, capturada por RH.

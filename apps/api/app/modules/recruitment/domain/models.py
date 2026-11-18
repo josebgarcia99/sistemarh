@@ -151,8 +151,9 @@ class Application:
     updated_at: datetime
     created_by: uuid.UUID | None = None
     cv_file_id: uuid.UUID | None = None
-    # Evaluación inicial de la IA con la que entró. Es una copia: no cambia aunque
-    # el CV se vuelva a evaluar ni cuando RH mueve a la persona.
+    # Evaluación más reciente de la IA sobre su CV. Es una copia: se pone al día
+    # si el CV se vuelve a evaluar (mientras la postulación siga activa) y no
+    # cambia cuando RH mueve a la persona.
     evaluation_item_id: uuid.UUID | None = None
     ai_classification: str | None = None
     ai_score: Decimal | None = None
@@ -241,8 +242,8 @@ class EvaluatedCv:
 
 
 class EvaluatedCvs(Protocol):
-    def first_evaluations(self, vacancy_id: uuid.UUID) -> list[EvaluatedCv]:
-        """La primera evaluación de cada CV de la vacante."""
+    def latest_evaluations(self, vacancy_id: uuid.UUID) -> list[EvaluatedCv]:
+        """La evaluación más reciente de cada CV de la vacante."""
         ...
 
     def evaluation(self, item_id: uuid.UUID) -> EvaluatedCv | None: ...

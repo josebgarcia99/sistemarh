@@ -331,7 +331,10 @@ describe("CvEvaluationTab", () => {
     renderTab();
     const button = await screen.findByRole("button", { name: "Evaluar 0 CV" });
     expect(button.hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByText(/mostrará el resultado nuevo/)).toBeNull();
     await user.click(screen.getByRole("checkbox", { name: /Volver a evaluar/ }));
+    // Avisa de lo que pasará con quienes ya son candidatos.
+    expect(screen.getByText(/mostrará el resultado nuevo/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Evaluar 3 CV" }));
     expect((await screen.findByRole("alert")).textContent).toContain("modelo asignado");
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");

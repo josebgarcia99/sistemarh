@@ -414,7 +414,7 @@ Postulación: la participación de una persona en una convocatoria.
 | `stage_id` | `UNIQUEIDENTIFIER` | Sí | Etapa actual (`pipeline_stages`). |
 | `status` | `VARCHAR(20)` | Sí | `ACTIVA` (en proceso) o el estado en que la dejó su resultado final: `CONTRATADA`, `DESCARTADA` (no contratada), `DESISTIO`, `NO_LOCALIZADA`, `CANCELADA` (vacante cancelada) u `OTRO_CIERRE`. |
 | `cv_file_id` | `UNIQUEIDENTIFIER` | No | Su CV (`files.file_assets`). |
-| `evaluation_item_id` | `UNIQUEIDENTIFIER` | No | Evaluación inicial de la IA (`ai.cv_batch_items`). |
+| `evaluation_item_id` | `UNIQUEIDENTIFIER` | No | Evaluación más reciente de la IA sobre el CV (`ai.cv_batch_items`). Se pone al día si el CV se vuelve a evaluar mientras la postulación sigue activa; el cambio queda en el historial. |
 | `ai_classification`, `ai_score` | `VARCHAR(20)`, `NUMERIC(5,2)` | No | Copia de la clasificación y puntuación iniciales. No cambian aunque el CV se vuelva a evaluar ni cuando RH mueve a la persona. |
 | `due_at` | `DATETIME2(3)` | No | Fecha acordada para la etapa actual. |
 | `created_at`, `created_by`, `updated_at` | | | `created_by` vacío si la creó el sistema. |

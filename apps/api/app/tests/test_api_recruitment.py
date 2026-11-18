@@ -221,17 +221,56 @@ def test_cada_cv_evaluado_entra_como_postulacion_en_revision_de_rh(
     assert [job["months"] for job in tenure["jobs"]] == [30, None]
     assert tenure["total_months"] == 30 and tenure["incomplete"] == 1
 
-    # Repetir la sincronización o volver a evaluar no duplica ni cambia la evaluación original.
+    # Repetir la sincronización no duplica ni cambia nada.
+    assert by_name(board(recruiter, vacancy_id)) == people
+    created = audit(admin, "postulacion.creada")
+    assert [e["details"]["postulaciones"] for e in created] == [2] and created[0][
+        "actor_name"
+    ] is None
+
+
+def test_volver_a_evaluar_muestra_la_evaluacion_nueva_y_guarda_la_anterior_en_el_historial(
+    evaluated, recruiter, admin, vacancy_id, providers
+):
+    people = by_name(evaluated)
+    ana, beto = people["Ana Pérez Ficticia"], people["Beto López Ficticio"]
+    review = stage_id(evaluated, "Revisión local RH")
+    # Beto se cierra antes de volver a evaluar: su postulación ya no está activa.
+    closed = recruiter.post(
+        f"{API}/applications/{beto['id']}/outcome",
+        json={"outcome": "NO_CONTRATADO", "reason": "No cumple el perfil"},
+    )
+    assert closed.status_code == 200, closed.text
+
     providers[ProviderCode.ANTHROPIC].script = [
         answer({"criteria": [{"code": c} for c in ("C1", "C2", "C3")]}, 0)
     ] * 2
     assert start(recruiter, vacancy_id, reevaluate=True).status_code == 201
     again = by_name(board(recruiter, vacancy_id))
-    assert len(again) == 2 and Decimal(again["Ana Pérez Ficticia"]["ai_score"]) == 100
-    created = audit(admin, "postulacion.creada")
-    assert [e["details"]["postulaciones"] for e in created] == [2] and created[0][
-        "actor_name"
-    ] is None
+
+    # No se duplica a nadie y Ana muestra el resultado nuevo, sin moverse de etapa.
+    assert len(again) == 2
+    renewed = again["Ana Pérez Ficticia"]
+    assert renewed["ai_classification"] == "RECHAZADO_IA" and Decimal(renewed["ai_score"]) == 0
+    assert renewed["stage_id"] == review and renewed["status"] == "ACTIVA"
+    detail = recruiter.get(f"{API}/applications/{ana['id']}").json()
+    assert detail["evaluation"]["classification"] == "RECHAZADO_IA"
+    assert [m["kind"] for m in detail["movements"]] == ["ALTA", "AVANCE", "INCIDENCIA"]
+    last = detail["movements"][-1]
+    assert last["actor_name"] is None
+    assert last["note"] == (
+        "La IA volvió a evaluar el CV: antes aceptado, 100.00 de 100; ahora rechazado, 0.00 de 100."
+    )
+
+    # La postulación cerrada conserva la evaluación con la que se decidió.
+    kept = again["Beto López Ficticio"]
+    assert kept["ai_classification"] == "RECHAZADO_IA" and Decimal(kept["ai_score"]) == 25
+
+    # Abrir otra vez los candidatos no repite el aviso en el historial.
+    board(recruiter, vacancy_id)
+    detail = recruiter.get(f"{API}/applications/{ana['id']}").json()
+    assert [m["kind"] for m in detail["movements"]] == ["ALTA", "AVANCE", "INCIDENCIA"]
+    assert [e["details"]["postulaciones"] for e in audit(admin, "postulacion.creada")] == [2]
 
 
 def test_sin_extraccion_el_nombre_sale_del_archivo(recruiter, vacancy_id, prompt, model, providers):
