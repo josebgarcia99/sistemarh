@@ -270,6 +270,40 @@ function contentOf(items: Item[], notes: string) {
   };
 }
 
+/** Texto sin diferencias de espacios: el servidor recorta y unifica los espacios al guardar. */
+const plain = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim();
+
+/** Lo que cuenta de cada parte de la llamada para saber si dos copias dicen lo mismo. */
+function parts(items: Item[], notes: string): Map<string, string> {
+  const found = new Map<string, string>();
+  let number = 0;
+  for (const item of items) {
+    if (!item.omitted) number += 1;
+    found.set(
+      item.omitted ? `una pregunta quitada («${plain(item.text).slice(0, 40)}»)` : `la pregunta ${number}`,
+      JSON.stringify([
+        item.id,
+        plain(item.text),
+        plain(item.guidance),
+        item.omitted,
+        plain(item.answer),
+        plain(item.notes),
+        item.notAsked,
+      ]),
+    );
+  }
+  found.set("las observaciones generales", plain(notes));
+  return found;
+}
+
+/** Dónde difiere lo que hay en pantalla de la copia que se volvió a leer del servidor. */
+function difference(screen: Map<string, string>, server: Map<string, string>): string | null {
+  for (const [label, value] of screen) {
+    if (server.get(label) !== value) return label;
+  }
+  return screen.size === server.size ? null : "la lista de preguntas";
+}
+
 /** Lo escrito en una llamada que se plegó antes de terminar de guardarse. */
 type Draft = { items: Item[]; notes: string };
 
@@ -312,6 +346,10 @@ function CallEditor({
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [autoError, setAutoError] = useState<string | null>(null);
   const dirty = editable && snapshot !== savedSnapshot;
+  // Comprobación: tras cada guardado se vuelve a leer la llamada del servidor (`call` es
+  // esa copia) y se compara con lo que hay en pantalla. Solo si coinciden se da por guardada.
+  const [verifying, setVerifying] = useState(false);
+  const mismatch = difference(parts(items, notes), parts(call.questions.map(toItem), call.notes));
   // Lo último que hay en pantalla, para los guardados que no ocurren durante un render.
   const latest = useRef({ content, snapshot, dirty, onChanged, items, notes });
   useEffect(() => {
@@ -341,6 +379,8 @@ function CallEditor({
             text: "Como cambiaron las preguntas, el análisis anterior se retiró: vuelve a pedirlo.",
           });
         }
+        setSaving(false);
+        setVerifying(true);
         await latest.current.onChanged();
       } catch (caught) {
         // No se reintenta lo mismo en bucle: se vuelve a intentar cuando la persona cambie algo.
@@ -348,6 +388,7 @@ function CallEditor({
         setAutoError(describeError(caught));
       } finally {
         setSaving(false);
+        setVerifying(false);
         inFlight.current = null;
       }
     })();
@@ -356,11 +397,11 @@ function CallEditor({
   }
 
   useEffect(() => {
-    if (!dirty || busy || saving || snapshot === failedSnapshot) return;
+    if (!dirty || busy || saving || verifying || snapshot === failedSnapshot) return;
     const timer = setTimeout(() => void autosave(), AUTOSAVE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- autosave lee lo último por referencia
-  }, [dirty, busy, saving, snapshot, failedSnapshot]);
+  }, [dirty, busy, saving, verifying, snapshot, failedSnapshot]);
 
   useEffect(() => {
     const flush = () => {
@@ -397,10 +438,12 @@ function CallEditor({
       setFeedback({ kind: "error", text: describeError(caught) });
     } finally {
       setBusy(false);
+      setVerifying(false);
     }
   }
   async function save(close: boolean) {
     const saved = await saveCall(call.id, { ...content, close });
+    setVerifying(true);
     setSavedSnapshot(snapshot);
     setSavedAt(new Date());
     setFailedSnapshot(null);
@@ -608,8 +651,10 @@ function CallEditor({
         <p
           aria-live="polite"
           aria-label="Estado del guardado"
-          className={`sticky bottom-4 z-10 self-start rounded-2xl px-4 py-2 text-sm shadow-lg ${
-            autoError ? "bg-accent-red-soft text-accent-red-ink" : "bg-surface text-ink-muted"
+          className={`sticky bottom-4 z-10 max-w-md self-end rounded-2xl px-4 py-2 text-sm shadow-lg ${
+            autoError || (!dirty && !saving && !verifying && mismatch)
+              ? "bg-accent-red-soft text-accent-red-ink"
+              : "bg-surface text-ink-muted"
           }`}
         >
           {autoError
@@ -618,9 +663,13 @@ function CallEditor({
               ? "Guardando…"
               : dirty
                 ? "Cambios sin guardar: se guardan solos en unos segundos."
-                : savedAt
-                  ? `Guardado a las ${timeFormat.format(savedAt)}.`
-                  : "Lo que escribas se guarda solo."}
+                : verifying
+                  ? "Comprobando que quedó guardado…"
+                  : mismatch
+                    ? `No se pudo confirmar el guardado: al volver a leer la llamada del servidor, ${mismatch} no coincide con lo que ves en pantalla. Lo que escribiste sigue aquí: no cierres esta llamada y pulsa «Guardar».`
+                    : savedAt
+                      ? `Guardado y comprobado a las ${timeFormat.format(savedAt)}.`
+                      : "Lo que escribas se guarda solo."}
         </p>
       )}
       {canEdit && (
@@ -665,8 +714,10 @@ function CallEditor({
       {editable && (
         <p className="text-sm text-ink-muted">
           Lo que escribes se guarda solo a los pocos segundos, al plegar la llamada y al salir
-          de la pantalla; «Guardar» lo hace en el momento. «Analizar con IA» guarda antes de
-          analizar. Al cerrar, la llamada ya no se puede modificar.
+          de la pantalla; «Guardar» lo hace en el momento. «Guardado y comprobado» significa que,
+          después de guardar, la pantalla volvió a leer la llamada del servidor y es igual a lo
+          que ves. «Analizar con IA» guarda antes de analizar. Al cerrar, la llamada ya no se
+          puede modificar.
         </p>
       )}
       {call.analysis && (

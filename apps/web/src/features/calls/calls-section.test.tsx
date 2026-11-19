@@ -313,10 +313,28 @@ describe("CallsSection", () => {
         };
       });
 
-  it("guarda sola lo que se escribe, sin que nadie pulse «Guardar»", async () => {
+  /** La llamada tal como queda en el servidor después de recibir un guardado. */
+  const stored = (sent: { notes: string; answers: { question_id: string; answer: string }[] }) => {
+    const base = makeCall();
+    return makeCall({
+      notes: sent.notes,
+      questions: base.questions.map((item) => ({
+        ...item,
+        answer: sent.answers.find((answer) => answer.question_id === item.id)?.answer ?? "",
+      })),
+    });
+  };
+
+  it("guarda sola lo que se escribe y comprueba contra el servidor que quedó guardado", async () => {
+    let calls = [makeCall()];
     const fetchMock = mockApi({
-      [`GET ${CALLS_URL}`]: { body: [makeCall()] },
-      ["PUT /api/v1/calls/l1"]: { body: makeCall() },
+      [`GET ${CALLS_URL}`]: () => ({ body: calls }),
+      ["PUT /api/v1/calls/l1"]: ({ init }) => {
+        // El servidor recorta los espacios sobrantes: eso no cuenta como diferencia.
+        const sent = JSON.parse(String(init.body));
+        calls = [stored({ ...sent, answers: sent.answers.map((a: { answer: string }) => ({ ...a, answer: a.answer.trim() })) })];
+        return { body: calls[0] };
+      },
     });
     const user = userEvent.setup();
     renderApp(<CallsSection applicationId="a1" canEdit active />, { session: makeUser() });
@@ -324,11 +342,38 @@ describe("CallsSection", () => {
     const state = await screen.findByLabelText("Estado del guardado");
     expect(state.textContent).toBe("Lo que escribas se guarda solo.");
 
-    await user.type(screen.getByLabelText("Respuesta a la pregunta 1"), "Nómina quincenal");
+    await user.type(screen.getByLabelText("Respuesta a la pregunta 1"), "Nómina quincenal ");
     expect(state.textContent).toContain("Cambios sin guardar");
-    // A los pocos segundos de dejar de escribir se guarda, marcado como automático.
-    await waitFor(() => expect(state.textContent).toMatch(/^Guardado a las /), { timeout: 4000 });
-    expect(writes(fetchMock)).toEqual([{ route: "PUT l1", autosave: true, answer: "Nómina quincenal" }]);
+    // A los pocos segundos de dejar de escribir se guarda, marcado como automático, y la
+    // pantalla vuelve a leer la llamada del servidor antes de darla por guardada.
+    await waitFor(() => expect(state.textContent).toMatch(/^Guardado y comprobado a las /), { timeout: 4000 });
+    expect(screen.getByText(/volvió a leer la llamada del servidor y es igual a lo que ves/)).toBeTruthy();
+    expect(writes(fetchMock)).toEqual([{ route: "PUT l1", autosave: true, answer: "Nómina quincenal " }]);
+    const reads = fetchMock.mock.calls.filter(
+      ([url, init]) => String(url).endsWith(CALLS_URL) && (init?.method ?? "GET") === "GET",
+    );
+    expect(reads.length).toBeGreaterThanOrEqual(2); // la carga inicial y la relectura
+  });
+
+  it("si el servidor contesta que guardó pero al releer no coincide, no lo da por guardado", async () => {
+    mockApi({
+      // El envío «sale bien», pero la llamada que se vuelve a leer sigue sin la respuesta.
+      [`GET ${CALLS_URL}`]: { body: [makeCall()] },
+      ["PUT /api/v1/calls/l1"]: { body: makeCall() },
+    });
+    const user = userEvent.setup();
+    renderApp(<CallsSection applicationId="a1" canEdit active />, { session: makeUser() });
+    await user.click(await screen.findByRole("button", { name: /Banco de nómina/ }));
+    const answer = await screen.findByLabelText<HTMLTextAreaElement>("Respuesta a la pregunta 2");
+    await user.type(answer, "Concilio contra el SUA");
+    const state = screen.getByLabelText("Estado del guardado");
+    await waitFor(() => expect(state.textContent).toContain("No se pudo confirmar el guardado"), {
+      timeout: 4000,
+    });
+    expect(state.textContent).toContain("la pregunta 2 no coincide con lo que ves en pantalla");
+    expect(state.textContent).toContain("pulsa «Guardar»");
+    expect(state.textContent).not.toContain("Guardado y comprobado");
+    expect(answer.value).toBe("Concilio contra el SUA");
   });
 
   it("al plegar la llamada guarda lo que faltaba, y «Analizar con IA» guarda antes de analizar", async () => {

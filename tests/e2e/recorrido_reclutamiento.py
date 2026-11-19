@@ -89,7 +89,8 @@ with sync_playwright() as p:
     page.get_by_label("Respuesta a la pregunta 5").fill("Sí, vivo cerca de la oficina")
     page.screenshot(path=f"{SHOTS}/f5_1_llamada_preguntas.png", full_page=True)
     # Sin pulsar «Guardar»: se guarda sola, y al plegar y volver a abrir la llamada todo sigue ahí
-    expect(page.get_by_label("Estado del guardado")).to_contain_text("Guardado a las", timeout=10000)
+    expect(page.get_by_label("Estado del guardado")).to_contain_text("Guardado y comprobado a las", timeout=10000)
+    page.get_by_label("Estado del guardado").scroll_into_view_if_needed(); page.screenshot(path=f"{SHOTS}/f5_1b_guardado_comprobado.png")
     cabecera = page.get_by_role("list", name="Llamadas").locator("li > button").first
     cabecera.click(); expect(page.get_by_label("Respuesta a la pregunta 1")).to_have_count(0)
     cabecera.click(); expect(page.get_by_label("Respuesta a la pregunta 1")).to_have_value("Me interesa por el área de nómina y la estabilidad")
