@@ -88,6 +88,15 @@ with sync_playwright() as p:
     page.get_by_role("checkbox", name="No se realizó").nth(3).check()
     page.get_by_label("Respuesta a la pregunta 5").fill("Sí, vivo cerca de la oficina")
     page.screenshot(path=f"{SHOTS}/f5_1_llamada_preguntas.png", full_page=True)
+    # Sin pulsar «Guardar»: se guarda sola, y al plegar y volver a abrir la llamada todo sigue ahí
+    expect(page.get_by_label("Estado del guardado")).to_contain_text("Guardado a las", timeout=10000)
+    cabecera = page.get_by_role("list", name="Llamadas").locator("li > button").first
+    cabecera.click(); expect(page.get_by_label("Respuesta a la pregunta 1")).to_have_count(0)
+    cabecera.click(); expect(page.get_by_label("Respuesta a la pregunta 1")).to_have_value("Me interesa por el área de nómina y la estabilidad")
+    expect(page.get_by_label("Respuesta a la pregunta 5")).to_have_value("Sí, vivo cerca de la oficina"); expect(page.get_by_role("checkbox", name="No se realizó").nth(3)).to_be_checked()
+    page.get_by_label("Respuesta a la pregunta 3").fill("Concilio contra el SUA cada mes, sin falta"); cabecera.click(); cabecera.click()
+    expect(page.get_by_label("Respuesta a la pregunta 3")).to_have_value("Concilio contra el SUA cada mes, sin falta"); print("5b la llamada se guarda sola: al plegarla y volver a abrirla, incluso de inmediato, las respuestas siguen ahí")
+    page.get_by_label("Respuesta a la pregunta 3").fill("Concilio contra el SUA cada mes")
     page.get_by_role("button", name="Guardar", exact=True).click()
     expect(page.get_by_role("status").filter(has_text="Llamada guardada")).to_be_visible()
     page.get_by_role("button", name="Analizar con IA").click()

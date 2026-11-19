@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AiWaitNotice, useAiWait } from "@/components/ui/ai-wait";
 import { cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
 import {
@@ -38,6 +38,8 @@ export function CallsSection({ applicationId, canEdit, active }: Props) {
   const [choosing, setChoosing] = useState(false);
   const [bankIds, setBankIds] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
+  // Borradores de llamadas plegadas con cambios que aún se estaban guardando.
+  const [drafts] = useState(() => new Map<string, Draft>());
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
   const banksQuery = useQuery({
@@ -165,6 +167,7 @@ export function CallsSection({ applicationId, canEdit, active }: Props) {
                 key={`${call.id}-${call.status}`}
                 call={call}
                 canEdit={canEdit}
+                drafts={drafts}
                 onChanged={() => queryClient.invalidateQueries({ queryKey })}
               />
             )}
@@ -195,6 +198,10 @@ type Item = {
   notes: string;
   notAsked: boolean;
 };
+
+/** Tiempo sin escribir tras el cual la llamada se guarda sola. */
+const AUTOSAVE_MS = 2000;
+const timeFormat = new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
 function toItem(question: CallQuestion): Item {
   return {
@@ -240,19 +247,50 @@ function SourcePills({ item }: { item: Item }) {
   );
 }
 
+/** Lo que se envía al guardar una llamada: respuestas, preguntas y observaciones. */
+function contentOf(items: Item[], notes: string) {
+  return {
+    answers: items
+      .filter((item) => item.answer.trim() || item.notes.trim() || item.notAsked)
+      .map((item) => ({
+        question_id: item.id,
+        answer: item.answer,
+        notes: item.notes,
+        not_asked: item.notAsked,
+      })),
+    questions: items.map((item) => ({
+      id: item.id,
+      text: item.text,
+      competency: item.competency,
+      guidance: item.guidance,
+      omitted: item.omitted,
+      bank_id: item.bankId,
+    })),
+    notes,
+  };
+}
+
+/** Lo escrito en una llamada que se plegó antes de terminar de guardarse. */
+type Draft = { items: Item[]; notes: string };
+
 function CallEditor({
   call,
   canEdit,
+  drafts,
   onChanged,
 }: {
   call: Call;
   canEdit: boolean;
+  drafts: Map<string, Draft>;
   onChanged: () => Promise<void>;
 }) {
   const editable = canEdit && call.status === "BORRADOR";
-  const [items, setItems] = useState<Item[]>(() => call.questions.map(toItem));
+  // Si la llamada se plegó con algo pendiente, se retoma eso y no lo que haya llegado del
+  // servidor, que puede ir un paso atrás mientras termina el guardado.
+  const [draft] = useState(() => (editable ? drafts.get(call.id) : undefined));
+  const [items, setItems] = useState<Item[]>(() => draft?.items ?? call.questions.map(toItem));
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [notes, setNotes] = useState(call.notes);
+  const [notes, setNotes] = useState(draft?.notes ?? call.notes);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
   const aiWait = useAiWait();
@@ -261,10 +299,97 @@ function CallEditor({
   const change = (id: string, patch: Partial<Item>) =>
     setItems(items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
 
+  // Guardado automático. Una llamada se captura mientras se habla: lo escrito se guarda
+  // solo a los pocos segundos de dejar de escribir, al plegar la llamada, al salir de la
+  // pantalla y al cambiar de pestaña, sin depender de que alguien pulse «Guardar».
+  const content = contentOf(items, notes);
+  const snapshot = JSON.stringify(content);
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify(contentOf(call.questions.map(toItem), call.notes)),
+  );
+  const [failedSnapshot, setFailedSnapshot] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [autoError, setAutoError] = useState<string | null>(null);
+  const dirty = editable && snapshot !== savedSnapshot;
+  // Lo último que hay en pantalla, para los guardados que no ocurren durante un render.
+  const latest = useRef({ content, snapshot, dirty, onChanged, items, notes });
+  useEffect(() => {
+    latest.current = { content, snapshot, dirty, onChanged, items, notes };
+  });
+  const inFlight = useRef<Promise<void> | null>(null);
+
+  async function autosave(keepalive = false) {
+    if (inFlight.current) return inFlight.current;
+    const { content: body, snapshot: sent } = latest.current;
+    const task = (async () => {
+      setSaving(true);
+      try {
+        const saved = await saveCall(
+          call.id,
+          { ...body, close: false, autosave: true },
+          // El navegador solo garantiza estos envíos si el cuerpo es pequeño.
+          { keepalive: keepalive && sent.length < 60_000 },
+        );
+        setSavedSnapshot(sent);
+        setSavedAt(new Date());
+        setFailedSnapshot(null);
+        setAutoError(null);
+        if (call.analysis && !saved.analysis) {
+          setFeedback({
+            kind: "ok",
+            text: "Como cambiaron las preguntas, el análisis anterior se retiró: vuelve a pedirlo.",
+          });
+        }
+        await latest.current.onChanged();
+      } catch (caught) {
+        // No se reintenta lo mismo en bucle: se vuelve a intentar cuando la persona cambie algo.
+        setFailedSnapshot(sent);
+        setAutoError(describeError(caught));
+      } finally {
+        setSaving(false);
+        inFlight.current = null;
+      }
+    })();
+    inFlight.current = task;
+    return task;
+  }
+
+  useEffect(() => {
+    if (!dirty || busy || saving || snapshot === failedSnapshot) return;
+    const timer = setTimeout(() => void autosave(), AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- autosave lee lo último por referencia
+  }, [dirty, busy, saving, snapshot, failedSnapshot]);
+
+  useEffect(() => {
+    const flush = () => {
+      if (document.visibilityState === "hidden" && latest.current.dirty) void autosave(true);
+    };
+    document.addEventListener("visibilitychange", flush);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", flush);
+      window.removeEventListener("pagehide", flush);
+      // Al plegar la llamada o salir de la pantalla se guarda lo que faltaba.
+      const { content: body, dirty: pending, onChanged: refresh } = latest.current;
+      drafts.delete(call.id);
+      if (pending) {
+        drafts.set(call.id, { items: latest.current.items, notes: latest.current.notes });
+        saveCall(call.id, { ...body, close: false, autosave: true })
+          .then(() => refresh())
+          .catch(() => undefined);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- se registra una sola vez por llamada
+  }, [call.id]);
+
   async function run(action: () => Promise<string | void>, message: string) {
     setBusy(true);
     setFeedback(null);
     try {
+      // Un guardado automático en curso termina antes de guardar, cerrar o analizar.
+      await inFlight.current;
       const other = await action();
       await onChanged();
       setFeedback({ kind: "ok", text: other || message });
@@ -275,26 +400,11 @@ function CallEditor({
     }
   }
   async function save(close: boolean) {
-    const saved = await saveCall(call.id, {
-      answers: items
-        .filter((item) => item.answer.trim() || item.notes.trim() || item.notAsked)
-        .map((item) => ({
-          question_id: item.id,
-          answer: item.answer,
-          notes: item.notes,
-          not_asked: item.notAsked,
-        })),
-      questions: items.map((item) => ({
-        id: item.id,
-        text: item.text,
-        competency: item.competency,
-        guidance: item.guidance,
-        omitted: item.omitted,
-        bank_id: item.bankId,
-      })),
-      notes,
-      close,
-    });
+    const saved = await saveCall(call.id, { ...content, close });
+    setSavedSnapshot(snapshot);
+    setSavedAt(new Date());
+    setFailedSnapshot(null);
+    setAutoError(null);
     setEditingId(null);
     // El análisis numera las preguntas: si cambiaron, el servidor lo retira.
     if (call.analysis && !saved.analysis) {
@@ -494,6 +604,25 @@ function CallEditor({
         />
       </div>
       <FeedbackLine feedback={feedback} />
+      {editable && (
+        <p
+          aria-live="polite"
+          aria-label="Estado del guardado"
+          className={`sticky bottom-4 z-10 self-start rounded-2xl px-4 py-2 text-sm shadow-lg ${
+            autoError ? "bg-accent-red-soft text-accent-red-ink" : "bg-surface text-ink-muted"
+          }`}
+        >
+          {autoError
+            ? `No se pudo guardar automáticamente: ${autoError} Lo que escribiste sigue en pantalla: no cierres esta llamada y pulsa «Guardar».`
+            : saving
+              ? "Guardando…"
+              : dirty
+                ? "Cambios sin guardar: se guardan solos en unos segundos."
+                : savedAt
+                  ? `Guardado a las ${timeFormat.format(savedAt)}.`
+                  : "Lo que escribas se guarda solo."}
+        </p>
+      )}
       {canEdit && (
         <div className="flex flex-wrap gap-3">
           {editable && (
@@ -522,6 +651,8 @@ function CallEditor({
             disabled={busy}
             onClick={() =>
               run(async () => {
+                // La IA analiza lo guardado: primero se guarda lo que haya en pantalla.
+                if (dirty) await save(false);
                 await aiWait.run(() => analyzeCall(call.id));
               }, "Análisis listo.")
             }
@@ -533,8 +664,9 @@ function CallEditor({
       <AiWaitNotice wait={aiWait} />
       {editable && (
         <p className="text-sm text-ink-muted">
-          Guarda antes de analizar: la IA trabaja con lo último guardado, también en las preguntas
-          que quitaste, cambiaste o agregaste. Al cerrar, la llamada ya no se puede modificar.
+          Lo que escribes se guarda solo a los pocos segundos, al plegar la llamada y al salir
+          de la pantalla; «Guardar» lo hace en el momento. «Analizar con IA» guarda antes de
+          analizar. Al cerrar, la llamada ya no se puede modificar.
         </p>
       )}
       {call.analysis && (
@@ -788,7 +920,7 @@ function AddQuestions({ items, onAdd }: { items: Item[]; onAdd: (extra: Item[]) 
       )}
       <p className="text-sm text-ink-muted">
         Lo que agregues, quites o cambies vale solo para esta llamada (los bancos quedan igual) y
-        se guarda al pulsar «Guardar».
+        se guarda solo, igual que las respuestas.
       </p>
     </div>
   );

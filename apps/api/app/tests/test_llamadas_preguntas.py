@@ -378,3 +378,44 @@ def test_una_llamada_anterior_conserva_sus_preguntas_y_los_reportes_la_encuentra
     assert names(general) == []
     options = recruiter.get(f"{API}/reports/options").json()
     assert [item["name"] for item in options["banks"]] == ["Banco de nómina", "Banco de sistemas"]
+
+
+def test_el_guardado_automatico_conserva_las_respuestas_sin_llenar_la_auditoria(
+    ana, recruiter, admin
+):
+    _general(admin)
+    call = recruiter.post(f"{API}/applications/{ana}/calls", json={"bank_ids": []}).json()
+    url = f"{API}/calls/{call['id']}"
+    interest, salary = call["questions"]
+
+    def body(text: str, **extra) -> dict:
+        return {
+            "answers": [
+                {"question_id": interest["id"], "answer": text, "notes": "", "not_asked": False}
+            ],
+            "questions": [_item(interest), _item(salary)],
+            "notes": "Contestó al segundo intento.",
+            **extra,
+        }
+
+    # Mientras la persona escribe, la pantalla guarda sola varias veces.
+    for text in ("Me int", "Me interesa por", "Me interesa por el horario."):
+        saved = recruiter.put(url, json=body(text, autosave=True))
+        assert saved.status_code == 200, saved.text
+    # Al volver a entrar, lo último escrito está ahí.
+    again = recruiter.get(f"{API}/applications/{ana}/calls").json()[0]
+    assert again["questions"][0]["answer"] == "Me interesa por el horario."
+    assert again["notes"] == "Contestó al segundo intento." and again["status"] == "BORRADOR"
+    # Esos guardados no dejan evento; el que pide la persona y el cierre, sí.
+    assert audit(admin, "llamada.guardada") == []
+    assert recruiter.put(url, json=body("Me interesa por el horario.")).status_code == 200
+    assert len(audit(admin, "llamada.guardada")) == 1
+    # Un cierre nunca es automático: aunque llegue marcado así, se audita.
+    closing = body("Me interesa por el horario.", close=True, autosave=True)
+    closing["answers"].append(
+        {"question_id": salary["id"], "answer": "", "notes": "", "not_asked": True}
+    )
+    assert recruiter.put(url, json=closing).json()["status"] == "CERRADA"
+    assert len(audit(admin, "llamada.cerrada")) == 1
+    # Una llamada cerrada ya no acepta guardados, tampoco automáticos.
+    assert recruiter.put(url, json=body("otra cosa", autosave=True)).status_code == 409

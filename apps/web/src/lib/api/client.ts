@@ -51,6 +51,8 @@ type RequestOptions<T> = {
   /** Códigos distintos de 2xx cuyo cuerpo también cumple el esquema. */
   acceptStatuses?: number[];
   signal?: AbortSignal;
+  /** Pide al navegador terminar el envío aunque la página se esté cerrando. */
+  keepalive?: boolean;
 };
 
 function buildUrl(path: string, query?: RequestOptions<unknown>["query"]): string {
@@ -63,7 +65,7 @@ function buildUrl(path: string, query?: RequestOptions<unknown>["query"]): strin
 }
 
 export async function apiFetch<T = void>(path: string, options: RequestOptions<T> = {}): Promise<T> {
-  const { schema, method = "GET", body, file, query, acceptStatuses = [], signal } = options;
+  const { schema, method = "GET", body, file, query, acceptStatuses = [], signal, keepalive } = options;
 
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -76,6 +78,7 @@ export async function apiFetch<T = void>(path: string, options: RequestOptions<T
     headers,
     body: file ?? (body === undefined ? undefined : JSON.stringify(body)),
     signal,
+    ...(keepalive ? { keepalive: true } : {}),
   });
 
   if (response.ok || acceptStatuses.includes(response.status)) {

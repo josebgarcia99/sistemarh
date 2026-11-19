@@ -195,9 +195,12 @@ export function saveCall(
     questions: CallQuestionInput[];
     notes: string;
     close: boolean;
+    /** Guardado que hace la pantalla sola mientras la persona escribe. */
+    autosave?: true;
   },
+  options: { keepalive?: boolean } = {},
 ) {
-  return apiFetch(`/calls/${callId}`, { method: "PUT", body: input, schema: callSchema });
+  return apiFetch(`/calls/${callId}`, { method: "PUT", body: input, schema: callSchema, ...options });
 }
 
 export function analyzeCall(callId: string) {

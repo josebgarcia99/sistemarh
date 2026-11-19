@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Bank, Call, CallQuestion } from "@/lib/api/calls";
@@ -298,5 +298,88 @@ describe("CallsSection", () => {
     await user.click(await screen.findByRole("button", { name: /Banco de nómina/ }));
     expect(screen.getByText("1. ¿Qué nóminas has calculado?")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Nueva llamada|Analizar con IA|Guardar/ })).toBeNull();
+  });
+
+  /** Las escrituras a la llamada, en orden, con lo esencial de cada una. */
+  const writes = (fetchMock: ReturnType<typeof mockApi>) =>
+    fetchMock.mock.calls
+      .filter(([, init]) => init?.method === "PUT" || init?.method === "POST")
+      .map(([url, init]) => {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        return {
+          route: `${init?.method} ${String(url).split("/").pop()}`,
+          autosave: body.autosave === true,
+          answer: body.answers?.[0]?.answer as string | undefined,
+        };
+      });
+
+  it("guarda sola lo que se escribe, sin que nadie pulse «Guardar»", async () => {
+    const fetchMock = mockApi({
+      [`GET ${CALLS_URL}`]: { body: [makeCall()] },
+      ["PUT /api/v1/calls/l1"]: { body: makeCall() },
+    });
+    const user = userEvent.setup();
+    renderApp(<CallsSection applicationId="a1" canEdit active />, { session: makeUser() });
+    await user.click(await screen.findByRole("button", { name: /Banco de nómina/ }));
+    const state = await screen.findByLabelText("Estado del guardado");
+    expect(state.textContent).toBe("Lo que escribas se guarda solo.");
+
+    await user.type(screen.getByLabelText("Respuesta a la pregunta 1"), "Nómina quincenal");
+    expect(state.textContent).toContain("Cambios sin guardar");
+    // A los pocos segundos de dejar de escribir se guarda, marcado como automático.
+    await waitFor(() => expect(state.textContent).toMatch(/^Guardado a las /), { timeout: 4000 });
+    expect(writes(fetchMock)).toEqual([{ route: "PUT l1", autosave: true, answer: "Nómina quincenal" }]);
+  });
+
+  it("al plegar la llamada guarda lo que faltaba, y «Analizar con IA» guarda antes de analizar", async () => {
+    const fetchMock = mockApi({
+      [`GET ${CALLS_URL}`]: { body: [makeCall()] },
+      ["PUT /api/v1/calls/l1"]: { body: makeCall() },
+      ["POST /api/v1/calls/l1/analysis"]: { body: makeCall() },
+    });
+    const user = userEvent.setup();
+    renderApp(<CallsSection applicationId="a1" canEdit active />, { session: makeUser() });
+    const header = await screen.findByRole("button", { name: /Banco de nómina/ });
+    await user.click(header);
+    await user.type(await screen.findByLabelText("Respuesta a la pregunta 1"), "Uno");
+    // La IA analiza lo guardado: primero se guarda lo que hay en pantalla.
+    await user.click(screen.getByRole("button", { name: "Analizar con IA" }));
+    await screen.findByText("Análisis listo.");
+    expect(writes(fetchMock)).toEqual([
+      { route: "PUT l1", autosave: false, answer: "Uno" },
+      { route: "POST analysis", autosave: false, answer: undefined },
+    ]);
+
+    // Se escribe algo más y se pliega la llamada de inmediato: no se pierde.
+    await user.type(screen.getByLabelText("Respuesta a la pregunta 1"), " dos");
+    await user.click(header);
+    await waitFor(() => expect(writes(fetchMock)).toHaveLength(3));
+    expect(writes(fetchMock)[2]).toEqual({ route: "PUT l1", autosave: true, answer: "Uno dos" });
+    // Al volver a abrirla se ve lo que se escribió, aunque la lista del servidor vaya un
+    // paso atrás (aquí siempre responde con la llamada vacía).
+    await user.click(header);
+    expect((await screen.findByLabelText<HTMLTextAreaElement>("Respuesta a la pregunta 1")).value).toBe("Uno dos");
+  });
+
+  it("si el guardado automático falla, lo dice y no borra lo escrito", async () => {
+    mockApi({
+      [`GET ${CALLS_URL}`]: { body: [makeCall()] },
+      ["PUT /api/v1/calls/l1"]: {
+        status: 503,
+        body: { title: "Sin servicio", status: 503, detail: "El servidor no está disponible.", code: "sin_servicio" },
+      },
+    });
+    const user = userEvent.setup();
+    renderApp(<CallsSection applicationId="a1" canEdit active />, { session: makeUser() });
+    await user.click(await screen.findByRole("button", { name: /Banco de nómina/ }));
+    const answer = (await screen.findByLabelText("Respuesta a la pregunta 1")) as HTMLTextAreaElement;
+    await user.type(answer, "Nómina quincenal");
+    const state = screen.getByLabelText("Estado del guardado");
+    await waitFor(() => expect(state.textContent).toContain("No se pudo guardar automáticamente"), {
+      timeout: 4000,
+    });
+    expect(state.textContent).toContain("El servidor no está disponible.");
+    expect(state.textContent).toContain("pulsa «Guardar»");
+    expect(answer.value).toBe("Nómina quincenal");
   });
 });

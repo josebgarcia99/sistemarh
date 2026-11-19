@@ -120,6 +120,8 @@ class CallIn(BaseModel):
     questions: list[CallQuestionIn] | None = Field(default=None, max_length=MAX_CALL_QUESTIONS)
     # Cerrar la llamada: ya no se podrá modificar.
     close: bool = False
+    # Guardado que hace la pantalla sola mientras la persona escribe.
+    autosave: bool = False
 
 
 class NewCallIn(BaseModel):
@@ -444,6 +446,7 @@ def save_call(
             notes=body.notes,
             called_at=body.called_at,
             close=body.close,
+            autosave=body.autosave,
             ip=client_ip(request),
         )
         names = _names(repos, {view.call.created_by})

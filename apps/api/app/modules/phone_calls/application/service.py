@@ -564,10 +564,15 @@ class PhoneCallService:
         called_at: datetime | None,
         questions: list[dict[str, object]] | None = None,
         close: bool = False,
+        autosave: bool = False,
         ip: str | None = None,
     ) -> CallView:
         """Guarda lo capturado. Con ``questions`` cambia además la lista de
-        preguntas de esta llamada. Con ``close`` queda cerrada y fija."""
+        preguntas de esta llamada. Con ``close`` queda cerrada y fija.
+
+        ``autosave`` es el guardado que hace la pantalla sola mientras la persona
+        escribe: guarda lo mismo, pero no deja un evento de auditoría cada pocos
+        segundos. El guardado que pide la persona y el cierre sí se auditan."""
         call = self._call(actor, call_id, AccessLevel.COLABORACION)
         if call.status is CallStatus.CERRADA:
             raise ConflictError("La llamada está cerrada y ya no se modifica.")
@@ -623,6 +628,8 @@ class PhoneCallService:
             call.status = CallStatus.CERRADA
             call.closed_at = now
         self._repo.save_call(call)
+        if autosave and not close:
+            return self._view(call)
         self._audit.record(
             AuditAction.LLAMADA_CERRADA if close else AuditAction.LLAMADA_GUARDADA,
             actor_user_id=actor.id,
