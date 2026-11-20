@@ -39,7 +39,7 @@ with sync_playwright() as p:
     fila = people.get_by_role("listitem").filter(has_text="Rechazado por IA").first
     fila.get_by_role("button", name="Ver por qué", exact=True).click()
     motivos = fila.get_by_role("list", name="Niveles por criterio"); expect(motivos.get_by_role("listitem").first).to_be_visible()
-    expect(motivos.get_by_role("listitem").first).to_contain_text("C1 · ")
+    expect(motivos.get_by_role("listitem").first).to_contain_text("Experiencia en cálculo de nómina (C1): ")
     expect(fila).to_contain_text("Evaluación más reciente de"); page.screenshot(path=f"{SHOTS}/f5_1c_ver_por_que.png")
     fila.get_by_role("button", name="Ocultar por qué", exact=True).click(); expect(fila.get_by_role("list", name="Niveles por criterio")).to_have_count(0)
     print("1b «Ver por qué» muestra en la lista el nivel de cada criterio, con su nombre, evidencia y justificación")

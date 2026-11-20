@@ -22,8 +22,8 @@ export function EvaluationReasons({ evaluation }: { evaluation: Evaluation }) {
         return (
           <li key={criterion.id} className="rounded-2xl bg-white/60 px-4 py-3">
             <p className="font-medium">
-              {criterion.id}
-              {name ? ` · ${name}` : ""}:{" "}
+              {name ?? criterion.id}
+              {name && <span className="font-normal text-ink-muted"> ({criterion.id})</span>}:{" "}
               {criterion.sin_evidencia ? "sin evidencia" : `nivel ${criterion.nivel} de 4`}
             </p>
             {criterion.evidencia && <p className="text-sm">«{criterion.evidencia}»</p>}

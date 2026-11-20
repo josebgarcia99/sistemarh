@@ -103,7 +103,12 @@ const itemSchema = z.object({
 });
 export type CvBatchItem = z.infer<typeof itemSchema>;
 
-const detailSchema = z.object({ batch: batchSchema, items: z.array(itemSchema) });
+const detailSchema = z.object({
+  batch: batchSchema,
+  items: z.array(itemSchema),
+  /** Título de cada criterio de la rúbrica con la que se evaluó el lote. */
+  criteria_names: z.record(z.string(), z.string()).default({}),
+});
 export type CvBatchDetail = z.infer<typeof detailSchema>;
 
 export function getCvOverview(vacancyId: string, signal?: AbortSignal): Promise<CvOverview> {

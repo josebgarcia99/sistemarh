@@ -229,6 +229,11 @@ class CvBatchService:
         ]
         return self._views([batch])[0], items
 
+    def criteria_names(self, batch: Batch) -> dict[str, str]:
+        """El título de cada criterio de la rúbrica con la que se evaluó el lote."""
+        rubric = self._rubrics.get(batch.prompt_version_id)
+        return {c.code: c.name for c in rubric.criteria} if rubric else {}
+
     # --- Operaciones de la persona -------------------------------------------------------
 
     def create(

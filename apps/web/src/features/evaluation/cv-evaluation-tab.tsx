@@ -540,7 +540,7 @@ function BatchItems({ batch }: { batch: CvBatch }) {
     <ul aria-label="CV del lote" className="flex flex-col gap-2">
       {data.items.map((item) => (
         <li key={item.id}>
-          <ItemRow item={item} />
+          <ItemRow item={item} names={data.criteria_names} />
         </li>
       ))}
     </ul>
@@ -560,7 +560,7 @@ function itemState(item: CvBatchItem): { label: string; style: string } {
   return { label: "Pendiente", style: "bg-neutral-soft text-neutral-ink" };
 }
 
-function ItemRow({ item }: { item: CvBatchItem }) {
+function ItemRow({ item, names }: { item: CvBatchItem; names: Record<string, string> }) {
   const state = itemState(item);
   const missing = item.criteria.filter((criterion) => criterion.no_evidence).length;
   const hasDetail = item.criteria.length > 0 || Boolean(item.reason || item.error_message);
@@ -609,7 +609,12 @@ function ItemRow({ item }: { item: CvBatchItem }) {
               <tbody>
                 {item.criteria.map((criterion) => (
                   <tr key={criterion.code} className="border-t border-line align-top">
-                    <td className="py-2 pr-3">{criterion.code}</td>
+                    <td className="py-2 pr-3">
+                      {names[criterion.code] ?? criterion.code}
+                      {names[criterion.code] && (
+                        <span className="text-sm text-ink-muted"> ({criterion.code})</span>
+                      )}
+                    </td>
                     <td className="py-2 pr-3 whitespace-nowrap">
                       {criterion.no_evidence ? "Sin evidencia" : `${criterion.level} de 4`}
                     </td>

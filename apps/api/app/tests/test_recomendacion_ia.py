@@ -216,8 +216,16 @@ def test_la_sintesis_da_un_veredicto_con_razones_y_usa_las_escalas_leidas(
     assert "- Escala leída del reporte: Soborno: 3 de 5" in sent
     assert "- Punto de atención del reporte: Lealtad: el reporte la ubica en 1 de 5" in sent
     assert "- Escala para revisar en el reporte (no la uses): Fraude" in sent
-    # Y cada criterio del CV, con su nombre y su nivel.
-    assert "- Criterio C1, " in sent and ": nivel 4." in sent
+    # Y cada criterio del CV con su nivel, por su título y sin su código, para que la IA
+    # lo cite por su nombre.
+    names = recruiter.get(f"{API}/applications/{ana}").json()["evaluation"]["criteria_names"]
+    assert len(names) == 3
+    for name in names.values():
+        assert f"- Criterio «{name}»: nivel 4." in sent
+    criteria_lines = [line for line in sent.splitlines() if line.startswith("- Criterio ")]
+    assert len(criteria_lines) == 3 and not any("C1" in line for line in criteria_lines)
+    rules = " ".join(fake.prompts[0][1].split())
+    assert "No uses códigos como C1 o C2: quien lee no los conoce." in rules
 
     # Emitir el veredicto no mueve a la persona ni cierra su postulación.
     detail = recruiter.get(f"{API}/applications/{ana}").json()

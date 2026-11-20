@@ -167,6 +167,8 @@ class ItemOut(BaseModel):
 class BatchDetailOut(BaseModel):
     batch: BatchOut
     items: list[ItemOut]
+    # Título de cada criterio de la rúbrica con la que se evaluó este lote.
+    criteria_names: dict[str, str] = {}
 
 
 def _names(repos, views: list[BatchView]) -> dict[uuid.UUID, str]:  # noqa: ANN001
@@ -211,9 +213,15 @@ def _dispatch(context: AppContext, batch_id: uuid.UUID) -> None:
 
 def _detail(context: AppContext, principal: Principal, batch_id: uuid.UUID) -> BatchDetailOut:
     with context.require_backend().transaction() as repos:
-        view, items = context.cv_batches(repos).detail(principal.user, batch_id)
+        service = context.cv_batches(repos)
+        view, items = service.detail(principal.user, batch_id)
         names = _names(repos, [view])
-    return BatchDetailOut(batch=BatchOut.of(view, names), items=[ItemOut.of(i) for i in items])
+        criteria = service.criteria_names(view.batch)
+    return BatchDetailOut(
+        batch=BatchOut.of(view, names),
+        items=[ItemOut.of(i) for i in items],
+        criteria_names=criteria,
+    )
 
 
 @router.get(

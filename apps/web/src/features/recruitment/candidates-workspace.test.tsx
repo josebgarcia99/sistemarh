@@ -241,8 +241,11 @@ describe("CandidatesWorkspace", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/applications/a1"))).toBe(false);
     await user.click(toggle);
     const reasons = within(await screen.findByRole("list", { name: "Niveles por criterio" }));
-    // Cada criterio con su nombre, su nivel, la evidencia que citó la IA y su justificación.
-    expect(reasons.getByText("C1 · Experiencia en nómina: nivel 4 de 4")).toBeTruthy();
+    // Cada criterio por su título (el código queda entre paréntesis), con su nivel, la
+    // evidencia que citó la IA y su justificación.
+    expect(reasons.getAllByRole("listitem")[0].textContent).toContain(
+      "Experiencia en nómina (C1): nivel 4 de 4",
+    );
     expect(reasons.getByText("«5 años en nómina»")).toBeTruthy();
     expect(reasons.getByText("Cumple")).toBeTruthy();
     expect(screen.getByText(/Evaluación más reciente de «cv ana.pdf»/)).toBeTruthy();

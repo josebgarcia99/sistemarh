@@ -202,6 +202,9 @@ MAX_CONTRASTS = 10
 # describen de orden y organización. La decisión sigue siendo de una persona.
 _SOURCE_RULES = f"""\
 - Usa solo lo que está en el expediente e indica la fuente de cada punto entre paréntesis.
+- Nombra cada criterio de la evaluación del CV por su título, tal como aparece en el \
+expediente; si es largo, acórtalo sin cambiar su sentido. No uses códigos como C1 o C2: \
+quien lee no los conoce.
 - No calcules ni propongas ninguna puntuación, índice ni porcentaje.
 - Una diferencia entre fuentes no prueba que la persona mintió: descríbela con los datos de \
 cada fuente.
@@ -726,7 +729,9 @@ def synthesis_request(
     for item in criteria:
         code = str(item.get("id"))
         name = material.criteria_names.get(code)
-        title = f"{code}, {name}" if name else code
+        # A la IA se le da el título del criterio y no su código (C1, C2…): así lo cita
+        # por su nombre, que es lo que entiende quien lee la recomendación.
+        title = f"«{name}»" if name else code
         level = "sin evidencia" if item.get("sin_evidencia") else f"nivel {item.get('nivel')}"
         evidence = f" Evidencia: {item['evidencia']}" if item.get("evidencia") else ""
         lines.append(f"- Criterio {title}: {level}.{evidence}")

@@ -74,7 +74,7 @@ Qué conviene saber:
 
 ## Candidatos y etapas
 
-Desde la vacante, el paso 4, «Candidatos y etapas» (o el botón «Ver candidatos y etapas» al terminar de evaluar los CV). Las personas evaluadas entran solas a la etapa «Revisión local RH» con la clasificación de la IA. También puedes dar de alta a alguien a mano. En cada fila, **«Ver por qué»** despliega ahí mismo la explicación de la IA: el nivel que dio a cada criterio (con su nombre), la evidencia que citó del CV y su justificación. Es lo mismo que «Ver detalle» en los lotes de la pestaña «Evaluación de CV» y que «Ver por qué» dentro del expediente.
+Desde la vacante, el paso 4, «Candidatos y etapas» (o el botón «Ver candidatos y etapas» al terminar de evaluar los CV). Las personas evaluadas entran solas a la etapa «Revisión local RH» con la clasificación de la IA. También puedes dar de alta a alguien a mano. En cada fila, **«Ver por qué»** despliega ahí mismo la explicación de la IA: el nivel que dio a cada criterio, la evidencia que citó del CV y su justificación. Los criterios aparecen por su título, con el código (C1, C2…) entre paréntesis; lo mismo en «Ver detalle» de los lotes. La recomendación de la IA también los cita por su título y no por su código (las síntesis generadas antes del 20 de noviembre de 2026 pueden seguir diciendo «C3»: genera una nueva para verla con títulos). Es lo mismo que «Ver detalle» en los lotes de la pestaña «Evaluación de CV» y que «Ver por qué» dentro del expediente.
 
 ### Mover de etapa
 

@@ -363,6 +363,8 @@ def test_un_lote_evalua_califica_clasifica_y_genera_los_archivos(
     assert items["beto.docx"]["classification"] == "RECHAZADO_IA"
     assert Decimal(items["beto.docx"]["score"]) == Decimal("25")
     assert len(items["beto.docx"]["criteria"]) == len(prompt["criteria"])
+    # El detalle del lote trae el título de cada criterio de su rúbrica.
+    assert detail["criteria_names"] == {c["code"]: c["name"] for c in prompt["criteria"]}
     # Un PDF sin texto no se envía a la IA y no cuenta como rechazo.
     scanned = items["escaneado.pdf"]
     assert scanned["classification"] == "NO_EVALUABLE" and scanned["score"] is None

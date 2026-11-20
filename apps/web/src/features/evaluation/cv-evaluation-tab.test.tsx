@@ -182,6 +182,20 @@ describe("CvEvaluationTab", () => {
     expect(screen.getByText(/las instrucciones de la versión 2 aprobada/)).toBeTruthy();
   });
 
+  it("el detalle de un CV nombra cada criterio por su título, no solo por su código", async () => {
+    mockApi({
+      [`GET ${OVERVIEW_URL}`]: { body: makeOverview({ pending_cvs: 0, batches: [makeBatch()] }) },
+      [`GET ${BATCH_URL}`]: {
+        // C2 no tiene título (un lote anterior a este cambio): se muestra su código.
+        body: { batch: makeBatch(), items: [makeItem()], criteria_names: { C1: "Experiencia en nómina" } },
+      },
+    });
+    renderApp(<CvEvaluationTab vacancyId={VACANCY_ID} canEdit />, { session: makeUser() });
+    const rows = within(await screen.findByRole("table")).getAllByRole("row");
+    expect(rows[1].textContent).toContain("Experiencia en nómina (C1)4 de 4");
+    expect(rows[2].textContent).toContain("C2Sin evidencia");
+  });
+
   it("con CV evaluados ofrece pasar a los candidatos", async () => {
     mockApi({
       [`GET ${OVERVIEW_URL}`]: { body: makeOverview({ pending_cvs: 0, batches: [makeBatch()] }) },
