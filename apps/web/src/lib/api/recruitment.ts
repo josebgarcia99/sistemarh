@@ -183,6 +183,8 @@ const detailSchema = z.object({
       classification: z.string(),
       score: z.string().nullable(),
       file_name: z.string(),
+      /** Nombre de cada criterio de la rúbrica con la que se evaluó. */
+      criteria_names: z.record(z.string(), z.string()).default({}),
       result: z
         .object({
           criterios: z.array(criterionResultSchema).optional(),

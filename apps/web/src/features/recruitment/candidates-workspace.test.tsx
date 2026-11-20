@@ -79,6 +79,7 @@ function makeDetail(overrides: Partial<ApplicationDetail> = {}): ApplicationDeta
       classification: "ACEPTADO_IA",
       score: "87.50",
       file_name: "cv ana.pdf",
+      criteria_names: { C1: "Experiencia en nómina" },
       result: { criterios: [{ id: "C1", nivel: 4, sin_evidencia: false, evidencia: "5 años en nómina", justificacion: "Cumple" }] },
       extraction: { habilidades: ["Excel"], estudios: [{ titulo: "Contaduría", institucion: "UNAM", periodo: "2015" }] },
     },
@@ -225,6 +226,30 @@ describe("CandidatesWorkspace", () => {
     expect(await screen.findByText("Todavía no hay llamadas registradas.")).toBeTruthy();
 
     expect(within(screen.getByRole("region", { name: "Resultado final" })).getByText(/En proceso/)).toBeTruthy();
+  });
+
+  it("desde la lista se puede ver por qué la IA aceptó o rechazó a cada persona", async () => {
+    const fetchMock = mockApi({
+      [`GET ${BOARD_URL}`]: { body: makeBoard() },
+      ["GET /api/v1/applications/a1"]: { body: makeDetail() },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    const row = within((await screen.findByRole("button", { name: "Ana Pérez" })).closest("li")!);
+    const toggle = row.getByRole("button", { name: "Ver por qué" });
+    // El detalle se pide solo cuando alguien lo abre.
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/applications/a1"))).toBe(false);
+    await user.click(toggle);
+    const reasons = within(await screen.findByRole("list", { name: "Niveles por criterio" }));
+    // Cada criterio con su nombre, su nivel, la evidencia que citó la IA y su justificación.
+    expect(reasons.getByText("C1 · Experiencia en nómina: nivel 4 de 4")).toBeTruthy();
+    expect(reasons.getByText("«5 años en nómina»")).toBeTruthy();
+    expect(reasons.getByText("Cumple")).toBeTruthy();
+    expect(screen.getByText(/Evaluación más reciente de «cv ana.pdf»/)).toBeTruthy();
+    // Sigue en la lista: no abrió el expediente. Y se puede volver a ocultar.
+    expect(screen.queryByRole("heading", { name: "Ana Pérez" })).toBeNull();
+    await user.click(row.getByRole("button", { name: "Ocultar por qué" }));
+    expect(screen.queryByRole("list", { name: "Niveles por criterio" })).toBeNull();
   });
 
   it("avisa cuando al expediente le faltan los datos del CV, en vez de callarlo", async () => {

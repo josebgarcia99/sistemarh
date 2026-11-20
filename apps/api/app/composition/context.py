@@ -158,7 +158,7 @@ class AppContext:
         return RecruitmentService(
             repos.recruitment,
             VacancyAccess(repos.vacancies),
-            BatchEvaluatedCvs(repos.cv_batches, repos.files),
+            BatchEvaluatedCvs(repos.cv_batches, repos.files, repos.evaluation_setup),
             self.audit(repos),
             self.clock,
         )

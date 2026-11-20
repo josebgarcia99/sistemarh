@@ -13,6 +13,7 @@ import {
 import { AssessmentsSection } from "@/features/assessments/assessments-section";
 import { AiWaitNotice, useAiWait } from "@/components/ui/ai-wait";
 import { DossierSection } from "@/features/assessments/dossier-section";
+import { EvaluationReasons } from "./evaluation-reasons";
 import { CallsSection } from "@/features/calls/calls-section";
 import { createSynthesis } from "@/lib/api/assessments";
 import { describeError } from "@/lib/api/client";
@@ -375,18 +376,12 @@ function EvaluationCard({ detail }: { detail: ApplicationDetail }) {
       {evaluation.result.motivo && <p>{evaluation.result.motivo}</p>}
       {criteria.length > 0 && (
         <details>
-          <summary className="cursor-pointer text-ink-muted underline">Ver niveles por criterio</summary>
-          <ul className="mt-3 flex flex-col gap-2">
-            {criteria.map((criterion) => (
-              <li key={criterion.id} className="rounded-2xl bg-surface px-4 py-3">
-                <p className="font-medium">
-                  {criterion.id}: {criterion.sin_evidencia ? "sin evidencia" : `nivel ${criterion.nivel} de 4`}
-                </p>
-                {criterion.evidencia && <p className="text-sm">«{criterion.evidencia}»</p>}
-                <p className="text-sm text-ink-muted">{criterion.justificacion}</p>
-              </li>
-            ))}
-          </ul>
+          <summary className="cursor-pointer text-ink-muted underline">
+            Ver por qué: niveles por criterio
+          </summary>
+          <div className="mt-3 rounded-2xl bg-surface p-3">
+            <EvaluationReasons evaluation={evaluation} />
+          </div>
         </details>
       )}
       {(extraction.estado === "FALLIDA" || extraction.estado === "SOLO_CONTACTO") &&

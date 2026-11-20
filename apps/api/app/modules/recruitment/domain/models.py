@@ -239,6 +239,8 @@ class EvaluatedCv:
     score: Decimal | None
     extraction: dict[str, Any] = field(default_factory=dict)
     result: dict[str, Any] = field(default_factory=dict)
+    # Nombre de cada criterio de la rúbrica con la que se evaluó (C1 → «Experiencia…»).
+    criteria_names: dict[str, str] = field(default_factory=dict)
 
 
 class EvaluatedCvs(Protocol):

@@ -23,6 +23,7 @@ import {
   type Stage,
 } from "@/lib/api/recruitment";
 import { ApplicationDetailView } from "./application-detail";
+import { ReasonsPanel } from "./evaluation-reasons";
 import { DialogButtons, type DialogProps, Field, MoveDialog } from "./dialogs";
 import { AI_STYLES, type Feedback, FeedbackLine, pillClass, STATUS_STYLES } from "./shared";
 
@@ -310,6 +311,7 @@ function ApplicationRow({
   onToggle: () => void;
   onOpen: () => void;
 }) {
+  const [showReasons, setShowReasons] = useState(false);
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-tile bg-surface px-5 py-3">
       {selectable && (
@@ -323,6 +325,7 @@ function ApplicationRow({
       )}
       <button
         type="button"
+        id={`candidate-${item.id}`}
         onClick={onOpen}
         className="min-w-0 flex-[1_1_220px] break-words text-left font-medium underline-offset-4 hover:underline"
       >
@@ -339,6 +342,22 @@ function ApplicationRow({
         <span className={`${pillClass} ${STATUS_STYLES[item.status]}`}>
           {APPLICATION_STATUS_LABELS[item.status]}
         </span>
+      )}
+      {item.ai_classification && (
+        <button
+          type="button"
+          aria-expanded={showReasons}
+          aria-describedby={`candidate-${item.id}`}
+          className="text-sm text-ink-muted underline"
+          onClick={() => setShowReasons((shown) => !shown)}
+        >
+          {showReasons ? "Ocultar por qué" : "Ver por qué"}
+        </button>
+      )}
+      {showReasons && (
+        <div className="basis-full border-t border-line pt-3">
+          <ReasonsPanel applicationId={item.id} onOpen={onOpen} />
+        </div>
       )}
     </li>
   );

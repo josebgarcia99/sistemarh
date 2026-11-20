@@ -216,6 +216,10 @@ def test_cada_cv_evaluado_entra_como_postulacion_en_revision_de_rh(
     assert "aceptado, 100.00 de 100" in detail["movements"][0]["note"]
     assert detail["evaluation"]["classification"] == "ACEPTADO_IA"
     assert detail["evaluation"]["extraction"]["habilidades"] == ["Excel"]
+    # Cada criterio lleva el nombre que tiene en la rúbrica con la que se evaluó.
+    names = detail["evaluation"]["criteria_names"]
+    assert set(names) == {c["id"] for c in detail["evaluation"]["result"]["criterios"]}
+    assert all(len(name) > 3 for name in names.values())
     assert len(detail["evaluation"]["result"]["criterios"]) == 3
     tenure = detail["tenure"]
     assert [job["months"] for job in tenure["jobs"]] == [30, None]

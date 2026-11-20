@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 
 from app.composition.cv_data import cv_data
 from app.modules.ai_settings.application.service import AiSettingsService
@@ -21,9 +22,25 @@ from app.modules.recruitment.domain.models import (
 class BatchEvaluatedCvs:
     """Los CV evaluados por lotes, como los ve el reclutamiento."""
 
-    def __init__(self, batches: CvBatchRepository, files: FileRepository) -> None:
+    def __init__(
+        self,
+        batches: CvBatchRepository,
+        files: FileRepository,
+        setup: EvaluationSetupRepository | None = None,
+    ) -> None:
         self._batches = batches
         self._files = files
+        self._setup = setup
+
+    def _criteria_names(self, item: BatchItem) -> dict[str, str]:
+        """El nombre de cada criterio de la rúbrica con la que se evaluó ese CV."""
+        if self._setup is None:
+            return {}
+        batch = self._batches.get_batch(item.batch_id)
+        version = self._setup.prompt_version(batch.prompt_version_id) if batch else None
+        if version is None:
+            return {}
+        return {criterion.code: criterion.name for criterion in version.criteria}
 
     def _evaluated(self, item: BatchItem) -> EvaluatedCv:
         asset = self._files.get(item.file_id)
@@ -46,7 +63,9 @@ class BatchEvaluatedCvs:
 
     def evaluation(self, item_id: uuid.UUID) -> EvaluatedCv | None:
         item = self._batches.get_item(item_id)
-        return self._evaluated(item) if item is not None else None
+        if item is None:
+            return None
+        return replace(self._evaluated(item), criteria_names=self._criteria_names(item))
 
     def is_cv_of(self, vacancy_id: uuid.UUID, file_id: uuid.UUID) -> bool:
         asset = self._files.get(file_id)

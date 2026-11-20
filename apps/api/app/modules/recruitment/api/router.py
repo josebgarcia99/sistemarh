@@ -248,6 +248,8 @@ class EvaluationOut(BaseModel):
     result: dict[str, Any]
     # Datos ordenados del CV (estudios, habilidades, etc.).
     extraction: dict[str, Any]
+    # Nombre de cada criterio de la rúbrica con la que se evaluó.
+    criteria_names: dict[str, str] = {}
 
 
 class ApplicationDetailOut(BaseModel):
@@ -306,6 +308,7 @@ def _detail_out(repos: Repositories, detail: ApplicationDetail) -> ApplicationDe
             file_name=evaluation.file_name,
             result=evaluation.result,
             extraction=evaluation.extraction,
+            criteria_names=evaluation.criteria_names,
         )
         if evaluation
         else None,
