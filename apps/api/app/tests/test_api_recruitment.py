@@ -273,6 +273,44 @@ def test_volver_a_evaluar_muestra_la_evaluacion_nueva_y_guarda_la_anterior_en_el
     assert [e["details"]["postulaciones"] for e in audit(admin, "postulacion.creada")] == [2]
 
 
+def test_volver_a_evaluar_no_hace_que_se_pierdan_los_datos_del_cv(
+    evaluated, recruiter, vacancy_id, providers, app
+):
+    """Los datos del CV (experiencia, estudios, habilidades) no dependen del prompt."""
+    ana = by_name(evaluated)["Ana Pérez Ficticia"]
+    url = f"{API}/applications/{ana['id']}"
+    before = recruiter.get(url).json()
+    assert before["evaluation"]["extraction"]["habilidades"] == ["Excel"]
+
+    # Al volver a evaluar, la IA solo califica: los datos ya ordenados se reutilizan,
+    # así que no hay una segunda petición de extracción por cada CV.
+    fake = providers[ProviderCode.ANTHROPIC]
+    fake.prompts = []
+    fake.script = [answer({"criteria": [{"code": c} for c in ("C1", "C2", "C3")]}, 0)] * 2
+    assert start(recruiter, vacancy_id, reevaluate=True).status_code == 201
+    assert len(fake.prompts) == 2
+    assert all("Ordena" not in system for _, system, _ in fake.prompts)
+    board(recruiter, vacancy_id)
+    after = recruiter.get(url).json()
+    # La evaluación es la nueva, y el expediente conserva los datos del CV y la experiencia.
+    assert after["evaluation"]["classification"] == "RECHAZADO_IA"
+    assert after["evaluation"]["extraction"] == before["evaluation"]["extraction"]
+    assert after["tenure"] == before["tenure"] and after["tenure"]["total_months"] == 30
+
+    # Evaluaciones que ya quedaron guardadas sin esos datos (la IA falló al ordenarlos o no
+    # había modelo asignado): el expediente toma los de la evaluación anterior del mismo CV.
+    context = app.state.context
+    with context.require_backend().transaction() as repos:
+        application = repos.recruitment.application(uuid.UUID(ana["id"]))
+        latest = repos.cv_batches.get_item(application.evaluation_item_id)
+        latest.extraction = {"correo": "ana@ejemplo.test", "telefono": None, "estado": "FALLIDA"}
+        repos.cv_batches.save_item(latest)
+    repaired = recruiter.get(url).json()
+    assert repaired["evaluation"]["extraction"]["estado"] == "COMPLETA"
+    assert repaired["evaluation"]["extraction"]["habilidades"] == ["Excel"]
+    assert repaired["tenure"] == before["tenure"]
+
+
 def test_sin_extraccion_el_nombre_sale_del_archivo(recruiter, vacancy_id, prompt, model, providers):
     upload(recruiter, vacancy_id, "CV_maria-gomez.pdf", person_cv("Maria", "maria@ejemplo.test"))
     upload(recruiter, vacancy_id, "escaneado.pdf", pdf_cv())

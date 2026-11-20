@@ -8,6 +8,7 @@ completa fechas ni infiere atributos personales.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from app.core.ai_json import parse_json_object
 
@@ -114,3 +115,22 @@ def extraction_from_answer(text: str) -> dict[str, object]:
     if not any(result.values()):
         raise InvalidExtractionError("La respuesta no contiene datos del CV.")
     return result
+
+
+def is_complete(extraction: dict[str, Any] | None) -> bool:
+    """La IA logró ordenar los datos del CV (no solo se leyó el contacto)."""
+    return bool(extraction) and extraction.get("estado") == "COMPLETA"
+
+
+def with_previous(
+    current: dict[str, Any] | None, previous: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Los datos del CV de una evaluación, completados con los que se ordenaron en una
+    anterior del mismo archivo cuando esta no los tiene. Los datos de un CV no dependen
+    del prompt: volver a evaluarlo no debe hacer que se pierdan. El contacto leído en
+    esta evaluación se conserva."""
+    current = current or {}
+    if is_complete(current) or previous is None:
+        return current
+    contact = {key: current[key] for key in ("correo", "telefono") if current.get(key)}
+    return {**previous, **contact}

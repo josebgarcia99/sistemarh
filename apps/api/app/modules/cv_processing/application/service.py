@@ -35,6 +35,7 @@ from app.modules.cv_processing.domain.extraction import (
     contact_from_text,
     extraction_from_answer,
     extraction_request,
+    with_previous,
 )
 from app.modules.cv_processing.domain.models import (
     ACTIVE,
@@ -495,7 +496,15 @@ class CvBatchService:
     def _extract(self, batch: Batch, item: BatchItem, user: str) -> None:
         """Ordena los datos del CV para el expediente. Es opcional: si no hay
         modelo asignado o la IA falla, el CV queda evaluado igualmente."""
-        if self._extractor is None or item.extraction is None:
+        if item.extraction is None:
+            return
+        # Los datos del CV no dependen del prompt: si ya se ordenaron en una evaluación
+        # anterior de este mismo archivo, se reutilizan en vez de pedirlos otra vez.
+        previous = self._repo.complete_extraction(item.file_id)
+        if previous is not None:
+            item.extraction = with_previous(item.extraction, previous)
+            return
+        if self._extractor is None:
             return
         try:
             answer = self._extractor.extract(

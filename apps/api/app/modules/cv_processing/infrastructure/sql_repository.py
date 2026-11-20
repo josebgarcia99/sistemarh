@@ -6,10 +6,12 @@ import json
 import uuid
 from dataclasses import fields
 from datetime import datetime
+from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from app.modules.cv_processing.domain.extraction import is_complete
 from app.modules.cv_processing.domain.models import (
     ACTIVE,
     Batch,
@@ -203,6 +205,23 @@ class SqlCvBatchRepository:
             .order_by(CvBatchRow.created_at, CvBatchRow.id, CvBatchItemRow.position)
         ).scalars()
         return [_to_item(row) for row in rows]
+
+    def complete_extraction(self, file_id: uuid.UUID) -> dict[str, Any] | None:
+        rows = self._session.execute(
+            sa.select(CvBatchItemRow.extraction)
+            .join(CvBatchRow, CvBatchRow.id == CvBatchItemRow.batch_id)
+            .where(
+                CvBatchItemRow.file_id == file_id,
+                CvBatchItemRow.status == ItemStatus.EVALUADO.value,
+                CvBatchItemRow.extraction.is_not(None),
+            )
+            .order_by(CvBatchRow.created_at.desc(), CvBatchRow.id.desc())
+        ).scalars()
+        for raw in rows:
+            data = json.loads(raw)
+            if is_complete(data):
+                return data
+        return None
 
     def evaluated_file_ids(
         self, vacancy_id: uuid.UUID, prompt_version_id: uuid.UUID

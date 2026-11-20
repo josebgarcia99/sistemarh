@@ -126,6 +126,11 @@ class CvBatchRepository(Protocol):
         """CV evaluados de la vacante, del lote más antiguo al más reciente."""
         ...
 
+    def complete_extraction(self, file_id: uuid.UUID) -> dict[str, Any] | None:
+        """Los datos de ese CV que la IA ordenó completos en su evaluación más
+        reciente que los tenga, o nada si nunca se lograron."""
+        ...
+
     def evaluated_file_ids(
         self, vacancy_id: uuid.UUID, prompt_version_id: uuid.UUID
     ) -> set[uuid.UUID]:

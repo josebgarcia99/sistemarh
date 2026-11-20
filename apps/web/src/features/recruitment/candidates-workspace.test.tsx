@@ -227,6 +227,30 @@ describe("CandidatesWorkspace", () => {
     expect(within(screen.getByRole("region", { name: "Resultado final" })).getByText(/En proceso/)).toBeTruthy();
   });
 
+  it("avisa cuando al expediente le faltan los datos del CV, en vez de callarlo", async () => {
+    const base = makeDetail();
+    mockApi({
+      [`GET ${BOARD_URL}`]: { body: makeBoard() },
+      ["GET /api/v1/applications/a1"]: {
+        body: makeDetail({
+          evaluation: { ...base.evaluation!, extraction: { estado: "FALLIDA" } },
+          tenure: null,
+        }),
+      },
+      ["GET /api/v1/applications/a1/calls"]: { body: [] },
+      ["GET /api/v1/applications/a1/assessments"]: { body: { items: [], restricted: [], writable: [] } },
+      ["GET /api/v1/applications/a1/syntheses"]: { body: { latest: null, total: 0, hidden: false } },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(await screen.findByRole("button", { name: "Ana Pérez" }));
+    const note = await screen.findByRole("note");
+    expect(note.textContent).toContain("Aquí faltan los datos del CV (experiencia, estudios y habilidades)");
+    expect(note.textContent).toContain("la IA no logró ordenarlos");
+    expect(note.textContent).toContain("La calificación no se ve afectada");
+    expect(screen.queryByText("Experiencia según el CV")).toBeNull();
+  });
+
   it("registra una contratación con fecha de incorporación y permite reabrir el proceso", async () => {
     const hired = makeDetail({
       application: makeApplication({ status: "CONTRATADA", outcome: "CONTRATADO" }),

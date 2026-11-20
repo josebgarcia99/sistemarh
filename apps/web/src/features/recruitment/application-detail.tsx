@@ -389,6 +389,17 @@ function EvaluationCard({ detail }: { detail: ApplicationDetail }) {
           </ul>
         </details>
       )}
+      {(extraction.estado === "FALLIDA" || extraction.estado === "SOLO_CONTACTO") &&
+        evaluation.classification !== "NO_EVALUABLE" && (
+          <p role="note" className="rounded-2xl bg-surface px-4 py-3">
+            Aquí faltan los datos del CV (experiencia, estudios y habilidades):{" "}
+            {extraction.estado === "FALLIDA"
+              ? "la IA no logró ordenarlos cuando se evaluó."
+              : "no se ordenaron cuando se evaluó, porque la tarea «Extracción de datos de CV» no tenía un modelo asignado o no respondió."}{" "}
+            La calificación no se ve afectada. Para intentarlo de nuevo, vuelve a evaluar los CV
+            de la vacante marcando «Volver a evaluar también los ya evaluados».
+          </p>
+        )}
       {tenure && (
         <div className="flex flex-col gap-2">
           <h3 className="text-lg font-medium">Experiencia según el CV</h3>

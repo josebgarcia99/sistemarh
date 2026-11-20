@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
+from app.composition.cv_data import cv_data
 from app.composition.file_access import VacancyFileAccessPolicy, is_study_analyst
 from app.core.security.master_key import DecryptionError, MasterKey
 from app.infrastructure.documents.photos import (
@@ -158,7 +159,7 @@ class AssessmentApplications:
             names = {criterion.code: criterion.name for criterion in version.criteria}
         return DossierMaterial(
             requirements=requirements,
-            cv=(item.extraction if item else None) or {},
+            cv=cv_data(self._batches, item),
             evaluation=(item.result if item else None) or {},
             calls=tuple(calls),
             cv_classification=application.ai_classification or "",

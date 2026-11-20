@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 
+from app.composition.cv_data import cv_data
 from app.modules.ai_settings.application.service import AiSettingsService
 from app.modules.ai_settings.domain.models import Operation
 from app.modules.cv_processing.domain.models import BatchItem, CvBatchRepository
@@ -32,7 +33,7 @@ class BatchEvaluatedCvs:
             item_id=item.id,
             classification=item.classification.value if item.classification else "NO_EVALUABLE",
             score=item.score,
-            extraction=item.extraction or {},
+            extraction=cv_data(self._batches, item),
             result=item.result or {},
         )
 
@@ -105,7 +106,7 @@ class CallApplications:
             vacancy_id=application.vacancy_id,
             active=application.status is ApplicationStatus.ACTIVA,
             candidate_name=candidate.full_name if candidate else "",
-            cv=(item.extraction if item else None) or {},
+            cv=cv_data(self._batches, item),
             requirements=profile[1] if profile else (),
         )
 

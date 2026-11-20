@@ -192,6 +192,8 @@ const detailSchema = z.object({
         .passthrough(),
       extraction: z
         .object({
+          /** COMPLETA si la IA ordenó los datos del CV; si no, solo se leyó el contacto. */
+          estado: z.string().optional(),
           habilidades: z.array(z.string()).optional(),
           certificaciones: z.array(z.string()).optional(),
           estudios: z
